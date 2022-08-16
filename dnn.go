@@ -313,7 +313,7 @@ func (m *NNModel) Save(fileRoot string) error {
 func LoadNN(fileRoot string, bSize int) (*NNModel, error) {
 
 	fileS := fileRoot + "S.nn"
-	modSpec, err := LoadFtypes(fileS)
+	modSpec, err := LoadFTypes(fileS)
 	if err != nil {
 		return nil, err
 	}

@@ -6,20 +6,20 @@ import (
 	"log"
 )
 
-// The Pipeline interface specifies the methods required to be a data pipeline
+// The Pipeline interface specifies the methods required to be a Data Pipeline. The Pipeline is the middleware between
+// the data and the fitting routines.
 type Pipeline interface {
 	Init() error                      // initialize the pipeline
-	Rows() int                        // # of rows in the data set
+	Rows() int                        // # of observations in the pipeline (size of the epoch)
 	Batch(inputs G.Nodes) bool        // puts the next batch in the input nodes
 	Epoch(setTo int) int              // manage epoch count
 	IsNormalized(feature string) bool // true if feature is normalized
 	IsCat(feature string) bool        // true if feature is one-hot encoded
-	Cols(feature string) int
-	//	Save
-	IsCts(feature string) bool
-	GetFeature(feature string) *FType
-	BatchSize() int
-	FieldList() []string
+	Cols(feature string) int          // # of columns in the feature
+	IsCts(feature string) bool        // true if the feature is continuous
+	GetFeature(feature string) *FType // Get FType for the feature
+	BatchSize() int                   // batch size
+	FieldList() []string              // fields available
 }
 
 // Opts function sets an option to a Pipeline
@@ -37,7 +37,7 @@ func WithBatchSize(bsize int) Opts {
 }
 
 // WithCycle sets the cycle bool.  If false, the intent is for the Pipeline to generate a new
-// data set is generated for each epoch.
+// Data set is generated for each epoch.
 func WithCycle(cycle bool) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
@@ -115,7 +115,7 @@ func WithNormalized(names ...string) Opts {
 	return f
 }
 
-// WithFParams sets the feature parameters: location/scale or map of feature value -> int32
+// WithFParams sets the FTypes of the Pipeline. The feature is used to override the default levels.
 func WithFtypes(fts FTypes) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
@@ -126,7 +126,8 @@ func WithFtypes(fts FTypes) Opts {
 	return f
 }
 
-// WithCallBack sets a callback function.
+// WithCallBack sets a callback function.  The intent is for the Callback function to be called at the end of
+// each epoch
 func WithCallBack(cb Opts) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
@@ -137,7 +138,7 @@ func WithCallBack(cb Opts) Opts {
 	return f
 }
 
-// WithReader adds a reader. Supplying separately allows the user to work with those structures.
+// WithReader adds a reader.
 func WithReader(rdr any) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {

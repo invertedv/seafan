@@ -1,5 +1,7 @@
 package seafan
 
+// structures and methods to produce gorgonia-ready data
+
 import (
 	"fmt"
 	"gonum.org/v1/gonum/stat"
@@ -9,8 +11,8 @@ import (
 
 type GDatum struct {
 	FT      *FType  // FT stores the details of the field: it's role, # categories, mappings
-	Summary Summary // Summary of the data (e.g. distribution)
-	Data    any     // data. This will be either []float64 (FRCts, FROneHot, FREmbed) or []int32 (FRCat)
+	Summary Summary // Summary of the Data (e.g. distribution)
+	Data    any     // Data. This will be either []float64 (FRCts, FROneHot, FREmbed) or []int32 (FRCat)
 }
 
 type GData []*GDatum
@@ -25,7 +27,7 @@ func (gd GData) check(name string) error {
 	n := 0
 	for _, d := range gd {
 		if d.Summary.nRow != n && n > 0 {
-			fmt.Errorf("differing number of rows")
+			return fmt.Errorf("differing number of rows")
 		}
 		n = d.Summary.nRow
 	}
@@ -126,8 +128,7 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		}
 		ds[ind] = val
 	}
-	distr := make(Levels)
-	distr.ByCounts(raw)
+	distr := ByCounts(raw)
 	ft := &FType{
 		Name:       name,
 		Role:       FRCat,

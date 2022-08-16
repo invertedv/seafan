@@ -169,7 +169,7 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 			log.Fatalln(e)
 		}
 	}
-	// out of data?  if nRow % bsize !=0, rows after the last full batch are unused.
+	// out of Data?  if nRow % bsize !=0, rows after the last full batch are unused.
 	if ch.cbRow+ch.bs > ch.nRow {
 		if !ch.cycle {
 			ch.pull = true
