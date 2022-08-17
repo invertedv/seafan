@@ -39,13 +39,18 @@ func NewChData(name string, opts ...Opts) *ChData {
 	return ch
 }
 
-// SaveFTypes saves the FTypes for the Pipeline.
-func (ch *ChData) SaveFTypes(fileName string) error {
+// GetFtypes returns FTypes for ch Pipeline
+func (ch *ChData) GetFTypes() FTypes {
 	fts := make(FTypes, 0)
 	for _, d := range ch.data {
 		fts = append(fts, d.FT)
 	}
-	return fts.Save(fileName)
+	return fts
+}
+
+// SaveFTypes saves the FTypes for the Pipeline.
+func (ch *ChData) SaveFTypes(fileName string) error {
+	return ch.GetFTypes().Save(fileName)
 }
 
 // returns *FType from user-input FTypes

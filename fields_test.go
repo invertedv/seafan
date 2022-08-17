@@ -58,7 +58,7 @@ func TestFTypes_Save(t *testing.T) {
 	}
 
 	fts := FTypes{ft0, ft1, ft2}
-	fileName := os.TempDir() + "/seafanTest.js"
+	fileName := os.TempDir() + "/seafanTest.json"
 	e := fts.Save(fileName)
 	assert.Nil(t, e)
 	fts1, e := LoadFTypes(fileName)

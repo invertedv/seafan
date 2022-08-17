@@ -170,6 +170,7 @@ func (gd GData) MakeOneHot(from string, name string) (GData, error) {
 	for row := 0; row < nRow; row++ {
 		oh[int32(row*nCat)+d.Data.([]int32)[row]] = 1
 	}
+	summ := Summary{nRow: d.Summary.nRow}
 	ft := &FType{
 		Name:       name,
 		Role:       FROneHot,
@@ -179,7 +180,7 @@ func (gd GData) MakeOneHot(from string, name string) (GData, error) {
 		From:       from,
 		FP:         nil,
 	}
-	oH := &GDatum{Data: oh, FT: ft}
+	oH := &GDatum{Data: oh, FT: ft, Summary: summ}
 	gdOut := append(gd, oH)
 	if e := gdOut.check(""); e != nil {
 		return nil, e
