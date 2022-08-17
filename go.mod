@@ -1,4 +1,4 @@
-module seafan
+module github.com/invertedv/seafan
 
 go 1.19
 

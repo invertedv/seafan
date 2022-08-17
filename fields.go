@@ -1,6 +1,6 @@
 package seafan
 
-// data structures/methods dealing with fields
+// structures/methods dealing with fields
 
 import (
 	"encoding/json"
