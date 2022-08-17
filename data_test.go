@@ -32,7 +32,8 @@ func TestXY_Sort(t *testing.T) {
 	expectY := []float64{2, 3, 1, 4}
 	xy, e := NewXY(x, y)
 	assert.Nil(t, e)
-	xy.Sort()
+	e = xy.Sort()
+	assert.Nil(t, e)
 	assert.ElementsMatch(t, xy.X, expectX)
 	assert.ElementsMatch(t, xy.Y, expectY)
 }
@@ -70,7 +71,7 @@ func TestAllocRaw(t *testing.T) {
 	x := AllocRaw(n, reflect.Float64)
 	assert.Equal(t, len(x.Data), n)
 	xx := make([]any, n)
-	for ind, _ := range xx {
+	for ind := range xx {
 		xx[ind] = rand.Float64()
 	}
 	x = NewRaw(xx)

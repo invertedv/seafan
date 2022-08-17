@@ -73,7 +73,9 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 		if tmp {
 			// need to pause while browser loads graph
 			time.Sleep(time.Second / 2)
-			os.Remove(pd.FileName)
+			if e := os.Remove(pd.FileName); e != nil {
+				return e
+			}
 		}
 	}
 	return nil

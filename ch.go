@@ -271,7 +271,7 @@ func (ch *ChData) FieldList() []string {
 	return fl
 }
 
-// GetFeature returns the fields FType
+// GetFType returns the fields FType
 func (ch *ChData) GetFType(field string) *FType {
 	d := ch.Get(field)
 	if d == nil {

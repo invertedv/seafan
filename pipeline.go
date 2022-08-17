@@ -115,7 +115,7 @@ func WithNormalized(names ...string) Opts {
 	return f
 }
 
-// WithFParams sets the FTypes of the Pipeline. The feature is used to override the default levels.
+// WithFtypes sets the FTypes of the Pipeline. The feature is used to override the default levels.
 func WithFtypes(fts FTypes) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {

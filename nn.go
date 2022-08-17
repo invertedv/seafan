@@ -90,7 +90,7 @@ func (m *NNModel) ObsSlice() []float64 {
 	return m.obs.Value().Data().([]float64)
 }
 
-// CostFit returns the value of the cost node
+// CostFlt returns the value of the cost node
 func (m *NNModel) CostFlt() float64 {
 	return m.cost.Value().Data().(float64)
 }
@@ -263,7 +263,7 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 	return nn
 }
 
-// Build forward pass
+// Fwd builds forward pass
 func (m *NNModel) Fwd() {
 	// input nodes
 	xall := G.Must(G.Concat(1, m.inputsC...))
@@ -323,13 +323,14 @@ type saveNode struct {
 
 // Save saves a model to disk.  Two files are created: *S.nn stores the structure of the model and
 // *P.nn stores the parameters.  Note: dropout layers are not saved.
-func (m *NNModel) Save(fileRoot string) error {
+func (m *NNModel) Save(fileRoot string) (err error) {
+	err = nil
 	fileP := fileRoot + "P.nn"
-	f, e := os.Create(fileP)
-	if e != nil {
-		return e
+	f, err := os.Create(fileP)
+	if err != nil {
+		return
 	}
-	defer f.Close()
+	defer func() { err = f.Close() }()
 	ps := make([]saveNode, 0)
 	for ind := 0; ind < len(m.Params()); ind++ {
 		n := m.Params()[ind]
@@ -340,39 +341,44 @@ func (m *NNModel) Save(fileRoot string) error {
 		}
 		ps = append(ps, p)
 	}
-	jp, e := json.MarshalIndent(ps, "", "  ")
-	if e != nil {
-		return e
+	jp, err := json.MarshalIndent(ps, "", "  ")
+	if err != nil {
+		return
 	}
-	if _, e := f.WriteString(string(jp)); e != nil {
-		return e
+	if _, err = f.WriteString(string(jp)); err != nil {
+		return
 	}
-	f.Close()
+	if err = f.Close(); err != nil {
+		return
+	}
 
 	fileS := fileRoot + "S.nn"
-	m.construct.Save(fileS)
+	if err = m.construct.Save(fileS); err != nil {
+		return
+	}
 	return nil
 }
 
 // LoadNN restores a previously saved NNModel
-func LoadNN(fileRoot string, bSize int) (*NNModel, error) {
-
+func LoadNN(fileRoot string, bSize int) (nn *NNModel, err error) {
+	err = nil
+	nn = nil
 	fileS := fileRoot + "S.nn"
 	modSpec, err := LoadFTypes(fileS)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	//	f.Close()
 	fileP := fileRoot + "P.nn"
-	f, e := os.Open(fileP)
-	if e != nil {
-		return nil, e
+	f, err := os.Open(fileP)
+	if err != nil {
+		return
 	}
-	defer f.Close()
-	js, e := io.ReadAll(f)
-	if e != nil {
-		return nil, e
+	defer func() { err = f.Close() }()
+	js, err := io.ReadAll(f)
+	if err != nil {
+		return
 	}
 
 	data := make([]saveNode, 0)
@@ -386,7 +392,7 @@ func LoadNN(fileRoot string, bSize int) (*NNModel, error) {
 		}
 	}
 
-	nn := NewNNModel(bSize, modSpec, hidden)
+	nn = NewNNModel(bSize, modSpec, hidden)
 	if len(data) != len(nn.Params()) {
 		return nil, fmt.Errorf("node count differs")
 	}
@@ -403,11 +409,12 @@ func LoadNN(fileRoot string, bSize int) (*NNModel, error) {
 			}
 		}
 		t := tensor.New(tensor.WithBacking(d.Parms), tensor.WithShape(shp...))
-		if e := G.Let(nd, t); e != nil {
-			return nil, e
+		if err = G.Let(nd, t); err != nil {
+			nn = nil
+			return
 		}
 	}
-	return nn, nil
+	return
 }
 
 func SoftRMS(model NNet) (cost *G.Node) {
@@ -513,7 +520,7 @@ func WithOutFile(fileName string) FitOpts {
 	return f
 }
 
-// Outfile returns the output file name
+// OutFile returns the output file name
 func (ft *Fit) OutFile() string {
 	return ft.outFile
 }

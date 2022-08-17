@@ -98,11 +98,11 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 		FT:      ft,
 		Summary: summ,
 	}
-	gd = append(gd, c)
-	if e := gd.check(""); e != nil {
+	gdOut := append(gd, c)
+	if e := gdOut.check(""); e != nil {
 		return nil, e
 	}
-	return gd, nil
+	return gdOut, nil
 }
 
 // AppendD appends a discrete feature
@@ -144,12 +144,12 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		DistrD: distr,
 	}
 	d := &GDatum{Data: ds, FT: ft, Summary: summ}
-	gd = append(gd, d)
+	gdOut := append(gd, d)
 
-	if e := gd.check(""); e != nil {
+	if e := gdOut.check(""); e != nil {
 		return nil, e
 	}
-	return gd, nil
+	return gdOut, nil
 }
 
 // MakeOneHot creates & appends a one hot feature from a discrete feature
@@ -180,11 +180,11 @@ func (gd GData) MakeOneHot(from string, name string) (GData, error) {
 		FP:         nil,
 	}
 	oH := &GDatum{Data: oh, FT: ft}
-	gd = append(gd, oH)
-	if e := gd.check(""); e != nil {
+	gdOut := append(gd, oH)
+	if e := gdOut.check(""); e != nil {
 		return nil, e
 	}
-	return gd, nil
+	return gdOut, nil
 }
 
 // Get returns a single feature from GData

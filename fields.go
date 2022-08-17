@@ -76,8 +76,8 @@ func (ft *FType) String() string {
 }
 
 // Get returns the *FType of name
-func (fs FTypes) Get(name string) *FType {
-	for _, f := range fs {
+func (fts FTypes) Get(name string) *FType {
+	for _, f := range fts {
 		if f.Name == name {
 			return f
 		}
@@ -106,12 +106,13 @@ type fType struct {
 }
 
 // Save saves FTypes to a json file--fileName
-func (fts FTypes) Save(fileName string) error {
+func (fts FTypes) Save(fileName string) (err error) {
+	err = nil
 	f, err := os.Create(fileName)
 	if err != nil {
-		return err
+		return
 	}
-	defer f.Close()
+	defer func() { err = f.Close() }()
 	out := make([]fType, 0)
 	for _, ft := range fts {
 		fpStr := &fps{}
@@ -139,32 +140,34 @@ func (fts FTypes) Save(fileName string) error {
 	}
 	jfp, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		return err
+		return
 	}
-	if _, e := f.WriteString(string(jfp)); e != nil {
-		return e
+	if _, err = f.WriteString(string(jfp)); err != nil {
+		return
 	}
-	return nil
+	return
 }
 
 // LoadFTypes loads a file created by the FTypes Save method
-func LoadFTypes(fileName string) (FTypes, error) {
+func LoadFTypes(fileName string) (fts FTypes, err error) {
+	fts = nil
+	err = nil
 	f, err := os.Open(fileName)
 	if err != nil {
-		return nil, err
+		return
 	}
-	defer f.Close()
+	defer func() { err = f.Close() }()
 
 	js, err := io.ReadAll(f)
 	if err != nil {
-		return nil, err
+		return
 	}
 	data := make([]fType, 0)
 	if e := json.Unmarshal(js, &data); e != nil {
 		fmt.Println(e)
 		return nil, e
 	}
-	fts := make(FTypes, 0)
+	fts = make(FTypes, 0)
 	for _, d := range data {
 		ft := FType{
 			Name:       d.Name,
@@ -199,5 +202,5 @@ func LoadFTypes(fileName string) (FTypes, error) {
 		ft.FP = &fp
 		fts = append(fts, &ft)
 	}
-	return fts, nil
+	return
 }
