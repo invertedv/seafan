@@ -1,5 +1,7 @@
 package seafan
 
+// github.com/invertedv/chutils Pipeline
+
 import (
 	"fmt"
 	"github.com/invertedv/chutils"
@@ -11,7 +13,10 @@ import (
 	"strings"
 )
 
-// ChData creates a Pipeline based on ClickHouse access using chutils
+// ChData creates a Pipeline based on chutils.  This provides an interface into text files (delimited, fixed length)
+// and ClickHouse.
+// If !cycle, Init is called after each epoch.
+// callback is called at the start of each Init
 type ChData struct {
 	bs         int           // batch size
 	cycle      bool          // if true, resuses data, false fetches new data after each epoch
@@ -22,7 +27,7 @@ type ChData struct {
 	data       GData         // processed data
 	epochCount int           // current epoch
 	ftypes     FTypes        // user input selections
-	callback   Opts          // user callbacks at end of each epoch
+	callback   Opts          // user callbacks executed at the start of Init()
 	name       string        // pipeline name
 }
 
@@ -34,6 +39,7 @@ func NewChData(name string, opts ...Opts) *ChData {
 	return ch
 }
 
+// SaveFTypes saves the FTypes for the Pipeline.
 func (ch *ChData) SaveFTypes(fileName string) error {
 	fts := make(FTypes, 0)
 	for _, d := range ch.data {
@@ -42,7 +48,8 @@ func (ch *ChData) SaveFTypes(fileName string) error {
 	return fts.Save(fileName)
 }
 
-func (ch *ChData) getFTypes(feature string) *FType {
+// returns *FType from user-input FTypes
+func (ch *ChData) getFType(feature string) *FType {
 	for _, ft := range ch.ftypes {
 		if ft.Name == feature {
 			return ft
@@ -51,31 +58,41 @@ func (ch *ChData) getFTypes(feature string) *FType {
 	return nil
 }
 
-func (ch *ChData) IsNormalized(name string) bool {
-	if ft := ch.Get(name); ft != nil {
+// IsNormalized returns true if the field is normalized
+func (ch *ChData) IsNormalized(field string) bool {
+	if ft := ch.Get(field); ft != nil {
 		return ft.FT.Normalized
 	}
 	return false
 }
 
-func (ch *ChData) IsCts(name string) bool {
-	return !ch.IsCat(name)
+// IsCts returns true if the field has role FRCts
+func (ch *ChData) IsCts(field string) bool {
+	if ft := ch.Get(field); ft != nil {
+		return ft.FT.Role == FRCat
+	}
+	return false
+
 }
 
-func (ch *ChData) IsCat(name string) bool {
-	if ft := ch.Get(name); ft != nil {
+// IsCat returns true if field has role FRCat
+func (ch *ChData) IsCat(field string) bool {
+	if ft := ch.Get(field); ft != nil {
 		return ft.FT.Role == FRCat
 	}
 	return false
 }
 
+// GData returns the Pipelines' GData
 func (ch *ChData) GData() GData {
 	d := ch.data
 	return d
 }
 
+// Init initializes the Pipeline.
 func (ch *ChData) Init() (err error) {
 	err = nil
+	// user callbacks
 	if ch.callback != nil {
 		ch.callback(ch)
 	}
@@ -92,13 +109,14 @@ func (ch *ChData) Init() (err error) {
 	}
 	ch.pull = false
 	fds := ch.rdr.TableSpec().FieldDefs
-	names := make([]string, len(fds))
-	trans := make([]*Raw, len(fds))
-	chTypes := make([]chutils.ChType, len(fds))
+	names := make([]string, len(fds))           // field names
+	trans := make([]*Raw, len(fds))             // data
+	chTypes := make([]chutils.ChType, len(fds)) // field types
 	for ind := 0; ind < len(fds); ind++ {
 		names[ind] = fds[ind].Name
 		chTypes[ind] = fds[ind].ChSpec.Base
 	}
+	// load GData
 	for row := 0; ; row++ {
 		r, _, e := ch.rdr.Read(1, true)
 		if e == io.EOF {
@@ -117,9 +135,10 @@ func (ch *ChData) Init() (err error) {
 	}
 	gd := make(GData, 0)
 
+	// work through fields, add to GData
 	for ind, nm := range names {
 		// if this isn't in our array, add it
-		ft := ch.getFTypes(nm)
+		ft := ch.getFType(nm)
 		if ft == nil {
 			ft = &FType{}
 			switch chTypes[ind] {
@@ -140,6 +159,8 @@ func (ch *ChData) Init() (err error) {
 			}
 		}
 	}
+
+	// Add calculated fields
 	for _, ft := range ch.ftypes {
 		switch ft.Role {
 		case FROneHot:
@@ -156,11 +177,16 @@ func (ch *ChData) Init() (err error) {
 	return nil
 }
 
+// Rows is # of rows of data in the Pipeline
 func (ch *ChData) Rows() int {
 	return ch.nRow
 }
 
+// Batch loads a batch into inputs.  It returns false if the epoch is done.
+// If cycle, it will start at the beginning on the next call.
+// If !cycle, it will call Init() at the next call to Batch()
 func (ch *ChData) Batch(inputs G.Nodes) bool {
+	// do we need to load the data?
 	if ch.pull {
 		if e := ch.rdr.Reset(); e != nil {
 			log.Fatalln(e)
@@ -203,13 +229,14 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 	return true
 }
 
-// Get returns a feature
-func (ch *ChData) Get(name string) *GDatum {
-	return ch.data.Get(name)
+// Get returns a fields's GDatum
+func (ch *ChData) Get(field string) *GDatum {
+	return ch.data.Get(field)
 }
 
-func (ch *ChData) Cols(feature string) int {
-	d := ch.Get(feature)
+// Cols returns the # of columns in the field
+func (ch *ChData) Cols(field string) int {
+	d := ch.Get(field)
 	if d == nil {
 		return 0
 	}
@@ -225,6 +252,8 @@ func (ch *ChData) Cols(feature string) int {
 	return 0
 }
 
+// Epoch sets the epoch to setTo if setTo >=0.
+// Returns epoch #.
 func (ch *ChData) Epoch(setTo int) int {
 	if setTo >= 0 {
 		ch.epochCount = setTo
@@ -233,6 +262,7 @@ func (ch *ChData) Epoch(setTo int) int {
 
 }
 
+// FieldList returns a slice of field names in the Pipeline
 func (ch *ChData) FieldList() []string {
 	fl := make([]string, 0)
 	for _, ft := range ch.data {
@@ -241,27 +271,35 @@ func (ch *ChData) FieldList() []string {
 	return fl
 }
 
-func (ch *ChData) GetFeature(feature string) *FType {
-	d := ch.Get(feature)
+// GetFeature returns the fields FType
+func (ch *ChData) GetFType(field string) *FType {
+	d := ch.Get(field)
 	if d == nil {
 		return nil
 	}
 	return d.FT
 }
 
+// Name returns Pipeline name
 func (ch *ChData) Name() string {
 	return ch.name
 }
 
+// BatchSize returns Pieeline batch size
 func (ch *ChData) BatchSize() int {
 	return ch.bs
 }
 
-func (ch *ChData) Describe(feature string, topK int) string {
-	d := ch.Get(feature)
+// Describe describes a field.  If the field has role FRCat, the top k values (by frequency) are returned.
+func (ch *ChData) Describe(field string, topK int) string {
+	d := ch.Get(field)
 	if d == nil {
 		return ""
 	}
+	if topK <= 0 {
+		topK = 5
+	}
+	topK = Max(Min(topK, 100), 2)
 
 	str := d.FT.String()
 	switch d.FT.Role {

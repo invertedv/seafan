@@ -1,5 +1,7 @@
 package seafan
 
+// DNN functionality
+
 import (
 	"encoding/json"
 	"fmt"
@@ -16,37 +18,41 @@ import (
 	"time"
 )
 
+// CostFunc function proto for cost functions
 type CostFunc func(model NNet) *G.Node
 
+// NNet interface
 type NNet interface {
-	Inputs() G.Nodes   // input nodes
-	Features() G.Nodes // predictors
-	Fitted() G.Result  // model output
-	Params() G.Nodes   // model weights
-	Obs() *G.Node      // observed values
-	CostFn() CostFunc
-	Cost() *G.Node
+	Inputs() G.Nodes            // input nodes
+	Features() G.Nodes          // predictors
+	Fitted() G.Result           // model output
+	Params() G.Nodes            // model weights
+	Obs() *G.Node               // observed values
+	CostFn() CostFunc           // cost function of fitting
+	Cost() *G.Node              // cost node in graph
 	Fwd()                       // forward pass
 	G() *G.ExprGraph            // return graph
 	Save(fileRoot string) error // save model
 }
 
+// NNModel structure
 type NNModel struct {
-	name      string
-	g         *G.ExprGraph
-	paramsW   G.Nodes
-	paramsB   G.Nodes
-	paremsEmb G.Nodes
-	output    G.Result
-	inputsC   G.Nodes
-	inputsE   G.Nodes
-	obs       *G.Node
-	cost      *G.Node
-	construct FTypes
-	drops     Drops
-	costFn    CostFunc
+	name      string       // name of model
+	g         *G.ExprGraph // model graph
+	paramsW   G.Nodes      // weight parameters
+	paramsB   G.Nodes      // bias parameters
+	paremsEmb G.Nodes      // embedding parameters
+	output    G.Result     // graph output
+	inputsC   G.Nodes      // continuous (including one-hot) inputs
+	inputsE   G.Nodes      // embedding inputs
+	obs       *G.Node      // observed values for model fit
+	cost      *G.Node      // cost node for model build
+	construct FTypes       // output, input FType
+	drops     Drops        // drop out layers
+	costFn    CostFunc     // costFn corresponding to cost *G.Node
 }
 
+// Name returns model name
 func (m *NNModel) Name() string {
 	return m.name
 }
@@ -64,59 +70,73 @@ func (m *NNModel) String() string {
 	return str
 }
 
+// CostFn returns cost function
 func (m *NNModel) CostFn() CostFunc {
 	return m.costFn
 }
 
+// Cost returns cost node
 func (m *NNModel) Cost() *G.Node {
 	return m.cost
 }
 
+// FitSlice returns fitted values as a slice
 func (m *NNModel) FitSlice() []float64 {
 	return m.output.Nodes()[0].Value().Data().([]float64)
 }
 
+// ObsSlice returns target values as a slice
 func (m *NNModel) ObsSlice() []float64 {
 	return m.obs.Value().Data().([]float64)
 }
 
+// CostFit returns the value of the cost node
 func (m *NNModel) CostFlt() float64 {
 	return m.cost.Value().Data().(float64)
 }
 
+// Obs returns the target value as a node
 func (m *NNModel) Obs() *G.Node {
 	return m.obs
 }
 
+// Fitted returns fitted values as a G.Result
 func (m *NNModel) Fitted() G.Result {
 	return m.output
 }
 
+// Inputs returns input (continuous+embedded+observed) inputs
 func (m *NNModel) Inputs() G.Nodes {
 	n := append(m.inputsC, m.inputsE...)
 	return append(n, m.obs)
 }
 
+// Features returns the model input features (continuous+embedded)
 func (m *NNModel) Features() G.Nodes {
 	return append(m.inputsC, m.inputsE...)
 }
 
+// Params retursn the model parameter nodes (weights, biases, embeddings)
 func (m *NNModel) Params() G.Nodes {
 	p := append(m.paramsW, m.paramsB...)
 	p = append(p, m.paremsEmb...)
 	return p
 }
 
+// G returns model graph
 func (m *NNModel) G() *G.ExprGraph {
 	return m.g
 }
 
+// Drop specifies a dropout layer.  It occurs in the graph after dense layer AfterLayer (the input layer is layer 0).
 type Drop struct {
-	AfterLayer int
-	DropProb   float64
+	AfterLayer int     // insert dropout after layer AfterLayer
+	DropProb   float64 // dropout probability
 }
+
 type Drops []*Drop
 
+// Get returns the dropout layer that occurs after dense layer after
 func (d Drops) Get(after int) *Drop {
 	for _, l := range d {
 		if l.AfterLayer == after {
@@ -126,8 +146,10 @@ func (d Drops) Get(after int) *Drop {
 	return nil
 }
 
+// NNOpts -- NNModel options
 type NNOpts func(model1 *NNModel)
 
+// WithDropOuts adds dropout layers
 func WithDropOuts(drops Drops) NNOpts {
 	f := func(m *NNModel) {
 		m.drops = drops
@@ -136,6 +158,7 @@ func WithDropOuts(drops Drops) NNOpts {
 	return f
 }
 
+// WithCostFn adds a cost function
 func WithCostFn(cf CostFunc) NNOpts {
 	f := func(m *NNModel) {
 		m.costFn = cf
@@ -144,13 +167,16 @@ func WithCostFn(cf CostFunc) NNOpts {
 	return f
 }
 
+// NewNNModel creates a new NN model. The modSpec input can be created by ByFormula.
 func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNModel {
 	g := G.NewGraph()
 	xs := make(G.Nodes, 0)
 	embParm := make(G.Nodes, 0) // embedding parameters
 	xEmInp := make(G.Nodes, 0)  // one-hot input
 	xEmProd := make(G.Nodes, 0) // product of one-hot input and embedding parameters
+	// work through the features
 	for ind, f := range modSpec {
+		// first element is the target--skip
 		if ind == 0 {
 			continue
 		}
@@ -170,13 +196,17 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 			xEmProd = append(xEmProd, z)
 		}
 	}
+
+	// inputs
 	xall := G.Must(G.Concat(1, xs...))
 
+	// add inputs to embeddings, if present
 	if len(xEmInp) > 0 {
 		zemb := G.Must(G.Concat(1, xEmProd...)) // embeddings for input to FC layer
 		xall = G.Must(G.Concat(1, xall, zemb))
 	}
 
+	// target
 	obsF := modSpec[0]
 	var yoh *G.Node
 	// obsF.Cats = 0 if the target is continuous
@@ -186,7 +216,8 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 	default:
 		yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, obsF.Cats))
 	}
-	outLRows := xall.Shape()[1]
+
+	outLRows := xall.Shape()[1] // layer output dim
 	parW := make(G.Nodes, 0)
 	parB := make(G.Nodes, 0)
 	if hidden != nil {
@@ -202,11 +233,12 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 			parB = append(parB, b)
 		}
 	}
-	// if categorical, we drop the last category
+	// if target categorical, we drop the last category.  This eliminates unidentifiability issues
 	sub := 1
 	if yoh.Shape()[1] == 1 {
 		sub = 0
 	}
+	// weights & bias for output layer
 	lw := G.NewTensor(g, tensor.Float64, 2, G.WithName("lWeightsOut"), G.WithShape(outLRows, yoh.Shape()[1]-sub), G.WithInit(G.GlorotN(1.0)))
 	lb := G.NewTensor(g, tensor.Float64, 2, G.WithName("lBiasOut"), G.WithShape(1, yoh.Shape()[1]-sub), G.WithInit(G.GlorotN(1.0)))
 	parW = append(parW, lw)
@@ -223,15 +255,19 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 		construct: modSpec,
 		drops:     nil,
 	}
-	nn.Fwd()
+	nn.Fwd() // init forward pass
+	// add user opts
 	for _, o := range no {
 		o(nn)
 	}
 	return nn
 }
 
+// Build forward pass
 func (m *NNModel) Fwd() {
+	// input nodes
 	xall := G.Must(G.Concat(1, m.inputsC...))
+	// add embeddings
 	if len(m.inputsE) > 0 {
 		zp := make(G.Nodes, 0)
 		for ind, x := range m.inputsE {
@@ -241,12 +277,16 @@ func (m *NNModel) Fwd() {
 		emb := G.Must(G.Concat(1, zp...))
 		xall = G.Must(G.Concat(1, xall, emb))
 	}
+	// first layer
 	p := m.paramsW[0]
+	// add dropout
 	if d := m.drops.Get(0); d != nil {
 		p = G.Must(G.Dropout(p, d.DropProb))
 	}
+	// end of first layer
 	out := G.Must(G.Mul(xall, p))
 	out = G.Must(G.BroadcastAdd(out, m.paramsB[0], nil, []byte{0}))
+	// work through hidden layers
 	for ind := 1; ind < len(m.paramsW); ind++ {
 		p := m.paramsW[ind]
 		if d := m.drops.Get(ind); d != nil {
@@ -256,6 +296,7 @@ func (m *NNModel) Fwd() {
 		out = G.Must(G.BroadcastAdd(out, m.paramsB[ind], nil, []byte{0}))
 
 	}
+	// is output categorical?  Softmax...
 	if m.Obs().Shape()[1] > 1 {
 		exp := G.Must(G.Exp(out))
 		sexp := G.Must(G.Sum(exp, 1))
@@ -273,12 +314,15 @@ func (m *NNModel) Fwd() {
 
 }
 
+// struct to save nodes to json file
 type saveNode struct {
 	Name  string    `json:"name"`
 	Dims  []int     `json:"dims"`
 	Parms []float64 `json:"parms"`
 }
 
+// Save saves a model to disk.  Two files are created: *S.nn stores the structure of the model and
+// *P.nn stores the parameters.  Note: dropout layers are not saved.
 func (m *NNModel) Save(fileRoot string) error {
 	fileP := fileRoot + "P.nn"
 	f, e := os.Create(fileP)
@@ -310,6 +354,7 @@ func (m *NNModel) Save(fileRoot string) error {
 	return nil
 }
 
+// LoadNN restores a previously saved NNModel
 func LoadNN(fileRoot string, bSize int) (*NNModel, error) {
 
 	fileS := fileRoot + "S.nn"
@@ -383,16 +428,19 @@ func SoftRMS(model NNet) (cost *G.Node) {
 	return
 }
 
+// CrossEntropy cost function
 func CrossEntropy(model NNet) (cost *G.Node) {
 	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(model.Fitted().Nodes()[0])), model.Obs()))))))
 	return
 }
 
+// RMS cost function
 func RMS(model NNet) (cost *G.Node) {
 	cost = G.Must(golgi.RMS(model.Fitted().Nodes()[0], model.Obs()))
 	return
 }
 
+// Fit struct for fitting a NNModel
 type Fit struct {
 	nn        NNet
 	p         Pipeline
@@ -409,8 +457,10 @@ type Fit struct {
 	l2Penalty float64
 }
 
+// FitOpts functions add options
 type FitOpts func(*Fit)
 
+// NewFit creates a new *Fit.
 func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 	rand.Seed(time.Now().UnixMicro())
 	outFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
@@ -428,6 +478,7 @@ func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 	return fit
 }
 
+// WithL2Reg adds L2 regularization
 func WithL2Reg(penalty float64) FitOpts {
 	f := func(ft *Fit) {
 		ft.l2Penalty = penalty
@@ -435,6 +486,7 @@ func WithL2Reg(penalty float64) FitOpts {
 	return f
 }
 
+// WithLearnRate sets a learning rate function that declines linearly across the epochs.
 func WithLearnRate(lrStart float64, lrEnd float64) FitOpts {
 	f := func(ft *Fit) {
 		ft.lrStart = lrStart
@@ -443,6 +495,8 @@ func WithLearnRate(lrStart float64, lrEnd float64) FitOpts {
 	return f
 }
 
+// WithValidation adds a validation Pipeline for early stopping.  The fit is stopped when the validation cost
+// does not improve for wait epochs.
 func WithValidation(p Pipeline, wait int) FitOpts {
 	f := func(ft *Fit) {
 		ft.pVal = p
@@ -451,6 +505,7 @@ func WithValidation(p Pipeline, wait int) FitOpts {
 	return f
 }
 
+// WithOutFile specifies the file root name to save the best model.
 func WithOutFile(fileName string) FitOpts {
 	f := func(ft *Fit) {
 		ft.outFile = fileName
@@ -458,17 +513,22 @@ func WithOutFile(fileName string) FitOpts {
 	return f
 }
 
+// Outfile returns the output file name
 func (ft *Fit) OutFile() string {
 	return ft.outFile
 }
 
+// BestEpoch returns the epoch of the best cost (validation or in-sample--whichever is specified)
 func (ft *Fit) BestEpoch() int {
 	return ft.bestEpoch
 }
 
+// InCosts returns XY: X=epoch, Y=In-sample cost
 func (ft *Fit) InCosts() *XY {
 	return ft.inCosts
 }
+
+// OutCosts returns XY: X=epoch, Y=validation cost
 func (ft *Fit) OutCosts() *XY {
 	return ft.outCosts
 }
@@ -571,7 +631,8 @@ func (ft *Fit) Do() (err error) {
 	return
 }
 
-// PredictNN reads in a NNModel from disk and populates it with a batch from p
+// PredictNN reads in a NNModel from disk and populates it with a batch from p.
+// Methods such as FitSlice and ObsSlice are immediately available.
 func PredictNN(fileRoot string, bSize int, p Pipeline, opts ...NNOpts) (nn *NNModel, err error) {
 
 	nn, err = LoadNN(fileRoot, bSize)
@@ -591,10 +652,10 @@ func PredictNN(fileRoot string, bSize int, p Pipeline, opts ...NNOpts) (nn *NNMo
 	return
 }
 
-// Parse returns model features/targets as FTypes.  The first entry is the target.
+// ByFormula returns model features/targets as FTypes.  The first entry is the target.
 // The model is specified as "target~feature1+feature2+...+featurek).  Embeddings are
 // specified as "E(<feature name>,<# embedding columns>).
-func Parse(model string, p Pipeline) (modSpec FTypes, err error) {
+func ByFormula(model string, p Pipeline) (modSpec FTypes, err error) {
 	modSpec = make([]*FType, 0)
 	err = nil
 
@@ -606,7 +667,7 @@ func Parse(model string, p Pipeline) (modSpec FTypes, err error) {
 		return
 	}
 	// target
-	feat = p.GetFeature(lr[0])
+	feat = p.GetFType(lr[0])
 	if feat == nil {
 		return nil, fmt.Errorf("feature %s not found", lr[0])
 	}
@@ -632,7 +693,7 @@ func Parse(model string, p Pipeline) (modSpec FTypes, err error) {
 			}
 			embCols = int(em)
 		}
-		feat = p.GetFeature(ft)
+		feat = p.GetFType(ft)
 		if feat == nil {
 			return nil, fmt.Errorf("feature %s not found", f)
 		}
