@@ -1,7 +1,6 @@
-// This is more overview.
 package seafan
 
-// DNN functionality
+// NN functionality
 
 import (
 	"encoding/json"
@@ -22,7 +21,7 @@ import (
 // CostFunc function proto for cost functions
 type CostFunc func(model NNet) *G.Node
 
-// NNet interface
+// NNet interface for NN models
 type NNet interface {
 	Inputs() G.Nodes            // input nodes
 	Features() G.Nodes          // predictors
@@ -62,11 +61,29 @@ func (m *NNModel) String() string {
 	if m.construct == nil {
 		return "No model"
 	}
-	str := fmt.Sprintf("%s model\nInputs:\n", m.name)
+	str := fmt.Sprintf("%s\nInputs:\n", m.name)
 	for ind := 1; ind < len(m.construct); ind++ {
-		str = fmt.Sprintf("%s%s", str, m.construct[ind].String())
+		fld := "\t" + strings.ReplaceAll(m.construct[ind].String(), "\t", "\t\t")
+		str = fmt.Sprintf("%s%s", str, fld)
 	}
-	str = fmt.Sprintf("%s\nTarget:\n%s", str, m.construct[0].String())
+	fld := "\t" + strings.ReplaceAll(m.construct[0].String(), "\t", "\t\t")
+	str = fmt.Sprintf("%s\nTarget:\n%s", str, fld)
+	if m.cost != nil {
+		str = fmt.Sprintf("%s\nCost function: %s\n", str, m.cost.Name())
+	}
+	bSize := m.inputsC[0].Shape()[0]
+	str = fmt.Sprintf("%sBatch size: %d\n", str, bSize)
+	str = fmt.Sprintf("%sNN structure:\n", str)
+	for ind, n := range m.paramsW {
+		if d := m.drops.Get(ind); d != nil {
+			str = fmt.Sprintf("%s\tDrop Layer (probability = %0.2f)\n", str, d.DropProb)
+		}
+		addon := ""
+		if ind == len(m.paramsW)-1 {
+			addon = " (output)"
+		}
+		str = fmt.Sprintf("%s\tFC Layer %d: %v%s\n", str, ind, n.Shape(), addon)
+	}
 
 	return str
 }
@@ -164,6 +181,13 @@ func WithCostFn(cf CostFunc) NNOpts {
 	f := func(m *NNModel) {
 		m.costFn = cf
 		m.cost = cf(m)
+	}
+	return f
+}
+
+func WithName(name string) NNOpts {
+	f := func(m *NNModel) {
+		m.name = name
 	}
 	return f
 }
@@ -436,12 +460,14 @@ func SoftRMS(model NNet) (cost *G.Node) {
 // CrossEntropy cost function
 func CrossEntropy(model NNet) (cost *G.Node) {
 	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(model.Fitted().Nodes()[0])), model.Obs()))))))
+	G.WithName("CrossEntropy")(cost)
 	return
 }
 
 // RMS cost function
 func RMS(model NNet) (cost *G.Node) {
 	cost = G.Must(golgi.RMS(model.Fitted().Nodes()[0], model.Obs()))
+	G.WithName("RMS")(cost)
 	return
 }
 
@@ -579,8 +605,8 @@ func (ft *Fit) Do() (err error) {
 		ft.p.Epoch(ft.p.Epoch(-1) + 1)
 		itv = append(itv, float64(ep))
 		cv = append(cv, ft.nn.Cost().Value().Data().(float64))
-		switch {
-		case ft.pVal == nil:
+		switch ft.pVal == nil {
+		case true:
 			// judge best epoch by in-sample cost
 			if cv[len(cv)-1] < best {
 				best = cv[len(cv)-1]
@@ -589,7 +615,7 @@ func (ft *Fit) Do() (err error) {
 					return
 				}
 			}
-		default:
+		case false:
 			// find validation cost..save model and load to new graph
 			if err = ft.nn.Save(ft.tmpFile); err != nil {
 				return err
@@ -625,9 +651,11 @@ func (ft *Fit) Do() (err error) {
 			}
 		}
 	}
-	fmt.Println("best epoch: ", ft.bestEpoch)
 	elapsed := time.Since(t).Minutes()
-	fmt.Printf("elapsed time %0.1f minutes\n", elapsed)
+	if Verbose {
+		fmt.Println("best epoch: ", ft.bestEpoch)
+		fmt.Printf("elapsed time %0.1f minutes\n", elapsed)
+	}
 	ft.inCosts, err = NewXY(itv, cv)
 	ft.outCosts, err = NewXY(itv, cVal)
 	// clean up
@@ -701,6 +729,9 @@ func ByFormula(model string, p Pipeline) (modSpec FTypes, err error) {
 		feat = p.GetFType(ft)
 		if feat == nil {
 			return nil, fmt.Errorf("feature %s not found", f)
+		}
+		if feat.Role == FRCat {
+			return nil, fmt.Errorf("feature %s is categorical--must convert to one-hot", feat.Name)
 		}
 		feat.EmbCols = embCols
 		if embCols > 0 {

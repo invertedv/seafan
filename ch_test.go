@@ -194,7 +194,7 @@ func ExampleChData_Batch() {
 	// mean of x1: 0.00
 }
 
-func ExampleChData_Batch_additional() {
+func ExampleChData_Batch_example2() {
 	// We can normalize fields by values we supply rather than the values in the epoch.
 	dataPath := os.Getenv("data") // path to data directory
 	fileName := dataPath + "/test1.csv"

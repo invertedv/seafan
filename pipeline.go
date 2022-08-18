@@ -54,12 +54,12 @@ func WithCats(names ...string) Opts {
 		switch d := c.(type) {
 		case *ChData:
 			for _, nm := range names {
-				dt := d.Get(nm)
-				if dt != nil {
-					dt.FT.Role = FRCat
+				ft := d.ftypes.Get(nm)
+				if ft != nil {
+					ft.Role = FRCat
 					continue
 				}
-				ft := &FType{
+				ft = &FType{
 					Name: nm,
 					Role: FRCat,
 				}

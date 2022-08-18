@@ -6,8 +6,6 @@ import (
 	"math"
 )
 
-var Browser = "firefox" // Browser is the browser to use for plotting.
-
 type Slicer func(row int) bool
 
 // Coalesce reduces a softmax output to two categories

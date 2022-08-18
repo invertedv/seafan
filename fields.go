@@ -53,7 +53,7 @@ type Summary struct {
 }
 
 func (ft *FType) String() string {
-	str := fmt.Sprintf("\nField %s\n", ft.Name)
+	str := fmt.Sprintf("Field %s\n", ft.Name)
 	switch ft.Role {
 	case FRCts:
 		str = fmt.Sprintf("%s\tcontinuous\n", str)

@@ -5,15 +5,15 @@ import (
 	"github.com/invertedv/chutils"
 	"github.com/invertedv/chutils/file"
 	"github.com/stretchr/testify/assert"
+	"gonum.org/v1/gonum/stat"
 	"log"
 	"os"
 	"testing"
 )
 
-func chPipe(bSize int) *ChData {
+func chPipe(bSize int, fileName string) *ChData {
 	dataPath := os.Getenv("data") // path to data directory
-	fileName := dataPath + "/test1.csv"
-	f, e := os.Open(fileName)
+	f, e := os.Open(dataPath + "/" + fileName)
 	if e != nil {
 		log.Fatalln(e)
 	}
@@ -41,9 +41,9 @@ func chPipe(bSize int) *ChData {
 	return ch
 }
 func TestFit_Do(t *testing.T) {
-
+	Verbose = false
 	bSize := 100
-	pipe := chPipe(bSize)
+	pipe := chPipe(bSize, "test1.csv")
 	mod, e := ByFormula("yoh~x1+x2+x3+x4", pipe)
 	assert.Nil(t, e)
 	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
@@ -51,9 +51,6 @@ func TestFit_Do(t *testing.T) {
 	ft := NewFit(nn, epochs, pipe)
 	e = ft.Do()
 	assert.Nil(t, e)
-	for _, n := range nn.Params() {
-		fmt.Println(n.Name(), n.Value().Data().([]float64))
-	}
 	wts := []float64{-2.06, -3.5, 1, -0.08} //glm logistic estimates
 	n := nn.G().ByName("lWeightsOut").Nodes()[0].Value().Data().([]float64)
 	for ind, w := range wts {
@@ -61,11 +58,145 @@ func TestFit_Do(t *testing.T) {
 	}
 }
 
-func ExampleFit_Do() {
+func ExampleWithOneHot() {
+	// This example shows a model that incorporates a feature (x4) as one-hot and an embedding
+	Verbose = false
 	bSize := 100
 	// generate a Pipeline of type *ChData that reads test.csv in the data directory
-	pipe := chPipe(bSize)
-	// model: target and features.  Target yoh is one-hot with 2 levels
+	pipe := chPipe(bSize, "test1.csv")
+	// The feature x4 takes on values 0,1,2,...19.  chPipe treats this a a continuous feature.
+	// Let's override that and re-initialize the pipeline.
+	WithCats("x4")(pipe)
+	WithOneHot("x4oh", "x4")(pipe)
+
+	if e := pipe.Init(); e != nil {
+		log.Fatalln(e)
+	}
+
+	mod, e := ByFormula("yoh~x1+x2+x3+x4oh", pipe)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	fmt.Println("x4 as one-hot")
+	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
+	fmt.Println(nn)
+	fmt.Println("x4 as embedding")
+	mod, e = ByFormula("yoh~x1+x2+x3+E(x4oh,3)", pipe)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	nn = NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
+	fmt.Println(nn)
+	// Output:
+	//x4 as one-hot
+	//
+	//Inputs:
+	//	Field x1
+	//		continuous
+	//	Field x2
+	//		continuous
+	//	Field x3
+	//		continuous
+	//	Field x4oh
+	//		one-hot
+	//		derived from feature x4
+	//		length 20
+	//
+	// Target:
+	//	Field yoh
+	//		one-hot
+	//		derived from feature y
+	//		length 2
+	//
+	// Cost function: CrossEntropy
+	// Batch size: 100
+	// NN structure:
+	//	FC Layer 0: (23, 1) (output)
+	//
+	//
+	// x4 as embedding
+	//
+	// Inputs:
+	//	Field x1
+	//		continuous
+	//	Field x2
+	//		continuous
+	//	Field x3
+	//		continuous
+	//	Field x4oh
+	//		embedding
+	//		derived from feature x4
+	//		length 20
+	//		embedding dimension of 3
+	//
+	// Target:
+	//	Field yoh
+	//		one-hot
+	//		derived from feature y
+	//		length 2
+	//
+	// Cost function: CrossEntropy
+	// Batch size: 100
+	// NN structure:
+	//	FC Layer 0: (6, 1) (output)
+
+}
+
+func ExampleWithDropOuts() {
+	Verbose = false
+	bSize := 100
+	// generate a Pipeline of type *ChData that reads test.csv in the data directory
+	pipe := chPipe(bSize, "test1.csv")
+	// generate model: target and features.  Target yoh is one-hot with 2 levels
+	mod, e := ByFormula("yoh~x1+x2+x3+x4", pipe)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	// model is straight-forward with no hidden layers or dropouts.
+	drops := Drops{
+		&Drop{AfterLayer: 1, DropProb: .1},
+		&Drop{AfterLayer: 2, DropProb: .05},
+	}
+	nn := NewNNModel(bSize, mod, []int{3, 4, 2},
+		WithCostFn(CrossEntropy),
+		WithDropOuts(drops),
+		WithName("Example With Dropouts"))
+	fmt.Println(nn)
+	// Output:
+	// Example With Dropouts
+	// Inputs:
+	//	Field x1
+	//		continuous
+	//	Field x2
+	//		continuous
+	//	Field x3
+	//		continuous
+	//	Field x4
+	//		continuous
+	//
+	// Target:
+	//	Field yoh
+	//		one-hot
+	//		derived from feature y
+	//		length 2
+	//
+	// Cost function: CrossEntropy
+	// Batch size: 100
+	// NN structure:
+	//	FC Layer 0: (4, 3)
+	//	Drop Layer (probability = 0.10)
+	//	FC Layer 1: (3, 4)
+	//	Drop Layer (probability = 0.05)
+	//	FC Layer 2: (4, 2)
+	//	FC Layer 3: (2, 1) (output)
+}
+
+func ExampleFit_Do() {
+	Verbose = false
+	bSize := 100
+	// generate a Pipeline of type *ChData that reads test.csv in the data directory
+	pipe := chPipe(bSize, "test1.csv")
+	// generate model: target and features.  Target yoh is one-hot with 2 levels
 	mod, e := ByFormula("yoh~x1+x2+x3+x4", pipe)
 	if e != nil {
 		log.Fatalln(e)
@@ -79,12 +210,84 @@ func ExampleFit_Do() {
 		log.Fatalln(e)
 	}
 	// Plot the in-sample cost in a browser (default: firefox)
-	e = ft.InCosts().Plot(&PlotDef{Title: "In Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
 	if e != nil {
 		log.Fatalln(e)
 	}
 	// Output:
-	// rows read:  8500
-	// best epoch:  150
-	// elapsed time 0.1 minutes
+}
+
+func ExampleFit_Do_example2() {
+	// This example demonstrates how to use a validation sample for early stopping
+	Verbose = false
+	bSize := 100
+	// generate a Pipeline of type *ChData that reads test.csv in the data directory
+	mPipe := chPipe(bSize, "test1.csv")
+	vPipe := chPipe(1000, "testVal.csv")
+
+	// generate model: target and features.  Target yoh is one-hot with 2 levels
+	mod, e := ByFormula("yoh~x1+x2+x3+x4", mPipe)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	// model is straight-forward with no hidden layers or dropouts.
+	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
+	epochs := 150
+	ft := NewFit(nn, epochs, mPipe)
+	WithValidation(vPipe, 10)(ft)
+	e = ft.Do()
+	if e != nil {
+		log.Fatalln(e)
+	}
+	// Plot the in-sample cost in a browser (default: firefox)
+	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	e = ft.OutCosts().Plot(&PlotDef{Title: "Validation Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	// Output:
+}
+
+func ExamplePredictNN() {
+	// This example demonstrates fitting a regression model and predicting on new data
+	Verbose = false
+	bSize := 100
+	// generate a Pipeline of type *ChData that reads test.csv in the data directory
+	mPipe := chPipe(bSize, "test1.csv")
+	vPipe := chPipe(1000, "testVal.csv")
+
+	// generate model: target and features.  Target yoh is one-hot with 2 levels
+	mod, e := ByFormula("ycts~x1+x2+x3+x4", mPipe)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	// model is straight-forward with no hidden layers or dropouts.
+	nn := NewNNModel(bSize, mod, nil, WithCostFn(RMS))
+	epochs := 150
+	ft := NewFit(nn, epochs, mPipe)
+	e = ft.Do()
+	if e != nil {
+		log.Fatalln(e)
+	}
+	sf := os.TempDir() + "/nnTest"
+	e = nn.Save(sf)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	pred, e := PredictNN(sf, vPipe.BatchSize(), vPipe)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	fmt.Printf("out-of-sample correlation: %0.2f\n", stat.Correlation(pred.FitSlice(), pred.ObsSlice(), nil))
+	e = os.Remove(sf + "P.nn")
+	if e != nil {
+		log.Fatalln(e)
+	}
+	e = os.Remove(sf + "S.nn")
+	// Output:
+	// out-of-sample correlation: 0.84
+
 }

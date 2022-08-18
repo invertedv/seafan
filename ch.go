@@ -125,7 +125,9 @@ func (ch *ChData) Init() (err error) {
 	for row := 0; ; row++ {
 		r, _, e := ch.rdr.Read(1, true)
 		if e == io.EOF {
-			fmt.Println("rows read: ", row)
+			if Verbose {
+				fmt.Println("rows read: ", row)
+			}
 			break
 		}
 		// now we have the types, we can allocate the slices
