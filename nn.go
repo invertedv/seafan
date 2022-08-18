@@ -1,3 +1,4 @@
+// This is more overview.
 package seafan
 
 // DNN functionality
@@ -346,9 +347,6 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 		return
 	}
 	if _, err = f.WriteString(string(jp)); err != nil {
-		return
-	}
-	if err = f.Close(); err != nil {
 		return
 	}
 
