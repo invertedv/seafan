@@ -1,5 +1,7 @@
 package seafan
 
+//TODO: layer numbers ... off? say, want drop after inputs
+
 // NN functionality
 
 import (
@@ -47,8 +49,7 @@ type NNModel struct {
 	inputsE   G.Nodes      // embedding inputs
 	obs       *G.Node      // observed values for model fit
 	cost      *G.Node      // cost node for model build
-	construct FTypes       // output, input FType
-	drops     Drops        // drop out layers
+	construct ModSpec      // model spec
 	costFn    CostFunc     // costFn corresponding to cost *G.Node
 }
 
@@ -63,10 +64,10 @@ func (m *NNModel) String() string {
 	}
 	str := fmt.Sprintf("%s\nInputs:\n", m.name)
 	for ind := 1; ind < len(m.construct); ind++ {
-		fld := "\t" + strings.ReplaceAll(m.construct[ind].String(), "\t", "\t\t")
+		fld := "\t" + strings.ReplaceAll(m.construct[ind], "\t", "\t\t")
 		str = fmt.Sprintf("%s%s", str, fld)
 	}
-	fld := "\t" + strings.ReplaceAll(m.construct[0].String(), "\t", "\t\t")
+	fld := "\t" + strings.ReplaceAll(m.construct[0], "\t", "\t\t")
 	str = fmt.Sprintf("%s\nTarget:\n%s", str, fld)
 	if m.cost != nil {
 		str = fmt.Sprintf("%s\nCost function: %s\n", str, m.cost.Name())
@@ -75,14 +76,14 @@ func (m *NNModel) String() string {
 	str = fmt.Sprintf("%sBatch size: %d\n", str, bSize)
 	str = fmt.Sprintf("%sNN structure:\n", str)
 	for ind, n := range m.paramsW {
-		if d := m.drops.Get(ind); d != nil {
+		if d := m.construct.DropOut(ind); d != nil {
 			str = fmt.Sprintf("%s\tDrop Layer (probability = %0.2f)\n", str, d.DropProb)
 		}
 		addon := ""
 		if ind == len(m.paramsW)-1 {
 			addon = " (output)"
 		}
-		str = fmt.Sprintf("%s\tFC Layer %d: %v%s\n", str, ind, n.Shape(), addon)
+		str = fmt.Sprintf("%s\tFCLayer Layer %d: %v%s\n", str, ind, n.Shape(), addon)
 	}
 
 	return str
@@ -167,15 +168,6 @@ func (d Drops) Get(after int) *Drop {
 // NNOpts -- NNModel options
 type NNOpts func(model1 *NNModel)
 
-// WithDropOuts adds dropout layers
-func WithDropOuts(drops Drops) NNOpts {
-	f := func(m *NNModel) {
-		m.drops = drops
-		m.Fwd()
-	}
-	return f
-}
-
 // WithCostFn adds a cost function
 func WithCostFn(cf CostFunc) NNOpts {
 	f := func(m *NNModel) {
@@ -193,18 +185,21 @@ func WithName(name string) NNOpts {
 }
 
 // NewNNModel creates a new NN model. The modSpec input can be created by ByFormula.
-func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNModel {
+func NewNNModel(modSpec ModSpec, p Pipeline, no ...NNOpts) (*NNModel, error) {
+	bSize := p.BatchSize()
 	g := G.NewGraph()
 	xs := make(G.Nodes, 0)
 	embParm := make(G.Nodes, 0) // embedding parameters
 	xEmInp := make(G.Nodes, 0)  // one-hot input
 	xEmProd := make(G.Nodes, 0) // product of one-hot input and embedding parameters
 	// work through the features
-	for ind, f := range modSpec {
+	inps, e := modSpec.Inputs(p)
+	if e != nil {
+		return nil, e
+	}
+	for ind := 0; ind < len(inps); ind++ {
+		f := inps[ind]
 		// first element is the target--skip
-		if ind == 0 {
-			continue
-		}
 		switch f.Role {
 		case FRCts:
 			x := G.NewTensor(g, tensor.Float64, 2, G.WithName(f.Name), G.WithShape(bSize, 1))
@@ -227,12 +222,15 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 
 	// add inputs to embeddings, if present
 	if len(xEmInp) > 0 {
-		zemb := G.Must(G.Concat(1, xEmProd...)) // embeddings for input to FC layer
+		zemb := G.Must(G.Concat(1, xEmProd...)) // embeddings for input to FCLayer layer
 		xall = G.Must(G.Concat(1, xall, zemb))
 	}
 
 	// target
-	obsF := modSpec[0]
+	obsF, e := modSpec.Output(p)
+	if e != nil {
+		return nil, e
+	}
 	var yoh *G.Node
 	// obsF.Cats = 0 if the target is continuous
 	switch {
@@ -242,32 +240,23 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 		yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, obsF.Cats))
 	}
 
-	outLRows := xall.Shape()[1] // layer output dim
+	lastCols := xall.Shape()[1] // layer output dim
 	parW := make(G.Nodes, 0)
 	parB := make(G.Nodes, 0)
-	if hidden != nil {
-		dims := []int{outLRows}
-		dims = append(dims, hidden...)
-		outLRows = hidden[len(hidden)-1]
-		for ind := 1; ind < len(dims); ind++ {
-			nmw := "lWeights" + strconv.Itoa(ind)
-			nmb := "lBias" + strconv.Itoa(ind)
-			w := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmw), G.WithShape(dims[ind-1], dims[ind]), G.WithInit(G.GlorotN(1.0)))
-			b := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmb), G.WithShape(1, dims[ind]), G.WithInit(G.GlorotN(1.0)))
-			parW = append(parW, w)
-			parB = append(parB, b)
+	fcs := modSpec.FCs()
+	for ind := 0; ind < len(fcs); ind++ {
+		nmw := "lWeights" + strconv.Itoa(ind)
+		nmb := "lBias" + strconv.Itoa(ind)
+		cols := int(fcs[ind].Size)
+		if fcs[ind].Act == SoftMax {
+			cols--
 		}
+		w := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmw), G.WithShape(lastCols, cols), G.WithInit(G.GlorotN(1.0)))
+		b := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmb), G.WithShape(1, cols), G.WithInit(G.GlorotN(1.0)))
+		lastCols = cols
+		parW = append(parW, w)
+		parB = append(parB, b)
 	}
-	// if target categorical, we drop the last category.  This eliminates unidentifiability issues
-	sub := 1
-	if yoh.Shape()[1] == 1 {
-		sub = 0
-	}
-	// weights & bias for output layer
-	lw := G.NewTensor(g, tensor.Float64, 2, G.WithName("lWeightsOut"), G.WithShape(outLRows, yoh.Shape()[1]-sub), G.WithInit(G.GlorotN(1.0)))
-	lb := G.NewTensor(g, tensor.Float64, 2, G.WithName("lBiasOut"), G.WithShape(1, yoh.Shape()[1]-sub), G.WithInit(G.GlorotN(1.0)))
-	parW = append(parW, lw)
-	parB = append(parB, lb)
 
 	nn := &NNModel{
 		g:         g,
@@ -278,14 +267,14 @@ func NewNNModel(bSize int, modSpec []*FType, hidden []int, no ...NNOpts) *NNMode
 		inputsE:   xEmInp,
 		obs:       yoh,
 		construct: modSpec,
-		drops:     nil,
 	}
+
 	nn.Fwd() // init forward pass
 	// add user opts
 	for _, o := range no {
 		o(nn)
 	}
-	return nn
+	return nn, nil
 }
 
 // Fwd builds forward pass
@@ -302,39 +291,30 @@ func (m *NNModel) Fwd() {
 		emb := G.Must(G.Concat(1, zp...))
 		xall = G.Must(G.Concat(1, xall, emb))
 	}
-	// first layer
-	p := m.paramsW[0]
-	// add dropout
-	if d := m.drops.Get(0); d != nil {
-		p = G.Must(G.Dropout(p, d.DropProb))
-	}
-	// end of first layer
-	out := G.Must(G.Mul(xall, p))
-	out = G.Must(G.BroadcastAdd(out, m.paramsB[0], nil, []byte{0}))
-	// work through hidden layers
-	for ind := 1; ind < len(m.paramsW); ind++ {
-		p := m.paramsW[ind]
-		if d := m.drops.Get(ind); d != nil {
-			p = G.Must(G.Dropout(p, d.DropProb))
-		}
-		out = G.Must(G.Mul(out, p))
-		out = G.Must(G.BroadcastAdd(out, m.paramsB[ind], nil, []byte{0}))
+	out := xall
 
+	// work through layers
+	for ind := 0; ind < len(m.paramsW); ind++ {
+		if d := m.construct.DropOut(ind); d != nil {
+			out = G.Must(G.Dropout(out, d.DropProb))
+		}
+		px := m.paramsW[ind]
+		out = G.Must(G.Mul(out, px))
+		out = G.Must(G.BroadcastAdd(out, m.paramsB[ind], nil, []byte{0}))
+		ly := m.construct.FC(ind)
+
+		switch ly.Act {
+		case Relu:
+			out = ReluAct(out)
+		case LeakyRelu:
+			out = LeakyReluAct(out, ly.ActParm)
+		case Sigmoid:
+			out = SigmoidAct(out)
+		case SoftMax:
+			out = SoftMaxAct(out)
+		}
 	}
-	// is output categorical?  Softmax...
-	if m.Obs().Shape()[1] > 1 {
-		exp := G.Must(G.Exp(out))
-		sexp := G.Must(G.Sum(exp, 1))
-		sexp = G.Must(G.Add(sexp, G.NewConstant(1.0)))
-		phat := G.Must(G.BroadcastHadamardDiv(exp, sexp, nil, []byte{1}))
-		phats := G.Must(G.Sum(phat, 1))
-		phat1 := G.Must(G.Sub(G.NewConstant(1.0), phats))
-		r := phat1.Shape()[0]
-		phat1a := G.Must(G.Reshape(phat1, tensor.Shape{r, 1}))
-		phat2 := G.Must(G.Concat(1, phat, phat1a))
-		m.output = phat2
-		return
-	}
+
 	m.output = out
 
 }
@@ -382,11 +362,11 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 }
 
 // LoadNN restores a previously saved NNModel
-func LoadNN(fileRoot string, bSize int) (nn *NNModel, err error) {
+func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	err = nil
 	nn = nil
 	fileS := fileRoot + "S.nn"
-	modSpec, err := LoadFTypes(fileS)
+	modSpec, err := LoadModSpec(fileS)
 	if err != nil {
 		return
 	}
@@ -414,7 +394,7 @@ func LoadNN(fileRoot string, bSize int) (nn *NNModel, err error) {
 		}
 	}
 
-	nn = NewNNModel(bSize, modSpec, hidden)
+	nn, err = NewNNModel(modSpec, p)
 	if len(data) != len(nn.Params()) {
 		return nil, fmt.Errorf("node count differs")
 	}
@@ -668,7 +648,7 @@ func (ft *Fit) Do() (err error) {
 // Methods such as FitSlice and ObsSlice are immediately available.
 func PredictNN(fileRoot string, bSize int, p Pipeline, opts ...NNOpts) (nn *NNModel, err error) {
 
-	nn, err = LoadNN(fileRoot, bSize)
+	nn, err = LoadNN(fileRoot, p, false)
 	for _, o := range opts {
 		o(nn)
 	}
@@ -685,62 +665,32 @@ func PredictNN(fileRoot string, bSize int, p Pipeline, opts ...NNOpts) (nn *NNMo
 	return
 }
 
-// ByFormula returns model features/targets as FTypes.  The first entry is the target.
-// The model is specified as "target~feature1+feature2+...+featurek).  Embeddings are
-// specified as "E(<feature name>,<# embedding columns>).
-func ByFormula(model string, p Pipeline) (modSpec FTypes, err error) {
-	modSpec = make([]*FType, 0)
-	err = nil
+func SoftMaxAct(n *G.Node) *G.Node {
+	exp := G.Must(G.Exp(n))
+	sexp := G.Must(G.Sum(exp, 1))
+	sexp = G.Must(G.Add(sexp, G.NewConstant(1.0)))
+	phat := G.Must(G.BroadcastHadamardDiv(exp, sexp, nil, []byte{1}))
+	phats := G.Must(G.Sum(phat, 1))
+	phat1 := G.Must(G.Sub(G.NewConstant(1.0), phats))
+	r := phat1.Shape()[0]
+	phat1a := G.Must(G.Reshape(phat1, tensor.Shape{r, 1}))
+	phat2 := G.Must(G.Concat(1, phat, phat1a))
+	//	fmt.Println("phat2 shape ", phat2.Shape())
+	return phat2
+}
 
-	var feat *FType
-	model = strings.ReplaceAll(model, " ", "")
-	lr := strings.Split(model, "~")
-	if len(lr) != 2 {
-		err = fmt.Errorf("bad formula ~")
-		return
-	}
-	// target
-	feat = p.GetFType(lr[0])
-	if feat == nil {
-		return nil, fmt.Errorf("feature %s not found", lr[0])
-	}
-	modSpec = append(modSpec, feat)
+func LinearAct(n *G.Node) *G.Node {
+	return n
+}
 
-	fs := strings.Split(lr[1], "+")
-	for _, f := range fs {
-		ft := f
-		embCols := 0
-		if strings.Contains(f, "E(") || strings.Contains(f, "e(") {
-			l := strings.Split(ft, ",")
-			if len(l) != 2 {
-				return nil, fmt.Errorf("parse error")
-			}
-			ft = l[0][2:]
-			var em int64
-			em, err = strconv.ParseInt(l[1][0:len(l[1])-1], 10, 32)
-			if err != nil {
-				return nil, err
-			}
-			if em <= 1 {
-				return nil, fmt.Errorf("embedding columns must be at least 2")
-			}
-			embCols = int(em)
-		}
-		feat = p.GetFType(ft)
-		if feat == nil {
-			return nil, fmt.Errorf("feature %s not found", f)
-		}
-		if feat.Role == FRCat {
-			return nil, fmt.Errorf("feature %s is categorical--must convert to one-hot", feat.Name)
-		}
-		feat.EmbCols = embCols
-		if embCols > 0 {
-			if feat.Role != FROneHot {
-				return nil, fmt.Errorf("feature %s must be one-hot", ft)
-			}
-			feat.Role = FREmbed
-		}
-		modSpec = append(modSpec, feat)
-	}
-	return
+func ReluAct(n *G.Node) *G.Node {
+	return G.Must(G.LeakyRelu(n, 0.0))
+}
+
+func LeakyReluAct(n *G.Node, alpha float64) *G.Node {
+	return G.Must(G.LeakyRelu(n, alpha))
+}
+
+func SigmoidAct(n *G.Node) *G.Node {
+	return G.Must(G.Sigmoid(n))
 }

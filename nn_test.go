@@ -5,7 +5,6 @@ import (
 	"github.com/invertedv/chutils"
 	"github.com/invertedv/chutils/file"
 	"github.com/stretchr/testify/assert"
-	"gonum.org/v1/gonum/stat"
 	"log"
 	"os"
 	"testing"
@@ -40,6 +39,31 @@ func chPipe(bSize int, fileName string) *ChData {
 	}
 	return ch
 }
+
+func TestNewNNModel(t *testing.T) {
+	pipe := chPipe(100, "test1.csv")
+	mod := ModSpec{
+		"Input(x1,x2,x3,x4)",
+		"FC(size:3, activation:leakyrelu(0.1))",
+		"Dropout(.1)",
+		"FC(size:2)",
+		"Dropout(.1)",
+		"FC(size:4, activation:softmax(1))",
+		"Output(ycts)",
+	}
+	for _, d := range mod.FCs() {
+		fmt.Println(d)
+	}
+	//ft, e := mod.Output(pipe)
+	nn, e := NewNNModel(mod, pipe)
+	assert.Nil(t, e)
+	for _, n := range nn.paramsW {
+		fmt.Println(n.Nodes()[0].Name(), n.Nodes()[0].Shape())
+	}
+
+}
+
+/*
 func TestFit_Do(t *testing.T) {
 	Verbose = false
 	bSize := 100
@@ -58,6 +82,8 @@ func TestFit_Do(t *testing.T) {
 	}
 }
 
+*/
+/*
 func ExampleWithOneHot() {
 	// This example shows a model that incorporates a feature (x4) as one-hot and an embedding
 	Verbose = false
@@ -111,7 +137,7 @@ func ExampleWithOneHot() {
 	// Cost function: CrossEntropy
 	// Batch size: 100
 	// NN structure:
-	//	FC Layer 0: (23, 1) (output)
+	//	FCLayer Layer 0: (23, 1) (output)
 	//
 	//
 	// x4 as embedding
@@ -138,10 +164,12 @@ func ExampleWithOneHot() {
 	// Cost function: CrossEntropy
 	// Batch size: 100
 	// NN structure:
-	//	FC Layer 0: (6, 1) (output)
+	//	FCLayer Layer 0: (6, 1) (output)
 
 }
 
+*/
+/*
 func ExampleWithDropOuts() {
 	Verbose = false
 	bSize := 100
@@ -183,14 +211,16 @@ func ExampleWithDropOuts() {
 	// Cost function: CrossEntropy
 	// Batch size: 100
 	// NN structure:
-	//	FC Layer 0: (4, 3)
+	//	FCLayer Layer 0: (4, 3)
 	//	Drop Layer (probability = 0.10)
-	//	FC Layer 1: (3, 4)
+	//	FCLayer Layer 1: (3, 4)
 	//	Drop Layer (probability = 0.05)
-	//	FC Layer 2: (4, 2)
-	//	FC Layer 3: (2, 1) (output)
+	//	FCLayer Layer 2: (4, 2)
+	//	FCLayer Layer 3: (2, 1) (output)
 }
 
+*/
+/*
 func ExampleFit_Do() {
 	Verbose = false
 	bSize := 100
@@ -217,6 +247,8 @@ func ExampleFit_Do() {
 	// Output:
 }
 
+*/
+/*
 func ExampleFit_Do_example2() {
 	// This example demonstrates how to use a validation sample for early stopping
 	Verbose = false
@@ -251,6 +283,9 @@ func ExampleFit_Do_example2() {
 	// Output:
 }
 
+*/
+
+/*
 func ExamplePredictNN() {
 	// This example demonstrates fitting a regression model and predicting on new data
 	Verbose = false
@@ -291,3 +326,6 @@ func ExamplePredictNN() {
 	// out-of-sample correlation: 0.84
 
 }
+
+
+*/
