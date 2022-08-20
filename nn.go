@@ -1,6 +1,9 @@
 package seafan
 
-//TODO: layer numbers ... off? say, want drop after inputs
+//TODO: layer numbers ... off? say, want drop after inputs...fixed??
+//TODO: build mode vs predict mode (exclude dropouts)
+//TODO: add cost function, LR, L2Reg to save/print?
+//TODO: OR move cost to Fit
 
 // NN functionality
 
@@ -62,30 +65,15 @@ func (m *NNModel) String() string {
 	if m.construct == nil {
 		return "No model"
 	}
-	str := fmt.Sprintf("%s\nInputs:\n", m.name)
-	for ind := 1; ind < len(m.construct); ind++ {
-		fld := "\t" + strings.ReplaceAll(m.construct[ind], "\t", "\t\t")
-		str = fmt.Sprintf("%s%s", str, fld)
+	str := fmt.Sprintf("%s\n", m.Name())
+	for ind := 0; ind < len(m.construct); ind++ {
+		str = fmt.Sprintf("%s%s\n", str, m.construct[ind])
 	}
-	fld := "\t" + strings.ReplaceAll(m.construct[0], "\t", "\t\t")
-	str = fmt.Sprintf("%s\nTarget:\n%s", str, fld)
 	if m.cost != nil {
 		str = fmt.Sprintf("%s\nCost function: %s\n", str, m.cost.Name())
 	}
 	bSize := m.inputsC[0].Shape()[0]
 	str = fmt.Sprintf("%sBatch size: %d\n", str, bSize)
-	str = fmt.Sprintf("%sNN structure:\n", str)
-	for ind, n := range m.paramsW {
-		if d := m.construct.DropOut(ind); d != nil {
-			str = fmt.Sprintf("%s\tDrop Layer (probability = %0.2f)\n", str, d.DropProb)
-		}
-		addon := ""
-		if ind == len(m.paramsW)-1 {
-			addon = " (output)"
-		}
-		str = fmt.Sprintf("%s\tFCLayer Layer %d: %v%s\n", str, ind, n.Shape(), addon)
-	}
-
 	return str
 }
 
@@ -145,24 +133,6 @@ func (m *NNModel) Params() G.Nodes {
 // G returns model graph
 func (m *NNModel) G() *G.ExprGraph {
 	return m.g
-}
-
-// Drop specifies a dropout layer.  It occurs in the graph after dense layer AfterLayer (the input layer is layer 0).
-type Drop struct {
-	AfterLayer int     // insert dropout after layer AfterLayer
-	DropProb   float64 // dropout probability
-}
-
-type Drops []*Drop
-
-// Get returns the dropout layer that occurs after dense layer after
-func (d Drops) Get(after int) *Drop {
-	for _, l := range d {
-		if l.AfterLayer == after {
-			return l
-		}
-	}
-	return nil
 }
 
 // NNOpts -- NNModel options
@@ -232,32 +202,61 @@ func NewNNModel(modSpec ModSpec, p Pipeline, no ...NNOpts) (*NNModel, error) {
 		return nil, e
 	}
 	var yoh *G.Node
-	// obsF.Cats = 0 if the target is continuous
-	switch {
-	case obsF.Cats <= 1:
-		yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, 1))
-	default:
-		yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, obsF.Cats))
+	yoh = nil
+	if obsF != nil {
+		switch obsF.Role {
+		case FRCts:
+			yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, 1))
+		case FROneHot:
+			yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, obsF.Cats))
+		default:
+			return nil, fmt.Errorf("output must be either FRCts or FROneHot")
+		}
 	}
 
 	lastCols := xall.Shape()[1] // layer output dim
 	parW := make(G.Nodes, 0)
 	parB := make(G.Nodes, 0)
-	fcs := modSpec.FCs()
-	for ind := 0; ind < len(fcs); ind++ {
-		nmw := "lWeights" + strconv.Itoa(ind)
-		nmb := "lBias" + strconv.Itoa(ind)
-		cols := int(fcs[ind].Size)
-		if fcs[ind].Act == SoftMax {
+
+	for ind := 0; ind < len(modSpec); ind++ {
+		ly := *modSpec.LType(ind)
+		if ly != FC {
+			continue
+		}
+		fc := modSpec.FC(ind)
+		if fc == nil {
+			return nil, fmt.Errorf("error parsing layer %d", ind)
+		}
+		cols := int(fc.Size)
+		if fc.Act == SoftMax {
+			if obsF.Role != FROneHot {
+				return nil, fmt.Errorf("obs not one-hot but softmax activation")
+			}
 			cols--
 		}
+		nmw := "lWeights" + strconv.Itoa(ind)
 		w := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmw), G.WithShape(lastCols, cols), G.WithInit(G.GlorotN(1.0)))
-		b := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmb), G.WithShape(1, cols), G.WithInit(G.GlorotN(1.0)))
+		if fc.Bias {
+			nmb := "lBias" + strconv.Itoa(ind)
+			b := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmb), G.WithShape(1, cols), G.WithInit(G.GlorotN(1.0)))
+			parB = append(parB, b)
+		}
 		lastCols = cols
 		parW = append(parW, w)
-		parB = append(parB, b)
 	}
+	if yoh != nil {
+		switch obsF.Role {
+		case FRCts:
+			if yoh.Shape()[1] != lastCols {
+				return nil, fmt.Errorf("output node and obs node have differing columns")
+			}
+		case FROneHot:
+			if yoh.Shape()[1] != lastCols+1 {
+				return nil, fmt.Errorf("output node and obs node have differing columns")
+			}
 
+		}
+	}
 	nn := &NNModel{
 		g:         g,
 		paramsW:   parW,
@@ -294,27 +293,36 @@ func (m *NNModel) Fwd() {
 	out := xall
 
 	// work through layers
-	for ind := 0; ind < len(m.paramsW); ind++ {
-		if d := m.construct.DropOut(ind); d != nil {
-			out = G.Must(G.Dropout(out, d.DropProb))
-		}
-		px := m.paramsW[ind]
-		out = G.Must(G.Mul(out, px))
-		out = G.Must(G.BroadcastAdd(out, m.paramsB[ind], nil, []byte{0}))
-		ly := m.construct.FC(ind)
+	for ind := 1; ind < len(m.construct); ind++ {
+		ltype := *m.construct.LType(ind)
+		switch ltype {
+		case FC:
+			fc := m.construct.FC(ind)
+			nmw := "lWeights" + strconv.Itoa(ind)
 
-		switch ly.Act {
-		case Relu:
-			out = ReluAct(out)
-		case LeakyRelu:
-			out = LeakyReluAct(out, ly.ActParm)
-		case Sigmoid:
-			out = SigmoidAct(out)
-		case SoftMax:
-			out = SoftMaxAct(out)
+			px := GetNode(m.paramsW, nmw)
+			out = G.Must(G.Mul(out, px))
+			nmb := "lBias" + strconv.Itoa(ind)
+			bias := GetNode(m.paramsB, nmb)
+			if bias != nil {
+				out = G.Must(G.BroadcastAdd(out, bias, nil, []byte{0}))
+			}
+			switch fc.Act {
+			case Relu:
+				out = ReluAct(out)
+			case LeakyRelu:
+				out = LeakyReluAct(out, fc.ActParm)
+			case Sigmoid:
+				out = SigmoidAct(out)
+			case SoftMax:
+				out = SoftMaxAct(out)
+			}
+		case DropOut:
+			if d := m.construct.DropOut(ind); d != nil {
+				out = G.Must(G.Dropout(out, d.DropProb))
+			}
 		}
 	}
-
 	m.output = out
 
 }
@@ -353,7 +361,6 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 	if _, err = f.WriteString(string(jp)); err != nil {
 		return
 	}
-
 	fileS := fileRoot + "S.nn"
 	if err = m.construct.Save(fileS); err != nil {
 		return
@@ -693,4 +700,13 @@ func LeakyReluAct(n *G.Node, alpha float64) *G.Node {
 
 func SigmoidAct(n *G.Node) *G.Node {
 	return G.Must(G.Sigmoid(n))
+}
+
+func GetNode(ns G.Nodes, name string) *G.Node {
+	for _, n := range ns {
+		if n.Name() == name {
+			return n
+		}
+	}
+	return nil
 }

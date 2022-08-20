@@ -6,6 +6,7 @@ import (
 	"github.com/invertedv/chutils/file"
 	"github.com/stretchr/testify/assert"
 	"log"
+	"math"
 	"os"
 	"testing"
 )
@@ -40,27 +41,46 @@ func chPipe(bSize int, fileName string) *ChData {
 	return ch
 }
 
-func TestNewNNModel(t *testing.T) {
+func TestNNModel_Save(t *testing.T) {
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
 		"Input(x1,x2,x3,x4)",
+		"Dropout(.11)",
 		"FC(size:3, activation:leakyrelu(0.1))",
 		"Dropout(.1)",
 		"FC(size:2)",
 		"Dropout(.1)",
-		"FC(size:4, activation:softmax(1))",
-		"Output(ycts)",
+		"FC(size:2,bias:false, activation:softmax)",
+		"Output(yoh)",
 	}
-	for _, d := range mod.FCs() {
-		fmt.Println(d)
-	}
+	//
 	//ft, e := mod.Output(pipe)
 	nn, e := NewNNModel(mod, pipe)
 	assert.Nil(t, e)
+	e = nn.Save("/home/will/tmp/testnn")
+	assert.Nil(t, e)
+	exp := make([]float64, 0)
 	for _, n := range nn.paramsW {
 		fmt.Println(n.Nodes()[0].Name(), n.Nodes()[0].Shape())
+		x := n.Nodes()[0].Value().Data().([]float64)
+		for ind := 0; ind < len(x); ind++ {
+			exp = append(exp, math.Round(x[ind]*100.0)/100.0)
+		}
 	}
-
+	nn1, e := LoadNN("/home/will/tmp/testnn", pipe, false)
+	assert.Nil(t, e)
+	fmt.Println("reading")
+	act := make([]float64, 0)
+	for _, n := range nn1.paramsW {
+		fmt.Println(n.Nodes()[0].Name(), n.Nodes()[0].Shape())
+		x := n.Nodes()[0].Value().Data().([]float64)
+		for ind := 0; ind < len(x); ind++ {
+			act = append(act, math.Round(x[ind]*100.0)/100.0)
+		}
+	}
+	assert.ElementsMatch(t, exp, act)
+	assert.ElementsMatch(t, mod, nn.construct)
+	fmt.Println(nn)
 }
 
 /*

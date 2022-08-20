@@ -1,5 +1,6 @@
 package seafan
 
+//TODO: add bias:true/false
 import (
 	"bufio"
 	"fmt"
@@ -63,21 +64,22 @@ func StrAct(s string) (*Activation, float64) {
 	return nil, 0.0
 }
 
-func (a *Activation) Check() bool {
-	if a == nil {
-		return false
-	}
-	return *a >= 0 && *a <= 3
-}
+//func (a *Activation) Check() bool {
+//	if a == nil {
+//		return false
+//	}
+//	return *a >= 0 && *a <= 3
+//}
 
-type HidSize int
+//type HidSize int
 
-func (s HidSize) Check() bool {
-	return s > 0 && s < 1000
-}
+//func (s HidSize) Check() bool {
+//	return s > 0 && s < 1000
+//}
 
 type FCLayer struct {
-	Size     HidSize
+	Size     int
+	Bias     bool
 	Act      Activation
 	ActParm  float64
 	position int
@@ -85,14 +87,17 @@ type FCLayer struct {
 
 // DOLayer specifies a dropout layer.  It occurs in the graph after dense layer AfterLayer (the input layer is layer 0).
 type DOLayer struct {
-	AfterLayer int     // insert dropout after layer AfterLayer
-	DropProb   float64 // dropout probability
+	position int     // insert dropout after layer AfterLayer
+	DropProb float64 // dropout probability
 }
 
+// ModSpec holds layers--each slice element is a layer
 type ModSpec []string
 
+// Args map holds layer arguments in key/val style
 type Args map[string]string
 
+// MakeArgs takes an argument string of the form "arg1:val1, arg2:val2, ...." and returns entries in key/val format
 func MakeArgs(s string) (keyval Args, err error) {
 	s = strings.ReplaceAll(s, " ", "")
 	err = nil
@@ -115,6 +120,7 @@ func MakeArgs(s string) (keyval Args, err error) {
 	return
 }
 
+// Get returns a val from Args coercing to type kind.  Nil if fails.
 func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 	val = nil
 	valStr, ok := kv[key]
@@ -136,6 +142,12 @@ func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 		val = int(i)
 	case reflect.String:
 		val = valStr
+	case reflect.Bool:
+		b, err := strconv.ParseBool(valStr)
+		if err != nil {
+			return
+		}
+		val = b
 	}
 	return
 }
@@ -146,10 +158,10 @@ func FCParse(s string) (fc *FCLayer, err error) {
 	if err != nil {
 		return
 	}
-	fc = &FCLayer{Act: Linear}
+	fc = &FCLayer{Act: Linear, Bias: true}
 	if val := kval.Get("size", reflect.Int); val != nil {
-		fc.Size = HidSize(val.(int))
-		if !fc.Size.Check() {
+		fc.Size = val.(int)
+		if fc.Size < 1 {
 			err = fmt.Errorf("illegal size")
 			return
 		}
@@ -160,41 +172,10 @@ func FCParse(s string) (fc *FCLayer, err error) {
 			fc.ActParm = p
 		}
 	}
+	if val := kval.Get("bias", reflect.Bool); val != nil {
+		fc.Bias = val.(bool)
+	}
 	return
-}
-
-func (m ModSpec) FC(l int) *FCLayer {
-	for _, f := range m.FCs() {
-		if f.position == l {
-			return f
-		}
-	}
-	return nil
-}
-
-func (m ModSpec) FCs() []*FCLayer {
-	if e := m.Check(); e != nil {
-		return nil
-	}
-	fcs := make([]*FCLayer, 0)
-	position := 0
-	for ind, term := range m {
-		l := m.LType(ind)
-		if l == nil {
-			return nil
-		}
-		if *l != FC {
-			continue
-		}
-		fc, err := FCParse(term)
-		if err != nil {
-			return nil
-		}
-		fc.position = position
-		position++
-		fcs = append(fcs, fc)
-	}
-	return fcs
 }
 
 func DropOutParse(s string) (*DOLayer, error) {
@@ -248,42 +229,26 @@ func (m ModSpec) LType(i int) *Layer {
 	return nil
 }
 
-func (m ModSpec) DropOut(after int) *DOLayer {
-	for _, do := range m.DropOuts() {
-		if do.AfterLayer == after {
-			return do
-		}
-	}
-	return nil
-}
-
-func (m ModSpec) DropOuts() []*DOLayer {
-	if e := m.Check(); e != nil {
+func (m ModSpec) DropOut(loc int) *DOLayer {
+	if *m.LType(loc) != DropOut {
 		return nil
 	}
-	dos := make([]*DOLayer, 0)
-	position := 0
-	after := -1
-	for ind, term := range m {
-		l := m.LType(ind)
-		if l == nil {
-			return nil
-		}
-		if *l == FC {
-			after++
-		}
-		if *l != DropOut {
-			continue
-		}
-		do, err := DropOutParse(term)
-		if err != nil {
-			return nil
-		}
-		do.AfterLayer = after
-		position++
-		dos = append(dos, do)
+	do, err := DropOutParse(m[loc])
+	if err != nil {
+		return nil
 	}
-	return dos
+	return do
+}
+
+func (m ModSpec) FC(loc int) *FCLayer {
+	if *m.LType(loc) != FC {
+		return nil
+	}
+	fc, err := FCParse(m[loc])
+	if err != nil {
+		return nil
+	}
+	return fc
 }
 
 func (m ModSpec) Inputs(p Pipeline) ([]*FType, error) {
@@ -339,7 +304,7 @@ func (m ModSpec) Inputs(p Pipeline) ([]*FType, error) {
 
 func (m ModSpec) Output(p Pipeline) (*FType, error) {
 	if *m.LType(len(m) - 1) != Output {
-		return nil, fmt.Errorf("last entry is not output")
+		return nil, nil
 	}
 	_, arg, e := Strip(m[len(m)-1])
 	if e != nil {

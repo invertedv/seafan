@@ -36,24 +36,6 @@ func TestFCParse(t *testing.T) {
 	}
 }
 
-func TestModSpec_FCs(t *testing.T) {
-	mod := ModSpec{
-		"Input(x1,x2,x3)",
-		"FC(size:3, activation:leakyrelu(0.1))",
-		"Dropout(.1)",
-		"FC(size:2)",
-		"Dropout(.1)",
-	}
-	fcs := mod.FCs()
-	for _, f := range fcs {
-		fmt.Println(f)
-	}
-	dos := mod.DropOuts()
-	for _, d := range dos {
-		fmt.Println(d)
-	}
-}
-
 func TestStrip(t *testing.T) {
 	inputs := []string{"ab(3)", "AB()", "r(as", "afdf)"}
 	expectL := []string{"ab", "ab", "", ""}
