@@ -2,8 +2,8 @@ package seafan
 
 //TODO: layer numbers ... off? say, want drop after inputs...fixed??
 //TODO: build mode vs predict mode (exclude dropouts)
-//TODO: add cost function, LR, L2Reg to save/print?
-//TODO: OR move cost to Fit
+//TODO: Save cost function? Put it in modSpec?
+//TODO: Add Name to NewNN and save name?
 
 // NN functionality
 

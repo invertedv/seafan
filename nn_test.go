@@ -45,18 +45,13 @@ func TestNNModel_Save(t *testing.T) {
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
 		"Input(x1,x2,x3,x4)",
-		"Dropout(.11)",
-		"FC(size:3, activation:leakyrelu(0.1))",
-		"Dropout(.1)",
-		"FC(size:2)",
-		"Dropout(.1)",
-		"FC(size:2,bias:false, activation:softmax)",
+		"FC(size:2, activation:softmax)",
 		"Output(yoh)",
 	}
 	//
-	//ft, e := mod.Output(pipe)
 	nn, e := NewNNModel(mod, pipe)
 	assert.Nil(t, e)
+	WithCostFn(CrossEntropy)(nn)
 	e = nn.Save("/home/will/tmp/testnn")
 	assert.Nil(t, e)
 	exp := make([]float64, 0)
@@ -81,6 +76,14 @@ func TestNNModel_Save(t *testing.T) {
 	assert.ElementsMatch(t, exp, act)
 	assert.ElementsMatch(t, mod, nn.construct)
 	fmt.Println(nn)
+	epochs := 150
+	ft := NewFit(nn, epochs, pipe)
+	e = ft.Do()
+	assert.Nil(t, e)
+	for _, n := range nn.Params() {
+		fmt.Println(n.Name(), n.Value().Data().([]float64))
+
+	}
 }
 
 /*
