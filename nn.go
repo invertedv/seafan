@@ -1,7 +1,5 @@
 package seafan
 
-//TODO: layer numbers ... off? say, want drop after inputs...fixed??
-//TODO: build mode vs predict mode (exclude dropouts)
 //TODO: Save cost function? Put it in modSpec?
 //TODO: Add Name to NewNN and save name?
 
@@ -19,7 +17,6 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -162,6 +159,7 @@ func WithCostFn(cf CostFunc) NNOpts {
 	return f
 }
 
+// WithName adds a name to the NNModel
 func WithName(name string) NNOpts {
 	f := func(m *NNModel) {
 		m.name = name
@@ -211,7 +209,7 @@ func NewNNModel(modSpec ModSpec, p Pipeline, build bool, no ...NNOpts) (*NNModel
 		xall = G.Must(G.Concat(1, xall, zemb))
 	}
 
-	// target
+	// target.  There may not be a target if the model has been built and is now in prediction mode.
 	obsF, e := modSpec.Output(p)
 	if e != nil {
 		return nil, e
@@ -344,7 +342,6 @@ func (m *NNModel) Fwd() {
 		}
 	}
 	m.output = out
-
 }
 
 // struct to save nodes to json file
@@ -354,8 +351,8 @@ type saveNode struct {
 	Parms []float64 `json:"parms"`
 }
 
-// Save saves a model to disk.  Two files are created: *S.nn stores the structure of the model and
-// *P.nn stores the parameters.  Note: dropout layers are not saved.
+// Save saves a model to disk.  Two files are created: *S.nn stores the ModSpec and
+// *P.nn stores the parameters.
 func (m *NNModel) Save(fileRoot string) (err error) {
 	err = nil
 	fileP := fileRoot + "P.nn"
@@ -413,12 +410,6 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	data := make([]saveNode, 0)
 	if e := json.Unmarshal(js, &data); e != nil {
 		return nil, e
-	}
-	var hidden []int
-	for _, n := range data {
-		if strings.Contains(n.Name, "Weights") && n.Name != "lWeightsOut" {
-			hidden = append(hidden, n.Dims[1])
-		}
 	}
 
 	nn, err = NewNNModel(modSpec, p, build)
@@ -703,26 +694,30 @@ func SoftMaxAct(n *G.Node) *G.Node {
 	r := phat1.Shape()[0]
 	phat1a := G.Must(G.Reshape(phat1, tensor.Shape{r, 1}))
 	phat2 := G.Must(G.Concat(1, phat, phat1a))
-	//	fmt.Println("phat2 shape ", phat2.Shape())
 	return phat2
 }
 
+// LinearAct is a no-op.  It is the default ModSpec default activation.
 func LinearAct(n *G.Node) *G.Node {
 	return n
 }
 
+// ReluAct is relu activation
 func ReluAct(n *G.Node) *G.Node {
 	return G.Must(G.LeakyRelu(n, 0.0))
 }
 
+// LeakyReluAct is leaky relu activation
 func LeakyReluAct(n *G.Node, alpha float64) *G.Node {
 	return G.Must(G.LeakyRelu(n, alpha))
 }
 
+// SigmoidActi is sigmoid activation
 func SigmoidAct(n *G.Node) *G.Node {
 	return G.Must(G.Sigmoid(n))
 }
 
+// GetNode returns a node by name from a G.Nodes
 func GetNode(ns G.Nodes, name string) *G.Node {
 	for _, n := range ns {
 		if n.Name() == name {

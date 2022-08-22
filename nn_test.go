@@ -43,6 +43,7 @@ func chPipe(bSize int, fileName string) *ChData {
 }
 
 func TestNNModel_Save(t *testing.T) {
+	Verbose = false
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4)",
@@ -198,7 +199,8 @@ func ExampleWithOneHot() {
 
 }
 
-func ExampleWithDropOuts() {
+func ExampleWithOneHot_example2() {
+	// This example incorporates a drop out layer
 	Verbose = false
 	bSize := 100
 	// generate a Pipeline of type *ChData that reads test.csv in the data directory

@@ -35,34 +35,6 @@ const (
 
 //go:generate stringer -type=Activation
 
-// StrAct takes a string and returns corresponding Activation and any parameter.  Nil if fails.
-func StrAct(s string) (*Activation, float64) {
-	parm := float64(0)
-
-	// takes a parameter?
-	if strings.Contains(s, "(") {
-		l, parmStr, e := Strip(s)
-		if e != nil {
-			return nil, 0.0
-		}
-		var err error
-		parm, err = strconv.ParseFloat(parmStr, 64)
-		if err != nil {
-			return nil, 0.0
-		}
-		s = l
-	}
-	if i := strings.Index(strings.ToLower(_Activation_name), strings.ToLower(s)); i >= 0 {
-		for ind, ix := range _Activation_index {
-			if i == int(ix) {
-				act := Activation(ind)
-				return &act, parm
-			}
-		}
-	}
-	return nil, 0.0
-}
-
 // FCLayer has details of a fully connected layer
 type FCLayer struct {
 	Size     int
@@ -139,6 +111,35 @@ func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 	return
 }
 
+// StrAct takes a string and returns corresponding Activation and any parameter.  Nil if fails.
+func StrAct(s string) (*Activation, float64) {
+	parm := float64(0)
+
+	// takes a parameter?
+	if strings.Contains(s, "(") {
+		l, parmStr, e := Strip(s)
+		if e != nil {
+			return nil, 0.0
+		}
+		var err error
+		parm, err = strconv.ParseFloat(parmStr, 64)
+		if err != nil {
+			return nil, 0.0
+		}
+		s = l
+	}
+	if i := strings.Index(strings.ToLower(_Activation_name), strings.ToLower(s)); i >= 0 {
+		for ind, ix := range _Activation_index {
+			if i == int(ix) {
+				act := Activation(ind)
+				return &act, parm
+			}
+		}
+	}
+	return nil, 0.0
+}
+
+// FCParse parses the arguments to an FC layer
 func FCParse(s string) (fc *FCLayer, err error) {
 	fc = nil
 	kval, err := MakeArgs(strings.ToLower(s[3 : len(s)-1]))
@@ -165,6 +166,7 @@ func FCParse(s string) (fc *FCLayer, err error) {
 	return
 }
 
+// DropOutParse parses the arguments to a drop out layer
 func DropOutParse(s string) (*DOLayer, error) {
 	_, args, err := Strip(s)
 	if err != nil {
@@ -181,6 +183,7 @@ func DropOutParse(s string) (*DOLayer, error) {
 	return do, nil
 }
 
+// Check checks that the layer name is valid
 func (m ModSpec) Check() error {
 	for _, ms := range m {
 		l, _, e := Strip(ms)
@@ -194,6 +197,7 @@ func (m ModSpec) Check() error {
 	return nil
 }
 
+// LType returns the layer type of layer i
 func (m ModSpec) LType(i int) *Layer {
 	if m.Check() != nil {
 		return nil
@@ -216,6 +220,7 @@ func (m ModSpec) LType(i int) *Layer {
 	return nil
 }
 
+// DropOut returns the *DoLayer for layer i, if it is of type DropOut.  Returns nil o.w.
 func (m ModSpec) DropOut(loc int) *DOLayer {
 	if *m.LType(loc) != DropOut {
 		return nil
@@ -227,6 +232,7 @@ func (m ModSpec) DropOut(loc int) *DOLayer {
 	return do
 }
 
+// FC returns the *FCLayer for layer i, if it is of type FC. Returns nil o.w.
 func (m ModSpec) FC(loc int) *FCLayer {
 	if *m.LType(loc) != FC {
 		return nil
@@ -238,7 +244,8 @@ func (m ModSpec) FC(loc int) *FCLayer {
 	return fc
 }
 
-func (m ModSpec) Inputs(p Pipeline) ([]*FType, error) {
+// Inputs returns the FTypes of the input features
+func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 	var err error
 	modSpec := make([]*FType, 0)
 	if *m.LType(0) != Input {
@@ -289,6 +296,7 @@ func (m ModSpec) Inputs(p Pipeline) ([]*FType, error) {
 	return modSpec, nil
 }
 
+// Output returns the *FType of the target
 func (m ModSpec) Output(p Pipeline) (*FType, error) {
 	if *m.LType(len(m) - 1) != Output {
 		return nil, nil
@@ -298,30 +306,14 @@ func (m ModSpec) Output(p Pipeline) (*FType, error) {
 		return nil, e
 	}
 
-	var feat *FType
-	// target
-	feat = p.GetFType(arg)
+	feat := p.GetFType(arg)
 	if feat == nil {
 		return nil, fmt.Errorf("feature %s not found", arg)
 	}
 	return feat, nil
 }
 
-func Strip(s string) (left, inner string, err error) {
-	left, inner, err = "", "", nil
-	s = strings.ToLower(strings.ReplaceAll(s, " ", ""))
-	il := strings.Index(s, "(")
-	if il <= 0 {
-		return "", "", fmt.Errorf("bad (")
-	}
-	if s[len(s)-1:] != ")" {
-		return "", "", fmt.Errorf("bad )")
-	}
-	left = s[0:il]
-	inner = s[il+1 : len(s)-1]
-	return
-}
-
+// Save ModSpec
 func (m ModSpec) Save(fileName string) (err error) {
 	if err = m.Check(); err != nil {
 		return
@@ -339,6 +331,7 @@ func (m ModSpec) Save(fileName string) (err error) {
 	return
 }
 
+// Load a ModSpec
 func LoadModSpec(fileName string) (ms ModSpec, err error) {
 	ms = make(ModSpec, 0)
 	f, err := os.Open(fileName)
@@ -361,5 +354,21 @@ func LoadModSpec(fileName string) (ms ModSpec, err error) {
 		}
 	}
 	err = ms.Check()
+	return
+}
+
+// Strip is a utility that takes a string of the form "Func(args)" and returns "Func" and "args"
+func Strip(s string) (left, inner string, err error) {
+	left, inner, err = "", "", nil
+	s = strings.ToLower(strings.ReplaceAll(s, " ", ""))
+	il := strings.Index(s, "(")
+	if il <= 0 {
+		return "", "", fmt.Errorf("bad (")
+	}
+	if s[len(s)-1:] != ")" {
+		return "", "", fmt.Errorf("bad )")
+	}
+	left = s[0:il]
+	inner = s[il+1 : len(s)-1]
 	return
 }
