@@ -4,8 +4,10 @@ import (
 	"fmt"
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"math"
+	"sort"
 )
 
+// Slicer is a optional function that returns true if the row is to be used in calculations
 type Slicer func(row int) bool
 
 // Coalesce reduces a softmax output to two categories
@@ -120,30 +122,31 @@ func KS(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *Plot
 	// p is an array that is equally spaced between lower and upper
 	p := make([]float64, 101)
 	// these are cumulative distributions
-	cumeNotTarget := make([]float64, 101)
-	cumeTarget := make([]float64, 101)
-
-	// for each value, find where it goes in our quantized slice p and increment corresponding element of cumeNotTarget
-	for row := 0; row < len(probNotTarget); row++ {
-		high := Min(int(100*(probNotTarget[row]-lower)/(upper-lower)), 100)
-		cumeNotTarget[high]++
+	for k := 0; k < 101; k++ {
+		p[k] = (float64(k)/100.0)*(upper-lower) + lower
 	}
-	for row := 0; row < len(probTarget); row++ {
-		high := Min(int(100*(probTarget[row]-lower)/(upper-lower)), 100)
-		cumeTarget[high]++
+	sort.Float64s(probNotTarget)
+	sort.Float64s(probTarget)
+	upnt := make([]float64, len(probNotTarget))
+	for k := 0; k < len(upnt); k++ {
+		upnt[k] = (float64(k) - .5) / float64(len(upnt))
 	}
+	upt := make([]float64, len(probTarget))
+	for k := 0; k < len(upt); k++ {
+		upt[k] = (float64(k) - .5) / float64(len(upt))
+	}
+	xypt, _ := NewXY(probTarget, upt)
+	xypnt, _ := NewXY(probNotTarget, upnt)
+	cpt, _ := xypt.Interp(p)
+	cpnt, _ := xypnt.Interp(p)
 
-	//nFloat := float64(n)
-	p[0], cumeNotTarget[0], cumeTarget[0] = lower, cumeNotTarget[0]/float64(len(probNotTarget)), cumeTarget[0]/float64(len(probTarget))
 	ks, at := 0.0, 0.0
-	// cumulate values and find KS
-	for row := 1; row < 101; row++ {
-		p[row] = lower + float64(row)*(upper-lower)/100.0
-		cumeNotTarget[row] = cumeNotTarget[row]/float64(len(probNotTarget)) + cumeNotTarget[row-1]
-		cumeTarget[row] = cumeTarget[row]/float64(len(probTarget)) + cumeTarget[row-1]
-		if d := 100.0 * (cumeNotTarget[row] - cumeTarget[row]); d > ks {
+	cumeNotTarget := cpnt.Y
+	cumeTarget := cpt.Y
+	for k := 0; k < 101; k++ {
+		if d := 100.0 * math.Abs(cumeTarget[k]-cumeNotTarget[k]); d > ks {
 			ks = d
-			at = p[row]
+			at = p[k]
 		}
 	}
 
