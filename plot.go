@@ -67,7 +67,7 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 		}
 		offline.ToHtml(fig, pd.FileName)
 		cmd := exec.Command(Browser, "-url", pd.FileName)
-		if e := cmd.Run(); e != nil {
+		if e := cmd.Start(); e != nil {
 			return e
 		}
 		if tmp {

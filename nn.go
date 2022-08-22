@@ -54,6 +54,9 @@ type NNModel struct {
 	cost      *G.Node      // cost node for model build
 	construct ModSpec      // model spec
 	costFn    CostFunc     // costFn corresponding to cost *G.Node
+	build     bool         // build mode includes drop out layers
+	inputFT   FTypes       // FTypes of input features
+	targetFT  *FType       // FType of output (target)
 }
 
 // Name returns model name
@@ -65,12 +68,24 @@ func (m *NNModel) String() string {
 	if m.construct == nil {
 		return "No model"
 	}
-	str := fmt.Sprintf("%s\n", m.Name())
+	str := fmt.Sprintf("%s\nInputs\n", m.Name())
+	for _, ft := range m.inputFT {
+		str = fmt.Sprintf("%s%v\n", str, ft)
+	}
+	str = fmt.Sprintf("%sTarget\n", str)
+	switch m.targetFT == nil {
+	case true:
+		str = fmt.Sprintf("%sNone\n", str)
+	case false:
+		str = fmt.Sprintf("%s%v", str, m.targetFT)
+	}
+	str = fmt.Sprintf("%s\nModel Structure\n", str)
 	for ind := 0; ind < len(m.construct); ind++ {
 		str = fmt.Sprintf("%s%s\n", str, m.construct[ind])
 	}
+	str = fmt.Sprintf("%s\n", str)
 	if m.cost != nil {
-		str = fmt.Sprintf("%s\nCost function: %s\n", str, m.cost.Name())
+		str = fmt.Sprintf("%sCost function: %s\n\n", str, m.cost.Name())
 	}
 	bSize := m.inputsC[0].Shape()[0]
 	str = fmt.Sprintf("%sBatch size: %d\n", str, bSize)
@@ -155,7 +170,7 @@ func WithName(name string) NNOpts {
 }
 
 // NewNNModel creates a new NN model. The modSpec input can be created by ByFormula.
-func NewNNModel(modSpec ModSpec, p Pipeline, no ...NNOpts) (*NNModel, error) {
+func NewNNModel(modSpec ModSpec, p Pipeline, build bool, no ...NNOpts) (*NNModel, error) {
 	bSize := p.BatchSize()
 	g := G.NewGraph()
 	xs := make(G.Nodes, 0)
@@ -266,6 +281,9 @@ func NewNNModel(modSpec ModSpec, p Pipeline, no ...NNOpts) (*NNModel, error) {
 		inputsE:   xEmInp,
 		obs:       yoh,
 		construct: modSpec,
+		build:     build,
+		inputFT:   inps,
+		targetFT:  obsF,
 	}
 
 	nn.Fwd() // init forward pass
@@ -318,8 +336,10 @@ func (m *NNModel) Fwd() {
 				out = SoftMaxAct(out)
 			}
 		case DropOut:
-			if d := m.construct.DropOut(ind); d != nil {
-				out = G.Must(G.Dropout(out, d.DropProb))
+			if m.build {
+				if d := m.construct.DropOut(ind); d != nil {
+					out = G.Must(G.Dropout(out, d.DropProb))
+				}
 			}
 		}
 	}
@@ -401,7 +421,7 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 		}
 	}
 
-	nn, err = NewNNModel(modSpec, p)
+	nn, err = NewNNModel(modSpec, p, build)
 	if len(data) != len(nn.Params()) {
 		return nil, fmt.Errorf("node count differs")
 	}
@@ -609,7 +629,8 @@ func (ft *Fit) Do() (err error) {
 			}
 
 			var valMod *NNModel
-			valMod, err = PredictNN(ft.tmpFile, ft.pVal.BatchSize(), ft.pVal, WithCostFn(ft.nn.CostFn()))
+			// with a validation set, don't use dropouts
+			valMod, err = PredictNN(ft.tmpFile, ft.pVal.BatchSize(), ft.pVal, false, WithCostFn(ft.nn.CostFn()))
 			if err != nil {
 				return
 			}
@@ -653,9 +674,9 @@ func (ft *Fit) Do() (err error) {
 
 // PredictNN reads in a NNModel from disk and populates it with a batch from p.
 // Methods such as FitSlice and ObsSlice are immediately available.
-func PredictNN(fileRoot string, bSize int, p Pipeline, opts ...NNOpts) (nn *NNModel, err error) {
+func PredictNN(fileRoot string, bSize int, p Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
 
-	nn, err = LoadNN(fileRoot, p, false)
+	nn, err = LoadNN(fileRoot, p, build)
 	for _, o := range opts {
 		o(nn)
 	}

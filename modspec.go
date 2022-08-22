@@ -1,6 +1,5 @@
 package seafan
 
-//TODO: add bias:true/false
 import (
 	"bufio"
 	"fmt"
@@ -64,19 +63,7 @@ func StrAct(s string) (*Activation, float64) {
 	return nil, 0.0
 }
 
-//func (a *Activation) Check() bool {
-//	if a == nil {
-//		return false
-//	}
-//	return *a >= 0 && *a <= 3
-//}
-
-//type HidSize int
-
-//func (s HidSize) Check() bool {
-//	return s > 0 && s < 1000
-//}
-
+// FCLayer has details of a fully connected layer
 type FCLayer struct {
 	Size     int
 	Bias     bool
@@ -263,7 +250,7 @@ func (m ModSpec) Inputs(p Pipeline) ([]*FType, error) {
 	}
 
 	var feat *FType
-	fs := strings.Split(inStr, ",")
+	fs := strings.Split(inStr, "+")
 	for _, f := range fs {
 		ft := f
 		embCols := 0

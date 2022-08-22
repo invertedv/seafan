@@ -5,6 +5,7 @@ import (
 	"github.com/invertedv/chutils"
 	"github.com/invertedv/chutils/file"
 	"github.com/stretchr/testify/assert"
+	"gonum.org/v1/gonum/stat"
 	"log"
 	"math"
 	"os"
@@ -44,19 +45,18 @@ func chPipe(bSize int, fileName string) *ChData {
 func TestNNModel_Save(t *testing.T) {
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
-		"Input(x1,x2,x3,x4)",
+		"Input(x1+x2+x3+x4)",
 		"FC(size:2, activation:softmax)",
 		"Output(yoh)",
 	}
 	//
-	nn, e := NewNNModel(mod, pipe)
+	nn, e := NewNNModel(mod, pipe, true)
 	assert.Nil(t, e)
 	WithCostFn(CrossEntropy)(nn)
 	e = nn.Save("/home/will/tmp/testnn")
 	assert.Nil(t, e)
 	exp := make([]float64, 0)
 	for _, n := range nn.paramsW {
-		fmt.Println(n.Nodes()[0].Name(), n.Nodes()[0].Shape())
 		x := n.Nodes()[0].Value().Data().([]float64)
 		for ind := 0; ind < len(x); ind++ {
 			exp = append(exp, math.Round(x[ind]*100.0)/100.0)
@@ -64,10 +64,8 @@ func TestNNModel_Save(t *testing.T) {
 	}
 	nn1, e := LoadNN("/home/will/tmp/testnn", pipe, false)
 	assert.Nil(t, e)
-	fmt.Println("reading")
 	act := make([]float64, 0)
 	for _, n := range nn1.paramsW {
-		fmt.Println(n.Nodes()[0].Name(), n.Nodes()[0].Shape())
 		x := n.Nodes()[0].Value().Data().([]float64)
 		for ind := 0; ind < len(x); ind++ {
 			act = append(act, math.Round(x[ind]*100.0)/100.0)
@@ -75,45 +73,37 @@ func TestNNModel_Save(t *testing.T) {
 	}
 	assert.ElementsMatch(t, exp, act)
 	assert.ElementsMatch(t, mod, nn.construct)
-	fmt.Println(nn)
-	epochs := 150
-	ft := NewFit(nn, epochs, pipe)
-	e = ft.Do()
-	assert.Nil(t, e)
-	for _, n := range nn.Params() {
-		fmt.Println(n.Name(), n.Value().Data().([]float64))
-
-	}
 }
 
-/*
 func TestFit_Do(t *testing.T) {
 	Verbose = false
-	bSize := 100
-	pipe := chPipe(bSize, "test1.csv")
-	mod, e := ByFormula("yoh~x1+x2+x3+x4", pipe)
+	pipe := chPipe(100, "test1.csv")
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4)",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+	nn, e := NewNNModel(mod, pipe, true)
 	assert.Nil(t, e)
-	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
+	WithCostFn(CrossEntropy)(nn)
 	epochs := 150
 	ft := NewFit(nn, epochs, pipe)
 	e = ft.Do()
 	assert.Nil(t, e)
 	wts := []float64{-2.06, -3.5, 1, -0.08} //glm logistic estimates
-	n := nn.G().ByName("lWeightsOut").Nodes()[0].Value().Data().([]float64)
+	n := nn.G().ByName("lWeights1").Nodes()[0].Value().Data().([]float64)
 	for ind, w := range wts {
 		assert.InEpsilon(t, n[ind], w, .15)
 	}
 }
 
-*/
-/*
 func ExampleWithOneHot() {
 	// This example shows a model that incorporates a feature (x4) as one-hot and an embedding
 	Verbose = false
 	bSize := 100
 	// generate a Pipeline of type *ChData that reads test.csv in the data directory
 	pipe := chPipe(bSize, "test1.csv")
-	// The feature x4 takes on values 0,1,2,...19.  chPipe treats this a a continuous feature.
+	// The feature x4 takes on values 0,1,2,...19.  chPipe treats this a continuous feature.
 	// Let's override that and re-initialize the pipeline.
 	WithCats("x4")(pipe)
 	WithOneHot("x4oh", "x4")(pipe)
@@ -121,141 +111,165 @@ func ExampleWithOneHot() {
 	if e := pipe.Init(); e != nil {
 		log.Fatalln(e)
 	}
-
-	mod, e := ByFormula("yoh~x1+x2+x3+x4oh", pipe)
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4oh)",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+	//
+	fmt.Println("x4 as one-hot")
+	nn, e := NewNNModel(mod, pipe, true)
 	if e != nil {
 		log.Fatalln(e)
 	}
-	fmt.Println("x4 as one-hot")
-	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
 	fmt.Println(nn)
 	fmt.Println("x4 as embedding")
-	mod, e = ByFormula("yoh~x1+x2+x3+E(x4oh,3)", pipe)
+	mod = ModSpec{
+		"Input(x1+x2+x3+E(x4oh,3))",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+	nn, e = NewNNModel(mod, pipe, true)
 	if e != nil {
 		log.Fatalln(e)
 	}
-	nn = NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
 	fmt.Println(nn)
 	// Output:
 	//x4 as one-hot
 	//
-	//Inputs:
-	//	Field x1
-	//		continuous
-	//	Field x2
-	//		continuous
-	//	Field x3
-	//		continuous
-	//	Field x4oh
-	//		one-hot
-	//		derived from feature x4
-	//		length 20
+	//Inputs
+	//Field x1
+	//	continuous
 	//
-	// Target:
-	//	Field yoh
-	//		one-hot
-	//		derived from feature y
-	//		length 2
+	//Field x2
+	//	continuous
 	//
-	// Cost function: CrossEntropy
-	// Batch size: 100
-	// NN structure:
-	//	FCLayer Layer 0: (23, 1) (output)
+	//Field x3
+	//	continuous
 	//
+	//Field x4oh
+	//	one-hot
+	//	derived from feature x4
+	//	length 20
 	//
-	// x4 as embedding
+	//Target
+	//Field yoh
+	//	one-hot
+	//	derived from feature y
+	//	length 2
 	//
-	// Inputs:
-	//	Field x1
-	//		continuous
-	//	Field x2
-	//		continuous
-	//	Field x3
-	//		continuous
-	//	Field x4oh
-	//		embedding
-	//		derived from feature x4
-	//		length 20
-	//		embedding dimension of 3
+	//Model Structure
+	//Input(x1+x2+x3+x4oh)
+	//FC(size:2, activation:softmax)
+	//Output(yoh)
 	//
-	// Target:
-	//	Field yoh
-	//		one-hot
-	//		derived from feature y
-	//		length 2
+	//Batch size: 100
 	//
-	// Cost function: CrossEntropy
-	// Batch size: 100
-	// NN structure:
-	//	FCLayer Layer 0: (6, 1) (output)
+	//x4 as embedding
+	//
+	//Inputs
+	//Field x1
+	//	continuous
+	//
+	//Field x2
+	//	continuous
+	//
+	//Field x3
+	//	continuous
+	//
+	//Field x4oh
+	//	embedding
+	//	derived from feature x4
+	//	length 20
+	//	embedding dimension of 3
+	//
+	//Target
+	//Field yoh
+	//	one-hot
+	//	derived from feature y
+	//	length 2
+	//
+	//Model Structure
+	//Input(x1+x2+x3+E(x4oh,3))
+	//FC(size:2, activation:softmax)
+	//Output(yoh)
+	//
+	//Batch size: 100
 
 }
 
-*/
-/*
 func ExampleWithDropOuts() {
 	Verbose = false
 	bSize := 100
 	// generate a Pipeline of type *ChData that reads test.csv in the data directory
 	pipe := chPipe(bSize, "test1.csv")
 	// generate model: target and features.  Target yoh is one-hot with 2 levels
-	mod, e := ByFormula("yoh~x1+x2+x3+x4", pipe)
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4)",
+		"FC(size:3, activation:relu)",
+		"DropOut(.1)",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+
+	nn, e := NewNNModel(mod, pipe, true,
+		WithCostFn(CrossEntropy),
+		WithName("Example With Dropouts"))
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// model is straight-forward with no hidden layers or dropouts.
-	drops := Drops{
-		&Drop{AfterLayer: 1, DropProb: .1},
-		&Drop{AfterLayer: 2, DropProb: .05},
-	}
-	nn := NewNNModel(bSize, mod, []int{3, 4, 2},
-		WithCostFn(CrossEntropy),
-		WithDropOuts(drops),
-		WithName("Example With Dropouts"))
 	fmt.Println(nn)
 	// Output:
-	// Example With Dropouts
-	// Inputs:
-	//	Field x1
-	//		continuous
-	//	Field x2
-	//		continuous
-	//	Field x3
-	//		continuous
-	//	Field x4
-	//		continuous
+	//Example With Dropouts
+	//Inputs
+	//Field x1
+	//	continuous
 	//
-	// Target:
-	//	Field yoh
-	//		one-hot
-	//		derived from feature y
-	//		length 2
+	//Field x2
+	//	continuous
 	//
-	// Cost function: CrossEntropy
-	// Batch size: 100
-	// NN structure:
-	//	FCLayer Layer 0: (4, 3)
-	//	Drop Layer (probability = 0.10)
-	//	FCLayer Layer 1: (3, 4)
-	//	Drop Layer (probability = 0.05)
-	//	FCLayer Layer 2: (4, 2)
-	//	FCLayer Layer 3: (2, 1) (output)
+	//Field x3
+	//	continuous
+	//
+	//Field x4
+	//	continuous
+	//
+	//Target
+	//Field yoh
+	//	one-hot
+	//	derived from feature y
+	//	length 2
+	//
+	//Model Structure
+	//Input(x1+x2+x3+x4)
+	//FC(size:3, activation:relu)
+	//DropOut(.1)
+	//FC(size:2, activation:softmax)
+	//Output(yoh)
+	//
+	//Cost function: CrossEntropy
+	//
+	//Batch size: 100
 }
 
-*/
-/*
 func ExampleFit_Do() {
 	Verbose = false
 	bSize := 100
 	// generate a Pipeline of type *ChData that reads test.csv in the data directory
 	pipe := chPipe(bSize, "test1.csv")
 	// generate model: target and features.  Target yoh is one-hot with 2 levels
-	mod, e := ByFormula("yoh~x1+x2+x3+x4", pipe)
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4)",
+		"FC(size:3, activation:relu)",
+		"DropOut(.1)",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+	// model is straight-forward with no hidden layers or dropouts.
+	nn, e := NewNNModel(mod, pipe, true, WithCostFn(CrossEntropy))
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// model is straight-forward with no hidden layers or dropouts.
-	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
 	epochs := 150
 	ft := NewFit(nn, epochs, pipe)
 	e = ft.Do()
@@ -270,8 +284,6 @@ func ExampleFit_Do() {
 	// Output:
 }
 
-*/
-/*
 func ExampleFit_Do_example2() {
 	// This example demonstrates how to use a validation sample for early stopping
 	Verbose = false
@@ -281,12 +293,17 @@ func ExampleFit_Do_example2() {
 	vPipe := chPipe(1000, "testVal.csv")
 
 	// generate model: target and features.  Target yoh is one-hot with 2 levels
-	mod, e := ByFormula("yoh~x1+x2+x3+x4", mPipe)
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4)",
+		"FC(size:3, activation:relu)",
+		"DropOut(.1)",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(CrossEntropy))
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// model is straight-forward with no hidden layers or dropouts.
-	nn := NewNNModel(bSize, mod, nil, WithCostFn(CrossEntropy))
 	epochs := 150
 	ft := NewFit(nn, epochs, mPipe)
 	WithValidation(vPipe, 10)(ft)
@@ -306,9 +323,6 @@ func ExampleFit_Do_example2() {
 	// Output:
 }
 
-*/
-
-/*
 func ExamplePredictNN() {
 	// This example demonstrates fitting a regression model and predicting on new data
 	Verbose = false
@@ -317,13 +331,17 @@ func ExamplePredictNN() {
 	mPipe := chPipe(bSize, "test1.csv")
 	vPipe := chPipe(1000, "testVal.csv")
 
-	// generate model: target and features.  Target yoh is one-hot with 2 levels
-	mod, e := ByFormula("ycts~x1+x2+x3+x4", mPipe)
+	// This model is OLS
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4)",
+		"FC(size:1)",
+		"Output(ycts)",
+	}
+	// model is straight-forward with no hidden layers or dropouts.
+	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(RMS))
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// model is straight-forward with no hidden layers or dropouts.
-	nn := NewNNModel(bSize, mod, nil, WithCostFn(RMS))
 	epochs := 150
 	ft := NewFit(nn, epochs, mPipe)
 	e = ft.Do()
@@ -335,7 +353,7 @@ func ExamplePredictNN() {
 	if e != nil {
 		log.Fatalln(e)
 	}
-	pred, e := PredictNN(sf, vPipe.BatchSize(), vPipe)
+	pred, e := PredictNN(sf, vPipe.BatchSize(), vPipe, false)
 	if e != nil {
 		log.Fatalln(e)
 	}
@@ -349,6 +367,3 @@ func ExamplePredictNN() {
 	// out-of-sample correlation: 0.84
 
 }
-
-
-*/
