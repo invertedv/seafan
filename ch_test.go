@@ -98,7 +98,7 @@ func TestChData_Batch(t *testing.T) {
 	node := G.NewTensor(g, G.Float64, 2, G.WithName("x1"), G.WithShape(bsize, 1), G.WithInit(G.Zeroes()))
 
 	// run through batchs and verify counts and mean of x1 is zero
-	sumX := float64(0.0)
+	var sumX float64 = 0.0
 	n := 0
 	for ch.Batch(G.Nodes{node}) {
 		n += bsize
@@ -177,7 +177,7 @@ func ExampleChData_Batch() {
 	g := G.NewGraph()
 	node := G.NewTensor(g, G.Float64, 2, G.WithName("x1"), G.WithShape(bSize, 1), G.WithInit(G.Zeroes()))
 
-	sumX := float64(0.0)
+	var sumX = 0.0
 	n := 0
 	// run through batchs and verify counts and mean of x1 is zero
 	for ch.Batch(G.Nodes{node}) {
@@ -214,7 +214,7 @@ func ExampleChData_Batch_example2() {
 		log.Fatalln(e)
 	}
 	bSize := 100
-	// Lets normalize x1 with location=41 and scale=1
+	// Let's normalize x1 with location=41 and scale=1
 	ft := &FType{
 		Name:       "x1",
 		Role:       0,
@@ -233,7 +233,7 @@ func ExampleChData_Batch_example2() {
 	g := G.NewGraph()
 	node := G.NewTensor(g, G.Float64, 2, G.WithName("x1"), G.WithShape(bSize, 1), G.WithInit(G.Zeroes()))
 
-	sumX := float64(0.0)
+	var sumX float64 = 0.0
 	n := 0
 	// run through batchs and verify counts and mean of x1 is zero
 	for ch.Batch(G.Nodes{node}) {

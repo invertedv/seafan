@@ -240,7 +240,7 @@ func NewNNModel(modSpec ModSpec, p Pipeline, build bool, no ...NNOpts) (*NNModel
 		if fc == nil {
 			return nil, fmt.Errorf("error parsing layer %d", ind)
 		}
-		cols := int(fc.Size)
+		cols := fc.Size
 		if fc.Act == SoftMax {
 			if obsF.Role != FROneHot {
 				return nil, fmt.Errorf("obs not one-hot but softmax activation")
@@ -621,7 +621,7 @@ func (ft *Fit) Do() (err error) {
 
 			var valMod *NNModel
 			// with a validation set, don't use dropouts
-			valMod, err = PredictNN(ft.tmpFile, ft.pVal.BatchSize(), ft.pVal, false, WithCostFn(ft.nn.CostFn()))
+			valMod, err = PredictNN(ft.tmpFile, ft.pVal, false, WithCostFn(ft.nn.CostFn()))
 			if err != nil {
 				return
 			}
@@ -665,7 +665,7 @@ func (ft *Fit) Do() (err error) {
 
 // PredictNN reads in a NNModel from disk and populates it with a batch from p.
 // Methods such as FitSlice and ObsSlice are immediately available.
-func PredictNN(fileRoot string, bSize int, p Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
+func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
 
 	nn, err = LoadNN(fileRoot, p, build)
 	for _, o := range opts {
@@ -712,7 +712,7 @@ func LeakyReluAct(n *G.Node, alpha float64) *G.Node {
 	return G.Must(G.LeakyRelu(n, alpha))
 }
 
-// SigmoidActi is sigmoid activation
+// SigmoidAct is sigmoid activation
 func SigmoidAct(n *G.Node) *G.Node {
 	return G.Must(G.Sigmoid(n))
 }

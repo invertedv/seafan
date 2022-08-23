@@ -355,7 +355,7 @@ func ExamplePredictNN() {
 	if e != nil {
 		log.Fatalln(e)
 	}
-	pred, e := PredictNN(sf, vPipe.BatchSize(), vPipe, false)
+	pred, e := PredictNN(sf, vPipe, false)
 	if e != nil {
 		log.Fatalln(e)
 	}
@@ -364,7 +364,7 @@ func ExamplePredictNN() {
 	if e != nil {
 		log.Fatalln(e)
 	}
-	e = os.Remove(sf + "S.nn")
+	_ = os.Remove(sf + "S.nn")
 	// Output:
 	// out-of-sample correlation: 0.84
 

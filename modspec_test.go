@@ -1,7 +1,6 @@
 package seafan
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -28,11 +27,9 @@ func TestFCParse(t *testing.T) {
 		"FC(size:3)",
 		"FC(size:4, activation:LeakyRelu(-1))",
 	}
-	for ind, i := range inputs {
-		_ = ind
-		fc, e := FCParse(i)
+	for _, i := range inputs {
+		_, e := FCParse(i)
 		assert.Nil(t, e)
-		fmt.Println(fc)
 	}
 }
 
@@ -48,9 +45,10 @@ func TestStrip(t *testing.T) {
 }
 
 func TestModSpec_Inputs(t *testing.T) {
+	Verbose = false
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
-		"Input(x1,x2,x3)",
+		"Input(x1+x2+x3)",
 		"FC(size:3, activation:leakyrelu(0.1))",
 		"Dropout(.1)",
 		"FC(size:2)",
@@ -68,9 +66,10 @@ func TestModSpec_Inputs(t *testing.T) {
 }
 
 func TestModSpec_Output(t *testing.T) {
+	Verbose = false
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
-		"Input(x1,x2,x3)",
+		"Input(x1+x2+x3)",
 		"FC(size:3, activation:leakyrelu(0.1))",
 		"Dropout(.1)",
 		"FC(size:2)",
@@ -98,7 +97,7 @@ func TestModSpec_Output(t *testing.T) {
 
 func TestModSpec_Save(t *testing.T) {
 	mod := ModSpec{
-		"Input(x1,x2,x3)",
+		"Input(x1+x2+x3)",
 		"FC(size:3, activation:leakyrelu(0.1))",
 		"Dropout(.1)",
 		"FC(size:2)",

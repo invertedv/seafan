@@ -37,16 +37,16 @@ const (
 
 // FCLayer has details of a fully connected layer
 type FCLayer struct {
-	Size     int
-	Bias     bool
-	Act      Activation
-	ActParm  float64
-	position int
+	Size    int
+	Bias    bool
+	Act     Activation
+	ActParm float64
+	//	position int
 }
 
 // DOLayer specifies a dropout layer.  It occurs in the graph after dense layer AfterLayer (the input layer is layer 0).
 type DOLayer struct {
-	position int     // insert dropout after layer AfterLayer
+	//	position int     // insert dropout after layer AfterLayer
 	DropProb float64 // dropout probability
 }
 
@@ -331,7 +331,7 @@ func (m ModSpec) Save(fileName string) (err error) {
 	return
 }
 
-// Load a ModSpec
+// LoadModSpec loads a ModSpec from file
 func LoadModSpec(fileName string) (ms ModSpec, err error) {
 	ms = make(ModSpec, 0)
 	f, err := os.Open(fileName)

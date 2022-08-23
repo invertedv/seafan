@@ -39,7 +39,7 @@ func NewChData(name string, opts ...Opts) *ChData {
 	return ch
 }
 
-// GetFtypes returns FTypes for ch Pipeline
+// GetFTypes returns FTypes for ch Pipeline
 func (ch *ChData) GetFTypes() FTypes {
 	fts := make(FTypes, 0)
 	for _, d := range ch.data {

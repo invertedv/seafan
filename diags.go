@@ -112,7 +112,7 @@ func KS(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *Plot
 	}
 	notTarget, _ = NewDesc(nil, fmt.Sprintf("Value not in %v", trg))
 	target, _ = NewDesc(nil, fmt.Sprintf("Value in %v", trg))
-	notTarget.Populate(probNotTarget, false) // side-effect is probNotTarget is sorted
+	notTarget.Populate(probNotTarget, false) // side effect is probNotTarget is sorted
 	target.Populate(probTarget, false)
 
 	// Min & max of probabilities
