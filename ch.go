@@ -97,10 +97,6 @@ func (ch *ChData) GData() GData {
 // Init initializes the Pipeline.
 func (ch *ChData) Init() (err error) {
 	err = nil
-	// user callbacks
-	if ch.callback != nil {
-		ch.callback(ch)
-	}
 	if ch.rdr == nil {
 		return fmt.Errorf("no reader")
 	}
@@ -208,6 +204,10 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 			ch.pull = true
 		}
 		ch.cbRow = 0
+		// user callbacks
+		if ch.callback != nil {
+			ch.callback(ch)
+		}
 		return false
 	}
 	startRow := ch.cbRow

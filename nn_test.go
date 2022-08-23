@@ -369,3 +369,62 @@ func ExamplePredictNN() {
 	// out-of-sample correlation: 0.84
 
 }
+
+func ExampleWithCallBack() {
+	// This example shows how to create a callback during the fitting phase (fit.Do).
+	// The callback is called at the end of each epoch.  The callback below loads a new dataset after
+	// epoch 100.
+
+	Verbose = false
+	bSize := 100
+	// generate a Pipeline of type *ChData that reads test.csv in the data directory
+	mPipe := chPipe(bSize, "test1.csv")
+	// This callback function replaces the initial dataset with newData.csv after epoch 2500
+	cb := func(c Pipeline) {
+		switch d := c.(type) {
+		case *ChData:
+			if d.Epoch(-1) == 100 {
+				dataPath := os.Getenv("data") // path to data directory
+				fileName := dataPath + "/testVal.csv"
+				f, e := os.Open(fileName)
+				if e != nil {
+					log.Fatalln(e)
+				}
+				rdrx := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
+				if e := rdrx.Init("", chutils.MergeTree); e != nil {
+					log.Fatalln(e)
+				}
+				if e := rdrx.TableSpec().Impute(rdrx, 0, .99); e != nil {
+					log.Fatalln(e)
+				}
+				rows, _ := rdrx.CountLines()
+				fmt.Println("New data at end of epoch ", d.Epoch(-1))
+				fmt.Println("Number of rows ", rows)
+				WithReader(rdrx)(d)
+
+			}
+		}
+	}
+	WithCallBack(cb)(mPipe)
+
+	// This model is OLS
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4)",
+		"FC(size:1)",
+		"Output(ycts)",
+	}
+	// model is straight-forward with no hidden layers or dropouts.
+	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(RMS))
+	if e != nil {
+		log.Fatalln(e)
+	}
+	epochs := 150
+	ft := NewFit(nn, epochs, mPipe)
+	e = ft.Do()
+	if e != nil {
+		log.Fatalln(e)
+	}
+	// Output:
+	//New data at end of epoch  100
+	//Number of rows  1000
+}

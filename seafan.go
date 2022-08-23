@@ -1,4 +1,4 @@
-// Package seafan creates a modeling workflow using Gorgonia as the model-build engine.
+// Package seafan is a set of tools for model building using Gorgonia as the model build engine.
 package seafan
 
 // Verbose controls amount of printing
