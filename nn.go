@@ -86,6 +86,20 @@ func (m *NNModel) String() string {
 	}
 	bSize := m.inputsC[0].Shape()[0]
 	str = fmt.Sprintf("%sBatch size: %d\n", str, bSize)
+
+	nPar := 0
+	for _, n := range m.paramsW {
+		nPar += n.Shape()[0] * n.Shape()[1]
+	}
+	for _, n := range m.paramsB {
+		nPar += n.Shape()[0] * n.Shape()[1]
+	}
+	str = fmt.Sprintf("%s%d FC parameters\n", str, nPar)
+	nEmb := 0
+	for _, n := range m.paremsEmb {
+		nEmb += n.Shape()[0] * n.Shape()[1]
+	}
+	str = fmt.Sprintf("%s%d Embedding parameters\n", str, nEmb)
 	return str
 }
 
@@ -232,8 +246,11 @@ func NewNNModel(modSpec ModSpec, p Pipeline, build bool, no ...NNOpts) (*NNModel
 	parB := make(G.Nodes, 0)
 
 	for ind := 0; ind < len(modSpec); ind++ {
-		ly := *modSpec.LType(ind)
-		if ly != FC {
+		ly, e := modSpec.LType(ind)
+		if e != nil {
+			return nil, e
+		}
+		if *ly != FC {
 			continue
 		}
 		fc := modSpec.FC(ind)
@@ -310,8 +327,11 @@ func (m *NNModel) Fwd() {
 
 	// work through layers
 	for ind := 1; ind < len(m.construct); ind++ {
-		ltype := *m.construct.LType(ind)
-		switch ltype {
+		ltype, e := m.construct.LType(ind)
+		if e != nil {
+			log.Fatalln(e)
+		}
+		switch *ltype {
 		case FC:
 			fc := m.construct.FC(ind)
 			nmw := "lWeights" + strconv.Itoa(ind)

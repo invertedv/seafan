@@ -58,7 +58,7 @@ type Args map[string]string
 
 // MakeArgs takes an argument string of the form "arg1:val1, arg2:val2, ...." and returns entries in key/val format
 func MakeArgs(s string) (keyval Args, err error) {
-	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(strings.ReplaceAll(s, " ", ""), "\n", "")
 	err = nil
 	keyval = make(map[string]string)
 	if !strings.Contains(s, ":") {
@@ -198,31 +198,35 @@ func (m ModSpec) Check() error {
 }
 
 // LType returns the layer type of layer i
-func (m ModSpec) LType(i int) *Layer {
-	if m.Check() != nil {
-		return nil
+func (m ModSpec) LType(i int) (*Layer, error) {
+	if e := m.Check(); e != nil {
+		return nil, e
 	}
 	if i < 0 || i >= len(m) {
-		return nil
+		return nil, fmt.Errorf("layer name error")
 	}
 	l, _, e := Strip(m[i])
 	if e != nil {
-		return nil
+		return nil, e
 	}
 	if i := strings.Index(strings.ToLower(_Layer_name), strings.ToLower(l)); i >= 0 {
 		for ind, ix := range _Layer_index {
 			if i == int(ix) {
 				lay := Layer(ind)
-				return &lay
+				return &lay, nil
 			}
 		}
 	}
-	return nil
+	return nil, fmt.Errorf("layer error")
 }
 
 // DropOut returns the *DoLayer for layer i, if it is of type DropOut.  Returns nil o.w.
 func (m ModSpec) DropOut(loc int) *DOLayer {
-	if *m.LType(loc) != DropOut {
+	l, e := m.LType(loc)
+	if e != nil {
+		return nil
+	}
+	if *l != DropOut {
 		return nil
 	}
 	do, err := DropOutParse(m[loc])
@@ -234,7 +238,11 @@ func (m ModSpec) DropOut(loc int) *DOLayer {
 
 // FC returns the *FCLayer for layer i, if it is of type FC. Returns nil o.w.
 func (m ModSpec) FC(loc int) *FCLayer {
-	if *m.LType(loc) != FC {
+	l, e := m.LType(loc)
+	if e != nil {
+		return nil
+	}
+	if *l != FC {
 		return nil
 	}
 	fc, err := FCParse(m[loc])
@@ -248,7 +256,11 @@ func (m ModSpec) FC(loc int) *FCLayer {
 func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 	var err error
 	modSpec := make([]*FType, 0)
-	if *m.LType(0) != Input {
+	l, e := m.LType(0)
+	if e != nil {
+		return nil, e
+	}
+	if *l != Input {
 		return nil, fmt.Errorf("first layer is not Input")
 	}
 	_, inStr, e := Strip(m[0])
@@ -298,7 +310,11 @@ func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 
 // Output returns the *FType of the target
 func (m ModSpec) Output(p Pipeline) (*FType, error) {
-	if *m.LType(len(m) - 1) != Output {
+	l, e := m.LType(len(m) - 1)
+	if e != nil {
+		return nil, e
+	}
+	if *l != Output {
 		return nil, nil
 	}
 	_, arg, e := Strip(m[len(m)-1])
@@ -324,7 +340,8 @@ func (m ModSpec) Save(fileName string) (err error) {
 	}
 	defer func() { err = f.Close() }()
 	for ind := 0; ind < len(m); ind++ {
-		if _, err = f.WriteString(m[ind] + "\n"); err != nil {
+		line := strings.ReplaceAll(strings.ReplaceAll(m[ind], " ", ""), "\n", "")
+		if _, err = f.WriteString(line + "\n"); err != nil {
 			return
 		}
 	}
@@ -361,7 +378,7 @@ func LoadModSpec(fileName string) (ms ModSpec, err error) {
 func Strip(s string) (left, inner string, err error) {
 	left, inner, err = "", "", nil
 	//	s = strings.ToLower(strings.ReplaceAll(s, " ", ""))
-	s = strings.ReplaceAll(s, " ", "")
+	s = strings.ReplaceAll(strings.ReplaceAll(s, " ", ""), "\n", "")
 	il := strings.Index(s, "(")
 	if il <= 0 {
 		return "", "", fmt.Errorf("bad (")
