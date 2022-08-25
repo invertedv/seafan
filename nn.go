@@ -413,6 +413,9 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	}
 
 	nn, err = NewNNModel(modSpec, p, build)
+	if err != nil {
+		return nil, err
+	}
 	if len(data) != len(nn.Params()) {
 		return nil, fmt.Errorf("node count differs")
 	}

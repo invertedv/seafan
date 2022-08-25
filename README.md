@@ -21,5 +21,5 @@ Seafan features:
   - Decile plots
 
 - Utilities.
-  - Plotting wrapper for [plotly](https://github.com/MetalBlueberry/go-plotly) for the most-commonly used plots in model-building.
+  - Plotting wrapper for [plotly](https://github.com/MetalBlueberry/go-plotly) for xy plots.
   - Numeric struct for (x,y) data and plotting and descriptive statistics.

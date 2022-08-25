@@ -190,7 +190,7 @@ func (m ModSpec) Check() error {
 		if e != nil {
 			return e
 		}
-		if !strings.Contains(strings.ToLower(_Layer_name), l) {
+		if !strings.Contains(strings.ToLower(_Layer_name), strings.ToLower(l)) {
 			return fmt.Errorf("unknown layer: %s", l)
 		}
 	}
@@ -286,8 +286,8 @@ func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 		}
 		feat.EmbCols = embCols
 		if embCols > 0 {
-			if feat.Role != FROneHot {
-				return nil, fmt.Errorf("feature %s must be one-hot", ft)
+			if feat.Role != FROneHot && feat.Role != FREmbed {
+				return nil, fmt.Errorf("feature %s can't be continuous/categorical", ft)
 			}
 			feat.Role = FREmbed
 		}
@@ -360,7 +360,8 @@ func LoadModSpec(fileName string) (ms ModSpec, err error) {
 // Strip is a utility that takes a string of the form "Func(args)" and returns "Func" and "args"
 func Strip(s string) (left, inner string, err error) {
 	left, inner, err = "", "", nil
-	s = strings.ToLower(strings.ReplaceAll(s, " ", ""))
+	//	s = strings.ToLower(strings.ReplaceAll(s, " ", ""))
+	s = strings.ReplaceAll(s, " ", "")
 	il := strings.Index(s, "(")
 	if il <= 0 {
 		return "", "", fmt.Errorf("bad (")
