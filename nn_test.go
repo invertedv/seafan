@@ -165,6 +165,8 @@ func ExampleWithOneHot() {
 	//Output(yoh)
 	//
 	//Batch size: 100
+	//24 FC parameters
+	//0 Embedding parameters
 	//
 	//x4 as embedding
 	//
@@ -196,6 +198,8 @@ func ExampleWithOneHot() {
 	//Output(yoh)
 	//
 	//Batch size: 100
+	//7 FC parameters
+	//60 Embedding parameters
 
 }
 
@@ -252,6 +256,8 @@ func ExampleWithOneHot_example2() {
 	//Cost function: CrossEntropy
 	//
 	//Batch size: 100
+	//19 FC parameters
+	//0 Embedding parameters
 }
 
 func ExampleFit_Do() {

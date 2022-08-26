@@ -35,7 +35,7 @@ func TestFCParse(t *testing.T) {
 
 func TestStrip(t *testing.T) {
 	inputs := []string{"ab(3)", "AB()", "r(as", "afdf)"}
-	expectL := []string{"ab", "ab", "", ""}
+	expectL := []string{"ab", "AB", "", ""}
 	expectI := []string{"3", "", "", ""}
 	for ind, i := range inputs {
 		left, inner, _ := Strip(i)
