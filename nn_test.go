@@ -360,7 +360,7 @@ func ExamplePredictNN() {
 		log.Fatalln(e)
 	}
 	fmt.Printf("out-of-sample correlation: %0.2f\n", stat.Correlation(pred.FitSlice(), pred.ObsSlice(), nil))
-	e = os.Remove(sf + "P.nn")
+	_ = os.Remove(sf + "P.nn")
 	if e != nil {
 		log.Fatalln(e)
 	}

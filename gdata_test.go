@@ -18,7 +18,7 @@ func TestGData_AppendC(t *testing.T) {
 		log.Fatalln(e)
 	}
 	xt := []any{"a", "b", "c"}
-	gd, e = gd.AppendD(NewRaw(xt), "Field1", nil)
+	_, e = gd.AppendD(NewRaw(xt), "Field1", nil)
 	assert.NotNil(t, e)
 
 	gd = make(GData, 0)

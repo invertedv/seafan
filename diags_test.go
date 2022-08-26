@@ -2,6 +2,8 @@ package seafan
 
 import (
 	"github.com/stretchr/testify/assert"
+	"log"
+	"os"
 	"testing"
 )
 
@@ -49,7 +51,81 @@ func TestKS(t *testing.T) {
 			cnt++
 		}
 	}
-	ks, _, _, e := KS(y, p, 2, []int{1}, false, nil, nil)
+	xy, e := Coalesce(y, p, 2, []int{1}, false, nil)
+	assert.Nil(t, e)
+	ks, _, _, e := KS(xy, nil)
 	assert.Nil(t, e)
 	assert.InEpsilon(t, ks, 25.0, .01)
+}
+
+func ExampleSlice_Iter() {
+	// An example of slicing through the data to generate diagnostics on subsets.
+	// The code here will generate a decile plot for each of the 20 levels of x4.
+	Verbose = false
+	bSize := 100
+	// generate a Pipeline of type *ChData that reads test.csv in the data directory
+	pipe := chPipe(bSize, "test1.csv")
+	// The feature x4 takes on values 0,1,2,...19.  chPipe treats this a continuous feature.
+	// Let's override that and re-initialize the pipeline.
+	WithCats("x4")(pipe)
+	WithOneHot("x4oh", "x4")(pipe)
+
+	if e := pipe.Init(); e != nil {
+		log.Fatalln(e)
+	}
+	mod := ModSpec{
+		"Input(x1+x2+x3+x4oh)",
+		"FC(size:2, activation:softmax)",
+		"Output(yoh)",
+	}
+	//
+	nn, e := NewNNModel(mod, pipe, true)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	WithCostFn(CrossEntropy)(nn)
+	ft := NewFit(nn, 100, pipe)
+	if e := ft.Do(); e != nil {
+		log.Fatalln(e)
+	}
+	sf := os.TempDir() + "/nnTest"
+	e = nn.Save(sf)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	WithBatchSize(8500)(pipe)
+	pred, e := PredictNN(sf, pipe, false)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	_ = os.Remove(sf + "P.nn")
+	if e != nil {
+		log.Fatalln(e)
+	}
+	_ = os.Remove(sf + "S.nn")
+	s, e := NewSlice("x4", 0, pipe, nil)
+	if e != nil {
+		log.Fatalln(e)
+	}
+	for s.Iter() {
+		slicer := s.MakeSlicer()
+		xy, e := Coalesce(pred.ObsSlice(), pred.FitSlice(), 2, []int{1}, false, slicer)
+		if e != nil {
+			log.Fatalln(e)
+		}
+		if e := Decile(xy, &PlotDef{
+			Title:    "Decile: " + s.Title(),
+			XTitle:   "Score",
+			YTitle:   "Actual",
+			STitle:   "",
+			Legend:   false,
+			Height:   1200,
+			Width:    1200,
+			Show:     true,
+			FileName: "",
+		}); e != nil {
+			log.Fatalln(e)
+		}
+	}
+	// Output:
 }

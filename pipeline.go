@@ -20,6 +20,7 @@ type Pipeline interface {
 	GetFType(field string) *FType   // Get FType for the feature
 	BatchSize() int                 // batch size
 	FieldList() []string            // fields available
+	Get(field string) *GDatum       // return data for field
 }
 
 // Opts function sets an option to a Pipeline

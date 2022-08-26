@@ -3,12 +3,158 @@ package seafan
 import (
 	"fmt"
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
+	"gonum.org/v1/gonum/stat"
 	"math"
 	"sort"
 )
 
-// Slicer is a optional function that returns true if the row is to be used in calculations
+// Slicer is an optional function that returns true if the row is to be used in calculations. This is used to
+// subset the diagnostics to specific values.
 type Slicer func(row int) bool
+
+// Slice implements generating Slicer functions for a feature.  These are used to slice through the values
+// of a discrete feature. For continuous features, it slices by quartile.
+type Slice struct {
+	feat     string   // feature to slice
+	minCnt   int      // a level of a feature must have at least minCnt obs to be used
+	pipe     Pipeline // data pipeline
+	index    int32    // current mapped level value we're working on
+	val      any      // current actual value of a discrete feature
+	title    string   // auto-generated title for plots
+	data     *GDatum  // feat data
+	restrict []any
+}
+
+// NewSlice makes a new Slice based on feat in Pipeline pipe.
+// minCnt is the minimum # of obs a slice must have to be used.
+func NewSlice(feat string, minCnt int, pipe Pipeline, restrict []any) (*Slice, error) {
+	d := pipe.Get(feat)
+
+	if d == nil {
+		return nil, fmt.Errorf("%s not found in pipeline", feat)
+	}
+	if d.FT.Role != FRCat && d.FT.Role != FRCts {
+		return nil, fmt.Errorf("cannot slice type %v", d.FT.Role)
+	}
+	s := &Slice{feat: feat, minCnt: minCnt, pipe: pipe, index: -1, val: nil, data: d, restrict: restrict}
+	return s, nil
+}
+
+// Title retrieves the auto-generated title
+func (s *Slice) Title() string {
+	return s.title
+}
+
+// Value returns the level of a discrete feature we're working on
+func (s *Slice) Value() any {
+	return s.val
+}
+
+// Index returns the mapped value of the current value
+func (s *Slice) Index() int32 {
+	return s.index
+}
+
+// SlicerAnd creates a Slicer that is s1 && s2
+func SlicerAnd(s1, s2 Slicer) Slicer {
+	return func(row int) bool {
+		return s1(row) && s2(row)
+	}
+}
+
+// SlicerOr creates a Slicer that is s1 || s2
+func SlicerOr(s1, s2 Slicer) Slicer {
+	return func(row int) bool {
+		return s1(row) || s2(row)
+	}
+}
+
+// MakeSlicer makes a Slicer function for the current value (discrete) or range (continuous) of the feature
+func (s *Slice) MakeSlicer() Slicer {
+	fx := func(row int) bool {
+		switch s.data.FT.Role {
+		case FRCat:
+			s.title = fmt.Sprintf("field %s = %v", s.feat, s.val)
+			return s.data.Data.([]int32)[row] == s.index
+		case FRCts:
+			q := s.data.Summary.DistrC.Q
+			qLab := make([]float64, len(q))
+			copy(qLab, q)
+			// if the feature is normalized, return it to original units for display
+			if s.data.FT.Normalized {
+				m := s.data.FT.FP.Location
+				std := s.data.FT.FP.Scale
+				for ind := 0; ind < len(qLab); ind++ {
+					qLab[ind] = qLab[ind]*std + m
+				}
+			}
+			switch s.index {
+			case 0:
+				s.title = fmt.Sprintf("%s Less Than Lower Quartile (%0.2f)", s.feat, qLab[2])
+				return s.data.Data.([]float64)[row] < q[2] // under lower quartile
+			case 1:
+				s.title = fmt.Sprintf("%s Between Lower Quartile (%0.2f) and Median (%0.2f)", s.feat, qLab[2], qLab[3])
+				return s.data.Data.([]float64)[row] >= q[2] && s.data.Data.([]float64)[row] < q[3] // lower quartile to median
+			case 2:
+				s.title = fmt.Sprintf("%s Between Median (%0.2f) and Upper Quartile (%0.2f)", s.feat, qLab[3], qLab[4])
+				return s.data.Data.([]float64)[row] >= q[3] && s.data.Data.([]float64)[row] < q[4] // median to upper quartile
+			case 3:
+				s.title = fmt.Sprintf("%s Above Upper Quartile (%0.2f)", s.feat, qLab[4])
+				return s.data.Data.([]float64)[row] >= q[4] // above upper quartile
+			}
+		}
+		return false
+	}
+	return fx
+}
+
+// Iter iterates through the levels (ranges) of the feature. Returns false when we're done.
+func (s *Slice) Iter() bool {
+	s.index++
+	switch s.data.FT.Role {
+	case FRCts:
+		if s.index == 4 {
+			s.index = -1
+			return false
+		}
+		return true
+	case FRCat:
+		for {
+			// find the level that corresponds to the mapped value s.index
+			for k, v := range s.data.FT.FP.Lvl {
+				if int(s.index) == s.data.FT.Cats {
+					s.index = -1
+					return false
+				}
+				if v == s.index {
+					s.val = k
+					// make sure it's in the current data set
+					c, ok := s.data.Summary.DistrD[s.val]
+					if !ok {
+						s.index++
+						continue
+					}
+					// and has enough data
+					if int(c) <= s.minCnt {
+						s.index++
+						continue
+					}
+					if s.restrict == nil {
+						return true
+					}
+					// check it's one of the values the user has restricted to
+					for _, r := range s.restrict {
+						if r == s.val {
+							return true
+						}
+					}
+					s.index++
+				}
+			}
+		}
+	}
+	return false
+}
 
 // Coalesce reduces a softmax output to two categories
 //
@@ -91,11 +237,7 @@ func Coalesce(y []float64, fit []float64, nCat int, trg []int, logodds bool, sl 
 //	target     Desc struct of fitted values of target outcomes
 //
 // Output: html plot file and/or plot in browser.
-func KS(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *PlotDef, sl Slicer) (ks float64, notTarget *Desc, target *Desc, err error) {
-	xy, err := Coalesce(y, fit, nCat, trg, logodds, sl)
-	if err != nil {
-		return -1.0, nil, nil, err
-	}
+func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err error) {
 
 	n := len(xy.X)
 	// arrays to hold probabilities with observed 0's and 1's separately
@@ -110,9 +252,9 @@ func KS(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *Plot
 			probNotTarget = append(probNotTarget, xy.X[row])
 		}
 	}
-	notTarget, _ = NewDesc(nil, fmt.Sprintf("Value not in %v", trg))
-	target, _ = NewDesc(nil, fmt.Sprintf("Value in %v", trg))
-	notTarget.Populate(probNotTarget, false) // side effect is probNotTarget is sorted
+	notTarget, _ = NewDesc(nil, "not target") // fmt.Sprintf("Value not in %v", trg))
+	target, _ = NewDesc(nil, "target")        // fmt.Sprintf("Value in %v", trg))
+	notTarget.Populate(probNotTarget, false)  // side effect is probNotTarget is sorted
 	target.Populate(probTarget, false)
 
 	// Min & max of probabilities
@@ -170,8 +312,15 @@ func KS(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *Plot
 		}
 		fig := &grob.Fig{Data: grob.Traces{t0, t1}}
 		plt.Title = fmt.Sprintf("%s<br>KS %v at %v", plt.Title, math.Round(10.0*ks)/10.0, math.Round(1000*at)/1000)
-		plt.XTitle = fmt.Sprintf("Probability value is in %v", trg)
-		plt.YTitle = "Cumulative Distribution"
+		if plt.XTitle == "" {
+			plt.XTitle = "Fitted Values"
+		}
+		if plt.YTitle == "" {
+			plt.YTitle = "Cumulative Score Distribution"
+		}
+		if plt.Title == "" {
+			plt.Title = "KS Plot"
+		}
 		lay := &grob.Layout{}
 		lay.Legend = &grob.LayoutLegend{X: target.Q[0], Y: 1.0}
 		err = Plotter(fig, lay, plt)
@@ -188,19 +337,14 @@ func KS(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *Plot
 //	plt       PlotDef plot options.  If plt is nil an error is generated.
 //
 // Output: html plot file and/or plot in browser.
-func Decile(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *PlotDef, sl Slicer) error {
+func Decile(xy *XY, plt *PlotDef) error {
 	if plt == nil {
 		return fmt.Errorf("plt cannot be nil")
 	}
-	xy, err := Coalesce(y, fit, nCat, trg, logodds, sl)
 	a, b := 0.0, 0.0
 	for j := 0; j < xy.Len(); j++ {
 		a += xy.X[j]
 		b += xy.Y[j]
-	}
-	fmt.Println("obs, est avgs ", a/float64(xy.Len()), b/float64(xy.Len()))
-	if err != nil {
-		return err
 	}
 	if e := xy.Sort(); e != nil {
 		return e
@@ -267,18 +411,26 @@ func Decile(y []float64, fit []float64, nCat int, trg []int, logodds bool, plt *
 		Line: &grob.ScatterLine{Color: "red"},
 	}
 	fig.AddTraces(tr)
-	plt.XTitle = fmt.Sprintf("Grouped mean probability value is in %v", trg)
-	plt.YTitle = fmt.Sprintf("Grouped mean observed value is in %v", trg)
-	plt.STitle = "95% CI assuming independence"
-	err = Plotter(fig, &grob.Layout{}, plt)
+
+	mFit := stat.Mean(xy.X, nil)
+	mObs := stat.Mean(xy.Y, nil)
+	n := xy.Len()
+	plt.STitle = fmt.Sprintf("95%% CI assuming independence<br># obs: %d means: Fit %0.3f actual %0.3f", n, mFit, mObs)
+	if plt.XTitle == "" {
+		plt.XTitle = "Fitted Values"
+	}
+	if plt.YTitle == "" {
+		plt.YTitle = "Actual Values"
+	}
+	if plt.Title == "" {
+		plt.Title = "Decile Plot"
+	}
+
+	err := Plotter(fig, &grob.Layout{}, plt)
 	return err
 }
 
-func Assess(y []float64, fit []float64, nCat int, trg []int, logodds bool, cutoff float64, sl Slicer) (n int, precision float64, recall float64, accuracy float64, err error) {
-	xy, err := Coalesce(y, fit, nCat, trg, logodds, sl)
-	if err != nil {
-		return
-	}
+func Assess(xy *XY, cutoff float64) (n int, precision float64, recall float64, accuracy float64, err error) {
 	correctYes := 0
 	correct := 0
 	obsTot := 0

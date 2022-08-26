@@ -292,7 +292,7 @@ func (ch *ChData) Name() string {
 	return ch.name
 }
 
-// BatchSize returns Pieeline batch size
+// BatchSize returns Pipeline batch size
 func (ch *ChData) BatchSize() int {
 	return ch.bs
 }

@@ -637,7 +637,7 @@ func (ft *Fit) Do() (err error) {
 				}
 			}
 		case false:
-			// find validation cost..save model and load to new graph
+			// find validation cost, save model and load to new graph
 			if err = ft.nn.Save(ft.tmpFile); err != nil {
 				return err
 			}
