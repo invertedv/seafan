@@ -1,6 +1,6 @@
 package seafan
 
-// github.com/invertedv/chutils Pipeline
+// ch.go implments a Pipeline using github.com/invertedv/chutils
 
 import (
 	"fmt"
@@ -186,8 +186,8 @@ func (ch *ChData) Rows() int {
 }
 
 // Batch loads a batch into inputs.  It returns false if the epoch is done.
-// If cycle, it will start at the beginning on the next call.
-// If !cycle, it will call Init() at the next call to Batch()
+// If cycle is true, it will start at the beginning on the next call.
+// If cycle is false, it will call Init() at the next call to Batch()
 func (ch *ChData) Batch(inputs G.Nodes) bool {
 	// do we need to load the data?
 	if ch.pull {

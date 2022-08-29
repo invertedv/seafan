@@ -1,6 +1,6 @@
 package seafan
 
-// structures/methods dealing with fields
+// fields.go implements structures/methods dealing with fields
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-// FType represents a single field. It holds key information about the feature: it's role, dimensions, summary info.
+// FType represents a single field. It holds key information about the feature: its role, dimensions, summary info.
 type FType struct {
 	Name       string
 	Role       FRole

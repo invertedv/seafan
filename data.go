@@ -120,7 +120,7 @@ type Desc struct {
 	Std  float64   // standard deviation
 }
 
-// NewDesc creates a pointer to a new Desc struct instance with error checking
+// NewDesc creates a pointer to a new Desc struct instance with error checking.
 //
 //	u is a slice of values at which to find quantiles. If nil, a standard set is used.
 //	name is the name of the feature (for printing)(
@@ -258,7 +258,7 @@ func (x *kv) Len() int {
 	return len(x.ord)
 }
 
-// pad returns a padding string
+// pad returns a padding string of length maxLen-thisLen
 func pad(maxLen, thisLen int) string {
 	sp := "   "
 	for ind := 0; ind < maxLen-thisLen; ind++ {

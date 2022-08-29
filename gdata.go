@@ -1,6 +1,6 @@
 package seafan
 
-// structures and methods to produce gorgonia-ready data
+// gdata.go implements structures and methods to produce gorgonia-ready data
 
 import (
 	"fmt"

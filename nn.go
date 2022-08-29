@@ -1,9 +1,6 @@
 package seafan
 
-//TODO: Save cost function? Put it in modSpec?
-//TODO: Add Name to NewNN and save name?
-
-// NN functionality
+// nn.go implements NN functionality
 
 import (
 	"encoding/json"
@@ -20,7 +17,7 @@ import (
 	"time"
 )
 
-// CostFunc function proto for cost functions
+// CostFunc function prototype for cost functions
 type CostFunc func(model NNet) *G.Node
 
 // NNet interface for NN models
@@ -181,16 +178,18 @@ func WithName(name string) NNOpts {
 	return f
 }
 
-// NewNNModel creates a new NN model. The modSpec input can be created by ByFormula.
-func NewNNModel(modSpec ModSpec, p Pipeline, build bool, no ...NNOpts) (*NNModel, error) {
-	bSize := p.BatchSize()
+// NewNNModel creates a new NN model.
+// Specs for fields in modSpec are pulled from pipe.
+// if build is true, DropOut layers are included.
+func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNModel, error) {
+	bSize := pipe.BatchSize()
 	g := G.NewGraph()
 	xs := make(G.Nodes, 0)
 	embParm := make(G.Nodes, 0) // embedding parameters
 	xEmInp := make(G.Nodes, 0)  // one-hot input
 	xEmProd := make(G.Nodes, 0) // product of one-hot input and embedding parameters
 	// work through the features
-	inps, e := modSpec.Inputs(p)
+	inps, e := modSpec.Inputs(pipe)
 	if e != nil {
 		return nil, e
 	}
@@ -224,7 +223,7 @@ func NewNNModel(modSpec ModSpec, p Pipeline, build bool, no ...NNOpts) (*NNModel
 	}
 
 	// target.  There may not be a target if the model has been built and is now in prediction mode.
-	obsF, e := modSpec.Output(p)
+	obsF, e := modSpec.Target(pipe)
 	if e != nil {
 		return nil, e
 	}
@@ -371,8 +370,8 @@ type saveNode struct {
 	Parms []float64 `json:"parms"`
 }
 
-// Save saves a model to disk.  Two files are created: *S.nn stores the ModSpec and
-// *P.nn stores the parameters.
+// Save saves a model to disk.  Two files are created: <fileRoot>S.nn for the ModSpec and
+// <fileRoot>P.nn form the parameters.
 func (m *NNModel) Save(fileRoot string) (err error) {
 	err = nil
 	fileP := fileRoot + "P.nn"
@@ -405,7 +404,10 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 	return nil
 }
 
-// LoadNN restores a previously saved NNModel
+// LoadNN restores a previously saved NNModel.
+// fileRoot is the root name of the save file.
+// p is the Pipeline with the field specs.
+// if build is true, DropOut layers are included.
 func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	err = nil
 	nn = nil
@@ -585,7 +587,7 @@ func (ft *Fit) OutCosts() *XY {
 	return ft.outCosts
 }
 
-// Do is the fitting loop for NNModels.
+// Do is the fitting loop.
 func (ft *Fit) Do() (err error) {
 	//	if ft.nn.Cost == nil {
 	//		return fmt.Errorf("no cost node in NNModel")
@@ -686,7 +688,7 @@ func (ft *Fit) Do() (err error) {
 	return
 }
 
-// PredictNN reads in a NNModel from disk and populates it with a batch from p.
+// PredictNN reads in a NNModel from a file and populates it with a batch from p.
 // Methods such as FitSlice and ObsSlice are immediately available.
 func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
 
@@ -707,6 +709,7 @@ func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNM
 	return
 }
 
+// SoftMaxAct implements softmax activation functin
 func SoftMaxAct(n *G.Node) *G.Node {
 	exp := G.Must(G.Exp(n))
 	sexp := G.Must(G.Sum(exp, 1))

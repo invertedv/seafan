@@ -2,19 +2,19 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/invertedv/seafan)](https://goreportcard.com/report/github.com/invertedv/seafan)
 [![godoc](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white)](https://pkg.go.dev/mod/github.com/invertedv/seafan?tab=overview)
 
-Package seafan is a set of tools for model building using [gorgonia](https://pkg.go.dev/gorgonia.org/gorgonia@v0.9.17)
-as the model-build engine.
+Package seafan is a set of tools for building DNN models. The build engine is [gorgonia](https://pkg.go.dev/gorgonia.org/gorgonia@v0.9.17).
 
 Seafan features:
 
-- A data pipeline based on [chutils](https://github.com/invertedv/chutils) to access files and ClickHouse.
+- A data pipeline based on [chutils](https://github.com/invertedv/chutils) to access files and ClickHouse tables.
   - Point-and-shoot specification of the data
   - Simple specification of one-hot features
 
-- A wrapper around gorgonia for neural nets that marries to the pipeline.
+- A wrapper around gorgonia that meshes to the pipeline.
   - Simple specification of models, including embeddings
-  - A fit method with optional early stopping and callbacks
-  - Methods for saving and loading models
+  - A fit method with optional early stopping
+  - Callbacks during model fit
+  - Saving and loading models
 
 - Model diagnostics for categorical targets.
   - KS plots

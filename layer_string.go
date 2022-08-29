@@ -11,10 +11,10 @@ func _() {
 	_ = x[Input-0]
 	_ = x[FC-1]
 	_ = x[DropOut-2]
-	_ = x[Output-3]
+	_ = x[Target-3]
 }
 
-const _Layer_name = "InputFCDropOutOutput"
+const _Layer_name = "InputFCDropOutTarget"
 
 var _Layer_index = [...]uint8{0, 5, 7, 14, 20}
 

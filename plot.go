@@ -1,5 +1,7 @@
 package seafan
 
+// plot.go implements routines to make simple plotly plots easy.
+
 import (
 	"fmt"
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"

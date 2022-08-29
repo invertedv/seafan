@@ -1,5 +1,7 @@
 package seafan
 
+// pipeline.go has interface and "With" funcs for Pipelines.
+
 import (
 	"github.com/invertedv/chutils"
 	G "gorgonia.org/gorgonia"

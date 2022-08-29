@@ -1,5 +1,7 @@
 package seafan
 
+// diags.go implements model diagnostics
+
 import (
 	"fmt"
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
@@ -27,6 +29,7 @@ type Slice struct {
 
 // NewSlice makes a new Slice based on feat in Pipeline pipe.
 // minCnt is the minimum # of obs a slice must have to be used.
+// Restrict is a slice of values to restrict Iter to.
 func NewSlice(feat string, minCnt int, pipe Pipeline, restrict []any) (*Slice, error) {
 	d := pipe.Get(feat)
 
@@ -69,7 +72,8 @@ func SlicerOr(s1, s2 Slicer) Slicer {
 	}
 }
 
-// MakeSlicer makes a Slicer function for the current value (discrete) or range (continuous) of the feature
+// MakeSlicer makes a Slicer function for the current value (discrete) or range (continuous) of the feature.
+// Continuous features are sliced at the lower quartile, median and upper quartile, producing 4 slices.
 func (s *Slice) MakeSlicer() Slicer {
 	fx := func(row int) bool {
 		switch s.data.FT.Role {
@@ -108,7 +112,7 @@ func (s *Slice) MakeSlicer() Slicer {
 	return fx
 }
 
-// Iter iterates through the levels (ranges) of the feature. Returns false when we're done.
+// Iter iterates through the levels (ranges) of the feature. Returns false when done.
 func (s *Slice) Iter() bool {
 	s.index++
 	switch s.data.FT.Role {
@@ -236,7 +240,7 @@ func Coalesce(y []float64, fit []float64, nCat int, trg []int, logodds bool, sl 
 //	notTarget  Desc struct of fitted values of the non-target outcomes
 //	target     Desc struct of fitted values of target outcomes
 //
-// Output: html plot file and/or plot in browser.
+// Target: html plot file and/or plot in browser.
 func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err error) {
 
 	n := len(xy.X)
@@ -271,14 +275,18 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 	sort.Float64s(probTarget)
 	upnt := make([]float64, len(probNotTarget))
 	for k := 0; k < len(upnt); k++ {
-		upnt[k] = (float64(k) - .5) / float64(len(upnt))
+		upnt[k] = float64(k+1) / float64(len(upnt))
 	}
 	upt := make([]float64, len(probTarget))
 	for k := 0; k < len(upt); k++ {
-		upt[k] = (float64(k) - .5) / float64(len(upt))
+		upt[k] = float64(k+1) / float64(len(upt))
 	}
 	xypt, _ := NewXY(probTarget, upt)
+	xypt.X = append(xypt.X, 0, 1)
+	xypt.Y = append(xypt.Y, 0, 1)
 	xypnt, _ := NewXY(probNotTarget, upnt)
+	xypnt.X = append(xypnt.X, 0, 1)
+	xypnt.Y = append(xypnt.Y, 0, 1)
 	cpt, _ := xypt.Interp(p)
 	cpnt, _ := xypnt.Interp(p)
 
@@ -336,7 +344,7 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 //	logodds   if true, fit is in log odds space
 //	plt       PlotDef plot options.  If plt is nil an error is generated.
 //
-// Output: html plot file and/or plot in browser.
+// Target: html plot file and/or plot in browser.
 func Decile(xy *XY, plt *PlotDef) error {
 	if plt == nil {
 		return fmt.Errorf("plt cannot be nil")
@@ -430,7 +438,8 @@ func Decile(xy *XY, plt *PlotDef) error {
 	return err
 }
 
-func Assess(xy *XY, cutoff float64) (n int, precision float64, recall float64, accuracy float64, err error) {
+// Assess returns a selection of statistics of the fit
+func Assess(xy *XY, cutoff float64) (n int, precision float64, recall float64, accuracy float64, obs *Desc, fit *Desc, err error) {
 	correctYes := 0
 	correct := 0
 	obsTot := 0
@@ -453,11 +462,22 @@ func Assess(xy *XY, cutoff float64) (n int, precision float64, recall float64, a
 		}
 	}
 	if obsTot == 0 {
-		return 0, 0.0, 0.0, 0.0, fmt.Errorf("there are not positive outcomes")
+		return 0, 0.0, 0.0, 0.0, nil, nil, fmt.Errorf("there are not positive outcomes")
 	}
 	precision = float64(correctYes) / float64(predTot) // fraction of Yes corrects to total predicted Yes
 	recall = float64(correctYes) / float64(obsTot)     // fraction of Yes corrects to total actual Yes
 	accuracy = float64(correct) / float64(len(xy.X))   // fraction of corrects
 	n = len(xy.X)
+	fit, err = NewDesc(nil, "fitted values")
+	if err != nil {
+		return
+	}
+	fit.Populate(xy.X, true)
+
+	obs, err = NewDesc(nil, "observed values")
+	if err != nil {
+		return
+	}
+	obs.Populate(xy.Y, true)
 	return
 }

@@ -48,7 +48,7 @@ func TestNNModel_Save(t *testing.T) {
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	//
 	nn, e := NewNNModel(mod, pipe, true)
@@ -82,7 +82,7 @@ func TestFit_Do(t *testing.T) {
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	nn, e := NewNNModel(mod, pipe, true)
 	assert.Nil(t, e)
@@ -115,7 +115,7 @@ func ExampleWithOneHot() {
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4oh)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	//
 	fmt.Println("x4 as one-hot")
@@ -128,14 +128,14 @@ func ExampleWithOneHot() {
 	mod = ModSpec{
 		"Input(x1+x2+x3+E(x4oh,3))",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	nn, e = NewNNModel(mod, pipe, true)
 	if e != nil {
 		log.Fatalln(e)
 	}
 	fmt.Println(nn)
-	// Output:
+	// Target:
 	//x4 as one-hot
 	//
 	//Inputs
@@ -162,7 +162,7 @@ func ExampleWithOneHot() {
 	//Model Structure
 	//Input(x1+x2+x3+x4oh)
 	//FC(size:2, activation:softmax)
-	//Output(yoh)
+	//Target(yoh)
 	//
 	//Batch size: 100
 	//24 FC parameters
@@ -195,7 +195,7 @@ func ExampleWithOneHot() {
 	//Model Structure
 	//Input(x1+x2+x3+E(x4oh,3))
 	//FC(size:2, activation:softmax)
-	//Output(yoh)
+	//Target(yoh)
 	//
 	//Batch size: 100
 	//7 FC parameters
@@ -215,7 +215,7 @@ func ExampleWithOneHot_example2() {
 		"FC(size:3, activation:relu)",
 		"DropOut(.1)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 
 	nn, e := NewNNModel(mod, pipe, true,
@@ -225,7 +225,7 @@ func ExampleWithOneHot_example2() {
 		log.Fatalln(e)
 	}
 	fmt.Println(nn)
-	// Output:
+	// Target:
 	//Example With Dropouts
 	//Inputs
 	//Field x1
@@ -251,7 +251,7 @@ func ExampleWithOneHot_example2() {
 	//FC(size:3, activation:relu)
 	//DropOut(.1)
 	//FC(size:2, activation:softmax)
-	//Output(yoh)
+	//Target(yoh)
 	//
 	//Cost function: CrossEntropy
 	//
@@ -271,7 +271,7 @@ func ExampleFit_Do() {
 		"FC(size:3, activation:relu)",
 		"DropOut(.1)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	// model is straight-forward with no hidden layers or dropouts.
 	nn, e := NewNNModel(mod, pipe, true, WithCostFn(CrossEntropy))
@@ -289,7 +289,7 @@ func ExampleFit_Do() {
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// Output:
+	// Target:
 }
 
 func ExampleFit_Do_example2() {
@@ -306,7 +306,7 @@ func ExampleFit_Do_example2() {
 		"FC(size:3, activation:relu)",
 		"DropOut(.1)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(CrossEntropy))
 	if e != nil {
@@ -328,7 +328,7 @@ func ExampleFit_Do_example2() {
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// Output:
+	// Target:
 }
 
 func ExamplePredictNN() {
@@ -343,7 +343,7 @@ func ExamplePredictNN() {
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4)",
 		"FC(size:1)",
-		"Output(ycts)",
+		"Target(ycts)",
 	}
 	// model is straight-forward with no hidden layers or dropouts.
 	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(RMS))
@@ -371,7 +371,7 @@ func ExamplePredictNN() {
 		log.Fatalln(e)
 	}
 	_ = os.Remove(sf + "S.nn")
-	// Output:
+	// Target:
 	// out-of-sample correlation: 0.84
 
 }
@@ -417,7 +417,7 @@ func ExampleWithCallBack() {
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4)",
 		"FC(size:1)",
-		"Output(ycts)",
+		"Target(ycts)",
 	}
 	// model is straight-forward with no hidden layers or dropouts.
 	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(RMS))
@@ -430,7 +430,7 @@ func ExampleWithCallBack() {
 	if e != nil {
 		log.Fatalln(e)
 	}
-	// Output:
+	// Target:
 	//New data at end of epoch  100
 	//Number of rows  1000
 }

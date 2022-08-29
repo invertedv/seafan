@@ -53,7 +53,7 @@ func TestModSpec_Inputs(t *testing.T) {
 		"Dropout(.1)",
 		"FC(size:2)",
 		"Dropout(.1)",
-		"Output(ycts)",
+		"Target(ycts)",
 	}
 	expN := []string{"x1", "x2", "x3"}
 	expR := []FRole{FRCts, FRCts, FRCts}
@@ -65,7 +65,7 @@ func TestModSpec_Inputs(t *testing.T) {
 	}
 }
 
-func TestModSpec_Output(t *testing.T) {
+func TestModSpec_Target(t *testing.T) {
 	Verbose = false
 	pipe := chPipe(100, "test1.csv")
 	mod := ModSpec{
@@ -74,9 +74,9 @@ func TestModSpec_Output(t *testing.T) {
 		"Dropout(.1)",
 		"FC(size:2)",
 		"Dropout(.1)",
-		"Output(ycts)",
+		"Target(ycts)",
 	}
-	ft, e := mod.Output(pipe)
+	ft, e := mod.Target(pipe)
 	assert.Nil(t, e)
 	assert.Equal(t, ft.Name, "ycts")
 	assert.Equal(t, ft.Role, FRCts)
@@ -87,9 +87,9 @@ func TestModSpec_Output(t *testing.T) {
 		"Dropout(.1)",
 		"FC(size:2)",
 		"Dropout(.1)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
-	ft, e = mod.Output(pipe)
+	ft, e = mod.Target(pipe)
 	assert.Nil(t, e)
 	assert.Equal(t, ft.Name, "yoh")
 	assert.Equal(t, ft.Role, FROneHot)
@@ -98,11 +98,11 @@ func TestModSpec_Output(t *testing.T) {
 func TestModSpec_Save(t *testing.T) {
 	mod := ModSpec{
 		"Input(x1+x2+x3)",
-		"FC(size:3, activation:leakyrelu(0.1))",
+		"FC(size:3,activation:leakyrelu(0.1))",
 		"Dropout(.1)",
 		"FC(size:2)",
 		"Dropout(.1)",
-		"Output(ycts)",
+		"Target(ycts)",
 	}
 	outfile := os.TempDir() + "/testSave.txt"
 	e := mod.Save(outfile)

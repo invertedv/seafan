@@ -76,7 +76,7 @@ func ExampleSlice_Iter() {
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4oh)",
 		"FC(size:2, activation:softmax)",
-		"Output(yoh)",
+		"Target(yoh)",
 	}
 	//
 	nn, e := NewNNModel(mod, pipe, true)
@@ -127,5 +127,5 @@ func ExampleSlice_Iter() {
 			log.Fatalln(e)
 		}
 	}
-	// Output:
+	// Target:
 }

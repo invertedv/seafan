@@ -1,5 +1,7 @@
 package seafan
 
+// modspec.go handles specifying the model
+
 import (
 	"bufio"
 	"fmt"
@@ -17,7 +19,7 @@ const (
 	Input Layer = 0 + iota
 	FC
 	DropOut
-	Output
+	Target
 )
 
 //go:generate stringer -type=Layer
@@ -308,13 +310,13 @@ func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 	return modSpec, nil
 }
 
-// Output returns the *FType of the target
-func (m ModSpec) Output(p Pipeline) (*FType, error) {
+// Target returns the *FType of the target
+func (m ModSpec) Target(p Pipeline) (*FType, error) {
 	l, e := m.LType(len(m) - 1)
 	if e != nil {
 		return nil, e
 	}
-	if *l != Output {
+	if *l != Target {
 		return nil, nil
 	}
 	_, arg, e := Strip(m[len(m)-1])
