@@ -4,24 +4,24 @@ package seafan
 
 import (
 	"fmt"
+	"io"
+	"reflect"
+	"strings"
+
 	"github.com/invertedv/chutils"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
-	"io"
-	"log"
-	"reflect"
-	"strings"
 )
 
 // ChData creates a Pipeline based on chutils.  This provides an interface into text files (delimited, fixed length)
 // and ClickHouse.
 // If !cycle, Init is called after each epoch.
-// callback is called at the start of each Init
+// callback is called at the start of each Init.
 type ChData struct {
-	bs         int           // batch size
 	cycle      bool          // if true, resuses data, false fetches new data after each epoch
-	cbRow      int           // current batch starting row
 	pull       bool          // if true, pull the data from ClickHouse on next call to Batch
+	bs         int           // batch size
+	cbRow      int           // current batch starting row
 	nRow       int           // # rows in dataset
 	rdr        chutils.Input // data reader
 	data       GData         // processed data
@@ -36,83 +36,96 @@ func NewChData(name string, opts ...Opts) *ChData {
 	for _, o := range opts {
 		o(ch)
 	}
+
 	return ch
 }
 
-// GetFTypes returns FTypes for ch Pipeline
+// GetFTypes returns FTypes for ch Pipeline.
 func (ch *ChData) GetFTypes() FTypes {
 	fts := make(FTypes, 0)
 	for _, d := range ch.data {
 		fts = append(fts, d.FT)
 	}
+
 	return fts
 }
 
 // SaveFTypes saves the FTypes for the Pipeline.
 func (ch *ChData) SaveFTypes(fileName string) error {
-	return ch.GetFTypes().Save(fileName)
+	return Wrapper(ch.GetFTypes().Save(fileName), "(*ChData).SaveFTypes")
 }
 
-// returns *FType from user-input FTypes
+// returns *FType from user-input FTypes.
 func (ch *ChData) getFType(feature string) *FType {
 	for _, ft := range ch.ftypes {
 		if ft.Name == feature {
 			return ft
 		}
 	}
+
 	return nil
 }
 
-// IsNormalized returns true if the field is normalized
+// IsNormalized returns true if the field is normalized.
 func (ch *ChData) IsNormalized(field string) bool {
 	if ft := ch.Get(field); ft != nil {
 		return ft.FT.Normalized
 	}
+
 	return false
 }
 
-// IsCts returns true if the field has role FRCts
+// IsCts returns true if the field has role FRCts.
 func (ch *ChData) IsCts(field string) bool {
 	if ft := ch.Get(field); ft != nil {
 		return ft.FT.Role == FRCat
 	}
-	return false
 
+	return false
 }
 
-// IsCat returns true if field has role FRCat
+// IsCat returns true if field has role FRCat.
 func (ch *ChData) IsCat(field string) bool {
 	if ft := ch.Get(field); ft != nil {
 		return ft.FT.Role == FRCat
 	}
+
 	return false
 }
 
 // GData returns the Pipelines' GData
 func (ch *ChData) GData() GData {
 	d := ch.data
+
 	return d
 }
 
 // Init initializes the Pipeline.
+//
+//nolint:funlen
 func (ch *ChData) Init() (err error) {
 	err = nil
+
 	if ch.rdr == nil {
-		return fmt.Errorf("no reader")
+		return Wrapper(ErrChData, "no reader")
 	}
+
 	nRow, e := ch.rdr.CountLines()
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	ch.nRow = nRow
 	if ch.bs > ch.nRow {
-		return fmt.Errorf("batch size = %d > dataset rows = %d", ch.bs, ch.nRow)
+		return Wrapper(ErrChData, fmt.Sprintf("Init: batch size = %d > dataset rows = %d", ch.bs, ch.nRow))
 	}
+
 	ch.pull = false
 	fds := ch.rdr.TableSpec().FieldDefs
 	names := make([]string, len(fds))           // field names
 	trans := make([]*Raw, len(fds))             // data
 	chTypes := make([]chutils.ChType, len(fds)) // field types
+
 	for ind := 0; ind < len(fds); ind++ {
 		names[ind] = fds[ind].Name
 		chTypes[ind] = fds[ind].ChSpec.Base
@@ -120,10 +133,12 @@ func (ch *ChData) Init() (err error) {
 	// load GData
 	for row := 0; ; row++ {
 		r, _, e := ch.rdr.Read(1, true)
+
 		if e == io.EOF {
 			if Verbose {
 				fmt.Println("rows read: ", row)
 			}
+
 			break
 		}
 		// now we have the types, we can allocate the slices
@@ -132,10 +147,12 @@ func (ch *ChData) Init() (err error) {
 				trans[c] = AllocRaw(nRow, reflect.TypeOf(r[0][c]).Kind())
 			}
 		}
+
 		for c := 0; c < len(trans); c++ {
 			trans[c].Data[row] = r[0][c]
 		}
 	}
+
 	gd := make(GData, 0)
 
 	// work through fields, add to GData
@@ -144,6 +161,7 @@ func (ch *ChData) Init() (err error) {
 		ft := ch.getFType(nm)
 		if ft == nil {
 			ft = &FType{}
+
 			switch chTypes[ind] {
 			case chutils.ChDate, chutils.ChString, chutils.ChFixedString:
 				ft.Role = FRCat
@@ -151,32 +169,34 @@ func (ch *ChData) Init() (err error) {
 				ft.Role = FRCts
 			}
 		}
+
 		switch ft.Role {
 		case FRCts:
 			if gd, err = gd.AppendC(trans[ind], nm, ft.Normalized, ft.FP); err != nil {
-				return
+				return Wrapper(err, "(*ChData).Init")
 			}
 		default:
 			if gd, err = gd.AppendD(trans[ind], names[ind], ft.FP); err != nil {
-				return
+				return Wrapper(err, "(*ChData).Init")
 			}
 		}
 	}
-
 	// Add calculated fields
 	for _, ft := range ch.ftypes {
 		switch ft.Role {
 		case FROneHot:
 			if gd, err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
-				return
+				return Wrapper(err, "(*ChData).Init")
 			}
 		case FREmbed:
 			if gd, err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
-				return
+				return Wrapper(err, "(*ChData).Init")
 			}
 		}
 	}
+
 	ch.data = gd
+
 	return nil
 }
 
@@ -192,10 +212,11 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 	// do we need to load the data?
 	if ch.pull {
 		if e := ch.rdr.Reset(); e != nil {
-			log.Fatalln(e)
+			panic(e)
 		}
+
 		if e := ch.Init(); e != nil {
-			log.Fatalln(e)
+			panic(e)
 		}
 	}
 	// out of Data?  if nRow % bsize !=0, rows after the last full batch are unused.
@@ -203,21 +224,28 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 		if !ch.cycle {
 			ch.pull = true
 		}
+
 		ch.cbRow = 0
 		// user callbacks
 		if ch.callback != nil {
 			ch.callback(ch)
 		}
+
 		return false
 	}
+
 	startRow := ch.cbRow
 	endRow := startRow + ch.bs
+
 	for _, nd := range inputs {
 		var t tensor.Tensor
+
 		d := ch.data.Get(nd.Name())
+
 		if d == nil {
-			log.Fatalln(fmt.Errorf("feature %s not in dataset", nd.Name()))
+			panic(Wrapper(ErrChData, fmt.Sprintf("feature %s not in dataset", nd.Name())))
 		}
+
 		switch d.FT.Role {
 		case FRCts:
 			t = tensor.New(tensor.WithBacking(d.Data.([]float64)[startRow:endRow]), tensor.WithShape(ch.bs, 1))
@@ -228,11 +256,14 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 			er := endRow * d.FT.Cats
 			t = tensor.New(tensor.WithBacking(d.Data.([]float64)[sr:er]), tensor.WithShape(ch.bs, d.FT.Cats))
 		}
+
 		if e := G.Let(nd, t); e != nil {
-			log.Fatalln(e)
+			panic(e)
 		}
 	}
+
 	ch.cbRow = endRow
+
 	return true
 }
 
@@ -244,11 +275,12 @@ func (ch *ChData) Get(field string) *GDatum {
 // Cols returns the # of columns in the field
 func (ch *ChData) Cols(field string) int {
 	d := ch.Get(field)
+
 	if d == nil {
 		return 0
 	}
-	switch d.FT.Role {
 
+	switch d.FT.Role {
 	case FRCts:
 		return 1
 	case FRCat:
@@ -256,6 +288,7 @@ func (ch *ChData) Cols(field string) int {
 	case FROneHot, FREmbed:
 		return d.FT.Cats
 	}
+
 	return 0
 }
 
@@ -265,8 +298,8 @@ func (ch *ChData) Epoch(setTo int) int {
 	if setTo >= 0 {
 		ch.epochCount = setTo
 	}
-	return ch.epochCount
 
+	return ch.epochCount
 }
 
 // FieldList returns a slice of field names in the Pipeline
@@ -275,6 +308,7 @@ func (ch *ChData) FieldList() []string {
 	for _, ft := range ch.data {
 		fl = append(fl, ft.FT.Name)
 	}
+
 	return fl
 }
 
@@ -284,6 +318,7 @@ func (ch *ChData) GetFType(field string) *FType {
 	if d == nil {
 		return nil
 	}
+
 	return d.FT
 }
 
@@ -299,16 +334,24 @@ func (ch *ChData) BatchSize() int {
 
 // Describe describes a field.  If the field has role FRCat, the top k values (by frequency) are returned.
 func (ch *ChData) Describe(field string, topK int) string {
+	const (
+		maxCat = 100
+		minCat = 2
+	)
+
 	d := ch.Get(field)
 	if d == nil {
 		return ""
 	}
+
 	if topK <= 0 {
 		topK = 5
 	}
-	topK = Max(Min(topK, 100), 2)
+
+	topK = Max(Min(topK, maxCat), minCat)
 
 	str := d.FT.String()
+
 	switch d.FT.Role {
 	case FRCts:
 		str = fmt.Sprintf("%s%s", str, "\t"+strings.ReplaceAll(d.Summary.DistrC.String(), "\n", "\n\t"))
@@ -316,16 +359,20 @@ func (ch *ChData) Describe(field string, topK int) string {
 		str = fmt.Sprintf("%s\tTop 5 Values\n", str)
 		str = fmt.Sprintf("%s%s", str, "\t"+strings.ReplaceAll(d.Summary.DistrD.TopK(topK, false, false), "\n", "\n\t"))
 	}
+
 	return str
 }
 
 func (ch *ChData) String() string {
+	const numCats = 5
 	str := fmt.Sprintf("Summary for pipeline %s\n", ch.Name())
 	fl := ch.FieldList()
 	str = fmt.Sprintf("%s%d fields\n", str, len(fl))
+
 	for _, f := range fl {
-		ff := ch.Describe(f, 5)
+		ff := ch.Describe(f, numCats)
 		str += ff
 	}
+
 	return str
 }

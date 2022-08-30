@@ -54,6 +54,7 @@ type Summary struct {
 
 func (ft *FType) String() string {
 	str := fmt.Sprintf("Field %s\n", ft.Name)
+
 	switch ft.Role {
 	case FRCts:
 		str = fmt.Sprintf("%s\tcontinuous\n", str)
@@ -72,6 +73,7 @@ func (ft *FType) String() string {
 		str = fmt.Sprintf("%s\tlength %d\n", str, ft.Cats)
 		str = fmt.Sprintf("%s\tembedding dimension of %d\n", str, ft.EmbCols)
 	}
+
 	return str
 }
 
@@ -82,6 +84,7 @@ func (fts FTypes) Get(name string) *FType {
 			return f
 		}
 	}
+
 	return nil
 }
 
@@ -108,25 +111,35 @@ type fType struct {
 // Save saves FTypes to a json file--fileName
 func (fts FTypes) Save(fileName string) (err error) {
 	err = nil
+
 	f, err := os.Create(fileName)
+
 	if err != nil {
 		return
 	}
+
 	defer func() { err = f.Close() }()
+
 	out := make([]fType, 0)
+
 	for _, ft := range fts {
 		fpStr := &fps{}
+
 		if ft.Role == FRCts || ft.Role == FRCat {
 			var t reflect.Kind
+
 			lvl := make(map[string]int32)
+
 			for k, v := range ft.FP.Lvl {
 				lvl[fmt.Sprintf("%v", k)] = v
 				t = reflect.TypeOf(k).Kind()
 			}
+
 			fpStr = &fps{Location: ft.FP.Location, Scale: ft.FP.Scale, Default: ft.FP.Default}
 			fpStr.Lvl = lvl
 			fpStr.Kind = t.String()
 		}
+
 		ftype := fType{
 			Name:       ft.Name,
 			Role:       ft.Role,
@@ -138,36 +151,47 @@ func (fts FTypes) Save(fileName string) (err error) {
 		}
 		out = append(out, ftype)
 	}
+
 	jfp, err := json.MarshalIndent(out, "", "  ")
+
 	if err != nil {
 		return
 	}
+
 	if _, err = f.WriteString(string(jfp)); err != nil {
 		return
 	}
-	return
+
+	return err
 }
 
 // LoadFTypes loads a file created by the FTypes Save method
+//
+//goland:noinspection GoLinter,GoLinter
 func LoadFTypes(fileName string) (fts FTypes, err error) {
 	fts = nil
 	err = nil
 	f, err := os.Open(fileName)
+
 	if err != nil {
 		return
 	}
+
 	defer func() { err = f.Close() }()
 
 	js, err := io.ReadAll(f)
 	if err != nil {
 		return
 	}
+
 	data := make([]fType, 0)
+
 	if e := json.Unmarshal(js, &data); e != nil {
-		fmt.Println(e)
 		return nil, e
 	}
+
 	fts = make(FTypes, 0)
+
 	for _, d := range data {
 		ft := FType{
 			Name:       d.Name,
@@ -180,6 +204,7 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 		}
 		fp := FParam{Location: d.FP.Location, Scale: d.FP.Scale, Default: d.FP.Default}
 		lvl := make(Levels)
+
 		for k, v := range d.FP.Lvl {
 			switch d.FP.Kind {
 			case "string":
@@ -187,20 +212,23 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 			case "int32":
 				i, e := strconv.ParseInt(k, 10, 32)
 				if e != nil {
-					return nil, fmt.Errorf("cannot convert %s to int32", k)
+					return nil, Wrapper(ErrFields, fmt.Sprintf("LoadFTypes: cannot convert %s to int32", k))
 				}
+
 				lvl[int32(i)] = v
 			case "int64":
 				i, e := strconv.ParseInt(k, 10, 64)
 				if e != nil {
-					return nil, fmt.Errorf("cannot convert %s to int64", k)
+					return nil, Wrapper(ErrFields, fmt.Sprintf("LoadFTypes: cannot convert %s to int64", k))
 				}
+
 				lvl[i] = v
 			}
 		}
+
 		fp.Lvl = lvl
 		ft.FP = &fp
 		fts = append(fts, &ft)
 	}
-	return
+	return fts, err
 }

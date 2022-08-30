@@ -5,7 +5,6 @@ package seafan
 import (
 	"github.com/invertedv/chutils"
 	G "gorgonia.org/gorgonia"
-	"log"
 )
 
 // The Pipeline interface specifies the methods required to be a Data Pipeline. The Pipeline is the middleware between
@@ -36,6 +35,7 @@ func WithBatchSize(bsize int) Opts {
 			d.bs = bsize
 		}
 	}
+
 	return f
 }
 
@@ -48,6 +48,7 @@ func WithCycle(cycle bool) Opts {
 			d.cycle = cycle
 		}
 	}
+
 	return f
 }
 
@@ -60,8 +61,10 @@ func WithCats(names ...string) Opts {
 				ft := d.ftypes.Get(nm)
 				if ft != nil {
 					ft.Role = FRCat
+
 					continue
 				}
+
 				ft = &FType{
 					Name: nm,
 					Role: FRCat,
@@ -70,6 +73,7 @@ func WithCats(names ...string) Opts {
 			}
 		}
 	}
+
 	return f
 }
 
@@ -81,8 +85,10 @@ func WithOneHot(name, from string) Opts {
 			if ft != nil {
 				ft.From = from
 				ft.Role = FROneHot
+
 				return
 			}
+
 			ft = &FType{
 				Name: name,
 				Role: FROneHot,
@@ -91,6 +97,7 @@ func WithOneHot(name, from string) Opts {
 			d.ftypes = append(d.ftypes, ft)
 		}
 	}
+
 	return f
 }
 
@@ -104,8 +111,10 @@ func WithNormalized(names ...string) Opts {
 				if ft != nil {
 					ft.Role = FRCts
 					ft.Normalized = true
+
 					continue
 				}
+
 				ft = &FType{
 					Name:       nm,
 					Role:       FRCts,
@@ -115,6 +124,7 @@ func WithNormalized(names ...string) Opts {
 			}
 		}
 	}
+
 	return f
 }
 
@@ -126,6 +136,7 @@ func WithFtypes(fts FTypes) Opts {
 			d.ftypes = fts
 		}
 	}
+
 	return f
 }
 
@@ -137,6 +148,7 @@ func WithCallBack(cb Opts) Opts {
 			d.callback = cb
 		}
 	}
+
 	return f
 }
 
@@ -147,10 +159,12 @@ func WithReader(rdr any) Opts {
 		case *ChData:
 			r, ok := rdr.(chutils.Input)
 			if !ok {
-				log.Fatalln("reader not chutils.Input")
+				panic("reader not chutils.Input")
 			}
+
 			d.rdr = r
 		}
 	}
+
 	return f
 }

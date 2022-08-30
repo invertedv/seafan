@@ -5,16 +5,16 @@ package seafan
 import (
 	"encoding/json"
 	"fmt"
-	"gorgonia.org/golgi"
-	G "gorgonia.org/gorgonia"
-	"gorgonia.org/tensor"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"os"
 	"strconv"
 	"time"
+
+	"gorgonia.org/golgi"
+	G "gorgonia.org/gorgonia"
+	"gorgonia.org/tensor"
 )
 
 // CostFunc function prototype for cost functions
@@ -62,25 +62,34 @@ func (m *NNModel) String() string {
 	if m.construct == nil {
 		return "No model"
 	}
+
 	str := fmt.Sprintf("%s\nInputs\n", m.Name())
+
 	for _, ft := range m.inputFT {
 		str = fmt.Sprintf("%s%v\n", str, ft)
 	}
+
 	str = fmt.Sprintf("%sTarget\n", str)
+
 	switch m.targetFT == nil {
 	case true:
 		str = fmt.Sprintf("%sNone\n", str)
 	case false:
 		str = fmt.Sprintf("%s%v", str, m.targetFT)
 	}
+
 	str = fmt.Sprintf("%s\nModel Structure\n", str)
+
 	for ind := 0; ind < len(m.construct); ind++ {
 		str = fmt.Sprintf("%s%s\n", str, m.construct[ind])
 	}
+
 	str = fmt.Sprintf("%s\n", str)
+
 	if m.cost != nil {
 		str = fmt.Sprintf("%sCost function: %s\n\n", str, m.cost.Name())
 	}
+
 	bSize := m.inputsC[0].Shape()[0]
 	str = fmt.Sprintf("%sBatch size: %d\n", str, bSize)
 
@@ -88,15 +97,20 @@ func (m *NNModel) String() string {
 	for _, n := range m.paramsW {
 		nPar += n.Shape()[0] * n.Shape()[1]
 	}
+
 	for _, n := range m.paramsB {
 		nPar += n.Shape()[0] * n.Shape()[1]
 	}
+
 	str = fmt.Sprintf("%s%d FC parameters\n", str, nPar)
 	nEmb := 0
+
 	for _, n := range m.paremsEmb {
 		nEmb += n.Shape()[0] * n.Shape()[1]
 	}
+
 	str = fmt.Sprintf("%s%d Embedding parameters\n", str, nEmb)
+
 	return str
 }
 
@@ -136,8 +150,11 @@ func (m *NNModel) Fitted() G.Result {
 }
 
 // Inputs returns input (continuous+embedded+observed) inputs
+//
+//goland:noinspection GoLinter,GoLinter,GoLinter
 func (m *NNModel) Inputs() G.Nodes {
 	n := append(m.inputsC, m.inputsE...)
+
 	return append(n, m.obs)
 }
 
@@ -150,6 +167,7 @@ func (m *NNModel) Features() G.Nodes {
 func (m *NNModel) Params() G.Nodes {
 	p := append(m.paramsW, m.paramsB...)
 	p = append(p, m.paremsEmb...)
+
 	return p
 }
 
@@ -167,6 +185,7 @@ func WithCostFn(cf CostFunc) NNOpts {
 		m.costFn = cf
 		m.cost = cf(m)
 	}
+
 	return f
 }
 
@@ -175,6 +194,7 @@ func WithName(name string) NNOpts {
 	f := func(m *NNModel) {
 		m.name = name
 	}
+
 	return f
 }
 
@@ -193,6 +213,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 	if e != nil {
 		return nil, e
 	}
+
 	for ind := 0; ind < len(inps); ind++ {
 		f := inps[ind]
 		// first element is the target--skip
@@ -227,8 +248,10 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 	if e != nil {
 		return nil, e
 	}
+
 	var yoh *G.Node
 	yoh = nil
+
 	if obsF != nil {
 		switch obsF.Role {
 		case FRCts:
@@ -236,7 +259,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 		case FROneHot:
 			yoh = G.NewTensor(g, tensor.Float64, 2, G.WithName(obsF.Name), G.WithShape(bSize, obsF.Cats))
 		default:
-			return nil, fmt.Errorf("output must be either FRCts or FROneHot")
+			return nil, Wrapper(ErrNNModel, "NewNNModel: output must be either FRCts or FROneHot")
 		}
 	}
 
@@ -249,43 +272,53 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 		if e != nil {
 			return nil, e
 		}
+
 		if *ly != FC {
 			continue
 		}
+
 		fc := modSpec.FC(ind)
+
 		if fc == nil {
-			return nil, fmt.Errorf("error parsing layer %d", ind)
+			return nil, Wrapper(ErrNNModel, fmt.Sprintf("NewNNModel: error parsing layer %d", ind))
 		}
+
 		cols := fc.Size
+
 		if fc.Act == SoftMax {
 			if obsF.Role != FROneHot {
-				return nil, fmt.Errorf("obs not one-hot but softmax activation")
+				return nil, Wrapper(ErrNNModel, "NewNNModel: obs not one-hot but softmax activation")
 			}
 			cols--
 		}
+
 		nmw := "lWeights" + strconv.Itoa(ind)
 		w := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmw), G.WithShape(lastCols, cols), G.WithInit(G.GlorotN(1.0)))
+
 		if fc.Bias {
 			nmb := "lBias" + strconv.Itoa(ind)
 			b := G.NewTensor(g, tensor.Float64, 2, G.WithName(nmb), G.WithShape(1, cols), G.WithInit(G.GlorotN(1.0)))
 			parB = append(parB, b)
 		}
+
 		lastCols = cols
+
 		parW = append(parW, w)
 	}
+
 	if yoh != nil {
 		switch obsF.Role {
 		case FRCts:
 			if yoh.Shape()[1] != lastCols {
-				return nil, fmt.Errorf("output node and obs node have differing columns")
+				return nil, Wrapper(ErrNNModel, "NewNNModel: output node and obs node have differing columns")
 			}
 		case FROneHot:
 			if yoh.Shape()[1] != lastCols+1 {
-				return nil, fmt.Errorf("output node and obs node have differing columns")
+				return nil, Wrapper(ErrNNModel, "NewNNModel: output node and obs node have differing columns")
 			}
-
 		}
 	}
+
 	nn := &NNModel{
 		g:         g,
 		paramsW:   parW,
@@ -305,6 +338,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 	for _, o := range no {
 		o(nn)
 	}
+
 	return nn, nil
 }
 
@@ -315,21 +349,25 @@ func (m *NNModel) Fwd() {
 	// add embeddings
 	if len(m.inputsE) > 0 {
 		zp := make(G.Nodes, 0)
+
 		for ind, x := range m.inputsE {
 			z := G.Must(G.Mul(x, m.paremsEmb[ind]))
 			zp = append(zp, z)
 		}
+
 		emb := G.Must(G.Concat(1, zp...))
 		xall = G.Must(G.Concat(1, xall, emb))
 	}
+
 	out := xall
 
 	// work through layers
 	for ind := 1; ind < len(m.construct); ind++ {
 		ltype, e := m.construct.LType(ind)
 		if e != nil {
-			log.Fatalln(e)
+			panic(e)
 		}
+
 		switch *ltype {
 		case FC:
 			fc := m.construct.FC(ind)
@@ -339,9 +377,11 @@ func (m *NNModel) Fwd() {
 			out = G.Must(G.Mul(out, px))
 			nmb := "lBias" + strconv.Itoa(ind)
 			bias := GetNode(m.paramsB, nmb)
+
 			if bias != nil {
 				out = G.Must(G.BroadcastAdd(out, bias, nil, []byte{0}))
 			}
+
 			switch fc.Act {
 			case Relu:
 				out = ReluAct(out)
@@ -360,6 +400,7 @@ func (m *NNModel) Fwd() {
 			}
 		}
 	}
+
 	m.output = out
 }
 
@@ -376,11 +417,15 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 	err = nil
 	fileP := fileRoot + "P.nn"
 	f, err := os.Create(fileP)
+
 	if err != nil {
 		return
 	}
+
 	defer func() { err = f.Close() }()
+
 	ps := make([]saveNode, 0)
+
 	for ind := 0; ind < len(m.Params()); ind++ {
 		n := m.Params()[ind]
 		p := saveNode{
@@ -390,17 +435,23 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 		}
 		ps = append(ps, p)
 	}
+
 	jp, err := json.MarshalIndent(ps, "", "  ")
+
 	if err != nil {
 		return
 	}
+
 	if _, err = f.WriteString(string(jp)); err != nil {
 		return
 	}
+
 	fileS := fileRoot + "S.nn"
+
 	if err = m.construct.Save(fileS); err != nil {
 		return
 	}
+
 	return nil
 }
 
@@ -413,18 +464,22 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	nn = nil
 	fileS := fileRoot + "S.nn"
 	modSpec, err := LoadModSpec(fileS)
+
 	if err != nil {
 		return
 	}
 
-	//	f.Close()
 	fileP := fileRoot + "P.nn"
 	f, err := os.Open(fileP)
+
 	if err != nil {
 		return
 	}
+
 	defer func() { err = f.Close() }()
+
 	js, err := io.ReadAll(f)
+
 	if err != nil {
 		return
 	}
@@ -438,28 +493,33 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(data) != len(nn.Params()) {
-		return nil, fmt.Errorf("node count differs")
+		return nil, Wrapper(ErrNNModel, "LoadNN: node count differs")
 	}
+
 	for _, d := range data {
 		nd := nn.g.ByName(d.Name)[0]
 		if nd == nil {
-			return nil, fmt.Errorf("node %s not found", d.Name)
+			return nil, Wrapper(ErrNNModel, fmt.Sprintf("LoadNN: node %s not found", d.Name))
 		}
+
 		shp := nd.Shape()
+
 		for ind, dim := range shp {
 			if dim != d.Dims[ind] {
-				return nil, fmt.Errorf("dimensions do not match")
-
+				return nil, Wrapper(ErrNNModel, "LoadNN: dimensions do not match")
 			}
 		}
+
 		t := tensor.New(tensor.WithBacking(d.Parms), tensor.WithShape(shp...))
-		if err = G.Let(nd, t); err != nil {
-			nn = nil
-			return
+
+		if err := G.Let(nd, t); err != nil {
+			return nil, err
 		}
 	}
-	return
+
+	return nn, nil
 }
 
 func SoftRMS(model NNet) (cost *G.Node) {
@@ -471,12 +531,14 @@ func SoftRMS(model NNet) (cost *G.Node) {
 		mzo := G.NewTensor(model.G(), G.Float64, 2, G.WithName("zo"+strconv.Itoa(ind)), G.WithShape(1, nCats), G.WithValue(zo))
 		a := G.Must(G.BroadcastHadamardProd(model.Fitted().Nodes()[0], mzo, nil, []byte{0}))
 		b := G.Must(G.BroadcastHadamardProd(model.Obs(), mzo, nil, []byte{0}))
+
 		if ind == 1 {
 			cost = G.Must(golgi.RMS(a, b))
 		} else {
 			cost = G.Must(G.Add(cost, G.Must(golgi.RMS(a, b))))
 		}
 	}
+
 	return
 }
 
@@ -484,6 +546,7 @@ func SoftRMS(model NNet) (cost *G.Node) {
 func CrossEntropy(model NNet) (cost *G.Node) {
 	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(model.Fitted().Nodes()[0])), model.Obs()))))))
 	G.WithName("CrossEntropy")(cost)
+
 	return
 }
 
@@ -491,6 +554,7 @@ func CrossEntropy(model NNet) (cost *G.Node) {
 func RMS(model NNet) (cost *G.Node) {
 	cost = G.Must(golgi.RMS(model.Fitted().Nodes()[0], model.Obs()))
 	G.WithName("RMS")(cost)
+
 	return
 }
 
@@ -515,6 +579,8 @@ type Fit struct {
 type FitOpts func(*Fit)
 
 // NewFit creates a new *Fit.
+//
+//goland:noinspection GoLinter
 func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 	rand.Seed(time.Now().UnixMicro())
 	outFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
@@ -526,9 +592,11 @@ func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 		outFile: outFile,
 		tmpFile: tmpFile,
 	}
+
 	for _, o := range opts {
 		o(fit)
 	}
+
 	return fit
 }
 
@@ -537,15 +605,17 @@ func WithL2Reg(penalty float64) FitOpts {
 	f := func(ft *Fit) {
 		ft.l2Penalty = penalty
 	}
+
 	return f
 }
 
 // WithLearnRate sets a learning rate function that declines linearly across the epochs.
-func WithLearnRate(lrStart float64, lrEnd float64) FitOpts {
+func WithLearnRate(lrStart, lrEnd float64) FitOpts {
 	f := func(ft *Fit) {
 		ft.lrStart = lrStart
 		ft.lrEnd = lrEnd
 	}
+
 	return f
 }
 
@@ -556,6 +626,7 @@ func WithValidation(p Pipeline, wait int) FitOpts {
 		ft.pVal = p
 		ft.wait = wait
 	}
+
 	return f
 }
 
@@ -564,6 +635,7 @@ func WithOutFile(fileName string) FitOpts {
 	f := func(ft *Fit) {
 		ft.outFile = fileName
 	}
+
 	return f
 }
 
@@ -588,26 +660,31 @@ func (ft *Fit) OutCosts() *XY {
 }
 
 // Do is the fitting loop.
+//
+//goland:noinspection GoLinter
 func (ft *Fit) Do() (err error) {
-	//	if ft.nn.Cost == nil {
-	//		return fmt.Errorf("no cost node in NNModel")
-	//	}
 	best := math.MaxFloat64
 	ft.bestEpoch = 0
+
 	if _, e := G.Grad(ft.nn.Cost(), ft.nn.Params()...); e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	vm := G.NewTapeMachine(ft.nn.G(), G.BindDualValues(ft.nn.Params()...))
+
 	defer func() { err = vm.Close() }()
 
 	t := time.Now()
 	itv := make([]float64, 0)
 	solv := G.NewAdamSolver()
+
 	if ft.l2Penalty > 0.0 {
 		G.WithL2Reg(ft.l2Penalty)(solv)
 	}
+
 	cv := make([]float64, 0)
 	cVal := make([]float64, 0)
+
 	for ep := 1; ep <= ft.epochs; ep++ {
 		// check for user specified learning rate
 		if ft.lrStart > 0.0 {
@@ -619,29 +696,34 @@ func (ft *Fit) Do() (err error) {
 			if err = vm.RunAll(); err != nil {
 				return
 			}
+
 			if err = solv.Step(G.NodesToValueGrads(ft.nn.Params())); err != nil {
 				return
 			}
+
 			vm.Reset()
 		}
 		// increment epoch counter in pipeline
 		ft.p.Epoch(ft.p.Epoch(-1) + 1)
+
 		itv = append(itv, float64(ep))
 		cv = append(cv, ft.nn.Cost().Value().Data().(float64))
+
 		switch ft.pVal == nil {
 		case true:
 			// judge best epoch by in-sample cost
 			if cv[len(cv)-1] < best {
 				best = cv[len(cv)-1]
 				ft.bestEpoch = ep
+
 				if err = ft.nn.Save(ft.outFile); err != nil {
 					return
 				}
 			}
 		case false:
 			// find validation cost, save model and load to new graph
-			if err = ft.nn.Save(ft.tmpFile); err != nil {
-				return err
+			if e := ft.nn.Save(ft.tmpFile); err != nil {
+				return e
 			}
 
 			var valMod *NNModel
@@ -656,6 +738,7 @@ func (ft *Fit) Do() (err error) {
 			if cVal[len(cVal)-1] < best {
 				best = cVal[len(cVal)-1]
 				ft.bestEpoch = ep
+
 				if err = ft.nn.Save(ft.outFile); err != nil {
 					return
 				}
@@ -664,48 +747,58 @@ func (ft *Fit) Do() (err error) {
 			if ft.wait > 0 && ep > ft.wait {
 				checkVal := cVal[len(cVal)-1-ft.wait]
 				minC := math.MaxFloat64
+
 				for ind := len(cVal) - ft.wait; ind < len(cVal); ind++ {
 					if cVal[ind] < minC {
 						minC = cVal[ind]
 					}
 				}
+
 				if minC > checkVal {
 					break
 				}
 			}
 		}
 	}
+
 	elapsed := time.Since(t).Minutes()
+
 	if Verbose {
 		fmt.Println("best epoch: ", ft.bestEpoch)
 		fmt.Printf("elapsed time %0.1f minutes\n", elapsed)
 	}
+
 	ft.inCosts, err = NewXY(itv, cv)
 	ft.outCosts, err = NewXY(itv, cVal)
 	// clean up
 	_ = os.Remove(ft.tmpFile + "P.nn")
 	_ = os.Remove(ft.tmpFile + "S.nn")
-	return
+	return nil
 }
 
 // PredictNN reads in a NNModel from a file and populates it with a batch from p.
 // Methods such as FitSlice and ObsSlice are immediately available.
 func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
-
 	nn, err = LoadNN(fileRoot, p, build)
 	for _, o := range opts {
 		o(nn)
 	}
+
 	if err != nil {
 		return
 	}
+
 	for !p.Batch(nn.Inputs()) {
 	}
+
 	vms := G.NewTapeMachine(nn.G())
+
 	defer func() { err = vms.Close() }()
+
 	if err = vms.RunAll(); err != nil {
 		return
 	}
+
 	return
 }
 
@@ -720,6 +813,7 @@ func SoftMaxAct(n *G.Node) *G.Node {
 	r := phat1.Shape()[0]
 	phat1a := G.Must(G.Reshape(phat1, tensor.Shape{r, 1}))
 	phat2 := G.Must(G.Concat(1, phat, phat1a))
+
 	return phat2
 }
 
@@ -750,5 +844,6 @@ func GetNode(ns G.Nodes, name string) *G.Node {
 			return n
 		}
 	}
+
 	return nil
 }

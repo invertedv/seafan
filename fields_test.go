@@ -1,9 +1,10 @@
 package seafan
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFTypes_Save(t *testing.T) {
@@ -85,5 +86,4 @@ func TestFTypes_Save(t *testing.T) {
 			assert.Equal(t, v, lvl1[k])
 		}
 	}
-
 }

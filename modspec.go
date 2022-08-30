@@ -63,43 +63,57 @@ func MakeArgs(s string) (keyval Args, err error) {
 	s = strings.ReplaceAll(strings.ReplaceAll(s, " ", ""), "\n", "")
 	err = nil
 	keyval = make(map[string]string)
+
 	if !strings.Contains(s, ":") {
 		return
 	}
+
 	entries := strings.Split(s, ",")
+
 	for _, entry := range entries {
 		if !strings.Contains(entry, ":") {
-			err = fmt.Errorf("bad keyval: %s", entry)
+			err = Wrapper(ErrModSpec, fmt.Sprintf("MakeArgs: bad keyval: %s", entry))
+
 			return
 		}
+
 		kv := strings.Split(entry, ":")
+
 		if len(kv) != 2 {
-			err = fmt.Errorf("bad keyval: %s", entry)
+			err = Wrapper(ErrModSpec, fmt.Sprintf("MakeArgs: bad keyval: %s", entry))
 		}
+
 		keyval[kv[0]] = kv[1]
 	}
+
 	return
 }
 
 // Get returns a val from Args coercing to type kind.  Nil if fails.
+//
+//goland:noinspection GoLinter,GoLinter,GoLinter
 func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 	val = nil
 	valStr, ok := kv[key]
+
 	if !ok {
 		return nil
 	}
+
 	switch kind {
 	case reflect.Float64:
 		f, err := strconv.ParseFloat(valStr, 64)
 		if err != nil {
 			return
 		}
+
 		val = f
 	case reflect.Int:
 		i, err := strconv.ParseInt(valStr, 10, 32)
 		if err != nil {
 			return
 		}
+
 		val = int(i)
 	case reflect.String:
 		val = valStr
@@ -108,12 +122,16 @@ func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 		if err != nil {
 			return
 		}
+
 		val = b
 	}
-	return
+
+	return val
 }
 
 // StrAct takes a string and returns corresponding Activation and any parameter.  Nil if fails.
+//
+//goland:noinspection GoLinter,GoLinter
 func StrAct(s string) (*Activation, float64) {
 	parm := float64(0)
 
@@ -123,21 +141,27 @@ func StrAct(s string) (*Activation, float64) {
 		if e != nil {
 			return nil, 0.0
 		}
+
 		var err error
 		parm, err = strconv.ParseFloat(parmStr, 64)
+
 		if err != nil {
 			return nil, 0.0
 		}
+
 		s = l
 	}
+
 	if i := strings.Index(strings.ToLower(_Activation_name), strings.ToLower(s)); i >= 0 {
 		for ind, ix := range _Activation_index {
 			if i == int(ix) {
 				act := Activation(ind)
+
 				return &act, parm
 			}
 		}
 	}
+
 	return nil, 0.0
 }
 
@@ -145,43 +169,57 @@ func StrAct(s string) (*Activation, float64) {
 func FCParse(s string) (fc *FCLayer, err error) {
 	fc = nil
 	kval, err := MakeArgs(strings.ToLower(s[3 : len(s)-1]))
+
 	if err != nil {
 		return
 	}
+
 	fc = &FCLayer{Act: Linear, Bias: true}
+
 	if val := kval.Get("size", reflect.Int); val != nil {
 		fc.Size = val.(int)
 		if fc.Size < 1 {
-			err = fmt.Errorf("illegal size")
+			err = Wrapper(ErrModSpec, "FC: illegal size")
+
 			return
 		}
 	}
+
 	if val := kval.Get("activation", reflect.String); val != nil {
 		if a, p := StrAct(val.(string)); a != nil {
 			fc.Act = *a
 			fc.ActParm = p
 		}
 	}
+
 	if val := kval.Get("bias", reflect.Bool); val != nil {
 		fc.Bias = val.(bool)
 	}
-	return
+
+	return fc, err
 }
 
 // DropOutParse parses the arguments to a drop out layer
+//
+//goland:noinspection GoLinter
 func DropOutParse(s string) (*DOLayer, error) {
 	_, args, err := Strip(s)
 	if err != nil {
 		return nil, err
 	}
+
 	p, err := strconv.ParseFloat(args, 64)
+
 	if err != nil {
 		return nil, err
 	}
+
 	if p <= 0.0 || p >= 1.0 {
-		return nil, fmt.Errorf("bad dropout probability <=0, >=1")
+		return nil, Wrapper(ErrModSpec, "DropOut: bad dropout probability <=0, >=1")
 	}
+
 	do := &DOLayer{DropProb: p}
+
 	return do, nil
 }
 
@@ -192,10 +230,12 @@ func (m ModSpec) Check() error {
 		if e != nil {
 			return e
 		}
+
 		if !strings.Contains(strings.ToLower(_Layer_name), strings.ToLower(l)) {
-			return fmt.Errorf("unknown layer: %s", l)
+			return Wrapper(ErrModSpec, fmt.Sprintf("unknown layer: %s", l))
 		}
 	}
+
 	return nil
 }
 
@@ -204,22 +244,28 @@ func (m ModSpec) LType(i int) (*Layer, error) {
 	if e := m.Check(); e != nil {
 		return nil, e
 	}
+
 	if i < 0 || i >= len(m) {
-		return nil, fmt.Errorf("layer name error")
+		return nil, Wrapper(ErrModSpec, "layer name error")
 	}
+
 	l, _, e := Strip(m[i])
+
 	if e != nil {
 		return nil, e
 	}
+
 	if i := strings.Index(strings.ToLower(_Layer_name), strings.ToLower(l)); i >= 0 {
 		for ind, ix := range _Layer_index {
 			if i == int(ix) {
 				lay := Layer(ind)
+
 				return &lay, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("layer error")
+
+	return nil, Wrapper(ErrModSpec, "layer error")
 }
 
 // DropOut returns the *DoLayer for layer i, if it is of type DropOut.  Returns nil o.w.
@@ -228,13 +274,17 @@ func (m ModSpec) DropOut(loc int) *DOLayer {
 	if e != nil {
 		return nil
 	}
+
 	if *l != DropOut {
 		return nil
 	}
+
 	do, err := DropOutParse(m[loc])
+
 	if err != nil {
 		return nil
 	}
+
 	return do
 }
 
@@ -244,69 +294,96 @@ func (m ModSpec) FC(loc int) *FCLayer {
 	if e != nil {
 		return nil
 	}
+
 	if *l != FC {
 		return nil
 	}
+
 	fc, err := FCParse(m[loc])
+
 	if err != nil {
 		return nil
 	}
+
 	return fc
 }
 
 // Inputs returns the FTypes of the input features
+//
+//goland:noinspection GoLinter
 func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 	var err error
+
 	modSpec := make([]*FType, 0)
 	l, e := m.LType(0)
+
 	if e != nil {
 		return nil, e
 	}
+
 	if *l != Input {
-		return nil, fmt.Errorf("first layer is not Input")
+		return nil, Wrapper(ErrModSpec, "first layer is not Input")
 	}
+
 	_, inStr, e := Strip(m[0])
+
 	if e != nil {
 		return nil, e
 	}
 
 	var feat *FType
+
 	fs := strings.Split(inStr, "+")
+
 	for _, f := range fs {
 		ft := f
 		embCols := 0
+
 		if strings.Contains(f, "E(") || strings.Contains(f, "e(") {
 			l := strings.Split(ft, ",")
 			if len(l) != 2 {
-				return nil, fmt.Errorf("parse error")
+				return nil, Wrapper(ErrModSpec, "Inputs: parse error")
 			}
+
 			ft = l[0][2:]
+
 			var em int64
 			em, err = strconv.ParseInt(l[1][0:len(l[1])-1], 10, 32)
+
 			if err != nil {
 				return nil, err
 			}
+
 			if em <= 1 {
-				return nil, fmt.Errorf("embedding columns must be at least 2")
+				return nil, Wrapper(ErrModSpec, "embedding columns must be at least 2")
 			}
+
 			embCols = int(em)
 		}
+
 		feat = p.GetFType(ft)
+
 		if feat == nil {
-			return nil, fmt.Errorf("feature %s not found", f)
+			return nil, Wrapper(ErrModSpec, fmt.Sprintf("Inputs: feature %s not found", f))
 		}
+
 		if feat.Role == FRCat {
-			return nil, fmt.Errorf("feature %s is categorical--must convert to one-hot", feat.Name)
+			return nil, Wrapper(ErrModSpec, fmt.Sprintf("feature %s is categorical--must convert to one-hot", feat.Name))
 		}
+
 		feat.EmbCols = embCols
+
 		if embCols > 0 {
 			if feat.Role != FROneHot && feat.Role != FREmbed {
-				return nil, fmt.Errorf("feature %s can't be continuous/categorical", ft)
+				return nil, Wrapper(ErrModSpec, fmt.Sprintf("feature %s can't be continuous/categorical", ft))
 			}
+
 			feat.Role = FREmbed
 		}
+
 		modSpec = append(modSpec, feat)
 	}
+
 	return modSpec, nil
 }
 
@@ -316,18 +393,22 @@ func (m ModSpec) Target(p Pipeline) (*FType, error) {
 	if e != nil {
 		return nil, e
 	}
+
 	if *l != Target {
 		return nil, nil
 	}
+
 	_, arg, e := Strip(m[len(m)-1])
+
 	if e != nil {
 		return nil, e
 	}
 
 	feat := p.GetFType(arg)
 	if feat == nil {
-		return nil, fmt.Errorf("feature %s not found", arg)
+		return nil, Wrapper(ErrModSpec, fmt.Sprintf("feature %s not found", arg))
 	}
+
 	return feat, nil
 }
 
@@ -336,17 +417,22 @@ func (m ModSpec) Save(fileName string) (err error) {
 	if err = m.Check(); err != nil {
 		return
 	}
+
 	f, err := os.Create(fileName)
+
 	if err != nil {
 		return
 	}
+
 	defer func() { err = f.Close() }()
+
 	for ind := 0; ind < len(m); ind++ {
 		line := strings.ReplaceAll(strings.ReplaceAll(m[ind], " ", ""), "\n", "")
 		if _, err = f.WriteString(line + "\n"); err != nil {
 			return
 		}
 	}
+
 	return
 }
 
@@ -354,9 +440,11 @@ func (m ModSpec) Save(fileName string) (err error) {
 func LoadModSpec(fileName string) (ms ModSpec, err error) {
 	ms = make(ModSpec, 0)
 	f, err := os.Open(fileName)
+
 	if err != nil {
 		return
 	}
+
 	defer func() { err = f.Close() }()
 
 	buf := bufio.NewReader(f)
@@ -364,31 +452,40 @@ func LoadModSpec(fileName string) (ms ModSpec, err error) {
 	for err != io.EOF {
 		var l []byte
 		l, err = buf.ReadBytes('\n')
+
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
+
 		line := strings.ReplaceAll(string(l), "\n", "")
+
 		if line != "" {
 			ms = append(ms, line)
 		}
 	}
+
 	err = ms.Check()
+
 	return
 }
 
 // Strip is a utility that takes a string of the form "Func(args)" and returns "Func" and "args"
 func Strip(s string) (left, inner string, err error) {
 	left, inner, err = "", "", nil
-	//	s = strings.ToLower(strings.ReplaceAll(s, " ", ""))
+
 	s = strings.ReplaceAll(strings.ReplaceAll(s, " ", ""), "\n", "")
 	il := strings.Index(s, "(")
+
 	if il <= 0 {
-		return "", "", fmt.Errorf("bad (")
+		return "", "", Wrapper(ErrModSpec, "bad (")
 	}
+
 	if s[len(s)-1:] != ")" {
-		return "", "", fmt.Errorf("bad )")
+		return "", "", Wrapper(ErrModSpec, "bad )")
 	}
+
 	left = s[0:il]
 	inner = s[il+1 : len(s)-1]
+
 	return
 }

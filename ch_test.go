@@ -2,29 +2,33 @@ package seafan
 
 import (
 	"fmt"
+	"math"
+	"os"
+	"testing"
+
 	"github.com/invertedv/chutils"
 	"github.com/invertedv/chutils/file"
 	"github.com/stretchr/testify/assert"
 	G "gorgonia.org/gorgonia"
-	"log"
-	"math"
-	"os"
-	"testing"
 )
 
 func TestChData_Init(t *testing.T) {
 	dataPath := os.Getenv("data")
 	fileName := dataPath + "/test1.csv"
 	f, e := os.Open(fileName)
+
 	assert.Nil(t, e)
+
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
+
 	assert.Nil(t, e)
 
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
 	assert.Nil(t, e)
+
 	bsize := 100
-	//	epochs := 150
 	ch := NewChData("Test ch Pipeline", WithBatchSize(bsize),
 		WithReader(rdr), WithCycle(true),
 		WithCats("y", "y1", "y2", "x4"),
@@ -34,8 +38,11 @@ func TestChData_Init(t *testing.T) {
 		WithNormalized("x1", "x2", "x3"),
 		WithOneHot("y2oh", "y2"))
 	e = ch.Init()
+
 	assert.Nil(t, e)
+
 	expRows := 8500
+
 	assert.Equal(t, expRows, ch.Rows())
 	assert.Equal(t, bsize, ch.BatchSize())
 
@@ -45,6 +52,7 @@ func TestChData_Init(t *testing.T) {
 	cats := make(map[string]int)
 	cats["x1"], cats["yoh"], cats["x4"] = 0, 2, 20
 	ind := 0
+
 	for k, v := range roles {
 		ft := ch.GetFType(k)
 		assert.NotNil(t, ft)
@@ -55,6 +63,7 @@ func TestChData_Init(t *testing.T) {
 
 	// check correctly normalized
 	ftX1 := ch.Get("x1")
+
 	assert.InEpsilon(t, ftX1.Summary.DistrC.Std, 1.0, 0.0001)
 	assert.Condition(t, func() bool { return math.Abs(ftX1.Summary.DistrC.Mean) < 0.0001 })
 
@@ -64,9 +73,11 @@ func TestChData_Init(t *testing.T) {
 	ft := fts.Get("x1")
 	ft.FP.Scale = 1
 	ft.FP.Location = 42
+
 	// set the FTypes so these values will be used
 	WithFtypes(fts)(ch)
 	e = ch.Init()
+
 	assert.Nil(t, e)
 	assert.InEpsilon(t, m-42.0, ch.Get("x1").Summary.DistrC.Mean, 0.0001)
 }
@@ -75,15 +86,19 @@ func TestChData_Batch(t *testing.T) {
 	dataPath := os.Getenv("data")
 	fileName := dataPath + "/test1.csv"
 	f, e := os.Open(fileName)
+
 	assert.Nil(t, e)
+
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
+
 	assert.Nil(t, e)
 
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
 	assert.Nil(t, e)
+
 	bsize := 100
-	//	epochs := 150
 	ch := NewChData("Test ch Pipeline", WithBatchSize(bsize),
 		WithReader(rdr), WithCycle(true),
 		WithCats("y", "y1", "y2", "x4"),
@@ -93,7 +108,9 @@ func TestChData_Batch(t *testing.T) {
 		WithNormalized("x1", "x2", "x3"),
 		WithOneHot("y2oh", "y2"))
 	e = ch.Init()
+
 	assert.Nil(t, e)
+
 	g := G.NewGraph()
 	node := G.NewTensor(g, G.Float64, 2, G.WithName("x1"), G.WithShape(bsize, 1), G.WithInit(G.Zeroes()))
 
@@ -108,6 +125,7 @@ func TestChData_Batch(t *testing.T) {
 		}
 	}
 	mean := sumX / float64(n)
+
 	assert.Equal(t, n, 8500)
 	assert.Condition(t, func() bool { return math.Abs(mean) < 0.0001 })
 }
@@ -116,20 +134,25 @@ func ExampleChData_Init() {
 	dataPath := os.Getenv("data") // path to data directory
 	fileName := dataPath + "/test1.csv"
 	f, e := os.Open(fileName)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// set up chutils file reader
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// determine data types
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	bSize := 100
 	ch := NewChData("Test ch Pipeline", WithBatchSize(bSize),
 		WithReader(rdr), WithCycle(true),
@@ -141,38 +164,42 @@ func ExampleChData_Init() {
 		WithOneHot("y2oh", "y2"))
 	// initialize pipeline
 	e = ch.Init()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// Target:
 	// rows read:  8500
-
 }
 
 func ExampleChData_Batch() {
 	dataPath := os.Getenv("data") // path to data directory
 	fileName := dataPath + "/test1.csv"
 	f, e := os.Open(fileName)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// set up chutils file reader
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// determine data types
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	bSize := 100
 	ch := NewChData("Test ch Pipeline",
 		WithBatchSize(bSize),
 		WithReader(rdr),
 		WithNormalized("x1"))
-
 	// create a graph & node to illustrate Batch()
 	g := G.NewGraph()
 	node := G.NewTensor(g, G.Float64, 2, G.WithName("x1"), G.WithShape(bSize, 1), G.WithInit(G.Zeroes()))
@@ -187,7 +214,9 @@ func ExampleChData_Batch() {
 			sumX += xv
 		}
 	}
+
 	mean := sumX / float64(n)
+
 	fmt.Printf("mean of x1: %0.2f", math.Abs(mean))
 	// Target:
 	// rows read:  8500
@@ -199,20 +228,26 @@ func ExampleChData_Batch_example2() {
 	dataPath := os.Getenv("data") // path to data directory
 	fileName := dataPath + "/test1.csv"
 	f, e := os.Open(fileName)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// set up chutils file reader
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// determine data types
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	bSize := 100
 	// Let's normalize x1 with location=41 and scale=1
 	ft := &FType{
@@ -227,6 +262,7 @@ func ExampleChData_Batch_example2() {
 	ch := NewChData("Test ch Pipeline",
 		WithBatchSize(bSize),
 		WithReader(rdr))
+
 	WithFtypes(FTypes{ft})(ch)
 
 	// create a graph & node to illustrate Batch()
@@ -243,7 +279,9 @@ func ExampleChData_Batch_example2() {
 			sumX += xv
 		}
 	}
+
 	mean := sumX / float64(n)
+
 	fmt.Printf("mean of x1: %0.2f", math.Abs(mean))
 	// Target:
 	// rows read:  8500
@@ -259,20 +297,26 @@ func ExampleChData_SaveFTypes() {
 	dataPath := os.Getenv("data") // path to data directory
 	fileName := dataPath + "/test1.csv"
 	f, e := os.Open(fileName)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// set up chutils file reader
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	// determine data types
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	bSize := 100
 	ch := NewChData("Test ch Pipeline", WithBatchSize(bSize),
 		WithReader(rdr), WithCycle(true),
@@ -284,27 +328,33 @@ func ExampleChData_SaveFTypes() {
 		WithOneHot("y2oh", "y2"))
 	// initialize pipeline
 	e = ch.Init()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	outFile := os.TempDir() + "/seafan.json"
-	if e := ch.SaveFTypes(outFile); e != nil {
-		log.Fatalln(e)
+
+	if e = ch.SaveFTypes(outFile); e != nil {
+		panic(e)
 	}
 
 	saveFTypes, e := LoadFTypes(outFile)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	ch1 := NewChData("Saved FTypes", WithReader(rdr), WithBatchSize(bSize),
 		WithFtypes(saveFTypes))
+
 	if e := ch1.Init(); e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	fmt.Printf("Role of field y1oh: %s", ch.GetFType("y1oh").Role)
 	// Target:
 	// rows read:  8500
 	// rows read:  8500
 	// Role of field y1oh: FROneHot
-
 }

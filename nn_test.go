@@ -2,33 +2,36 @@ package seafan
 
 import (
 	"fmt"
+	"math"
+	"os"
+	"testing"
+
 	"github.com/invertedv/chutils"
 	"github.com/invertedv/chutils/file"
 	"github.com/stretchr/testify/assert"
 	"gonum.org/v1/gonum/stat"
-	"log"
-	"math"
-	"os"
-	"testing"
 )
 
 func chPipe(bSize int, fileName string) *ChData {
 	dataPath := os.Getenv("data") // path to data directory
 	f, e := os.Open(dataPath + "/" + fileName)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// set up chutils file reader
 	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 	e = rdr.Init("", chutils.MergeTree)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// determine data types
 	e = rdr.TableSpec().Impute(rdr, 0, .99)
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	ch := NewChData("Test ch Pipeline", WithBatchSize(bSize),
 		WithReader(rdr), WithCycle(true),
 		WithCats("y", "y1", "y2"),
@@ -36,9 +39,11 @@ func chPipe(bSize int, fileName string) *ChData {
 		WithOneHot("y1oh", "y1"))
 	// initialize pipeline
 	e = ch.Init()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	return ch
 }
 
@@ -55,16 +60,22 @@ func TestNNModel_Save(t *testing.T) {
 	assert.Nil(t, e)
 	WithCostFn(CrossEntropy)(nn)
 	e = nn.Save("/home/will/tmp/testnn")
+
 	assert.Nil(t, e)
+
 	exp := make([]float64, 0)
+
 	for _, n := range nn.paramsW {
 		x := n.Nodes()[0].Value().Data().([]float64)
 		for ind := 0; ind < len(x); ind++ {
 			exp = append(exp, math.Round(x[ind]*100.0)/100.0)
 		}
 	}
+
 	nn1, e := LoadNN("/home/will/tmp/testnn", pipe, false)
+
 	assert.Nil(t, e)
+
 	act := make([]float64, 0)
 	for _, n := range nn1.paramsW {
 		x := n.Nodes()[0].Value().Data().([]float64)
@@ -72,6 +83,7 @@ func TestNNModel_Save(t *testing.T) {
 			act = append(act, math.Round(x[ind]*100.0)/100.0)
 		}
 	}
+
 	assert.ElementsMatch(t, exp, act)
 	assert.ElementsMatch(t, mod, nn.construct)
 }
@@ -85,14 +97,19 @@ func TestFit_Do(t *testing.T) {
 		"Target(yoh)",
 	}
 	nn, e := NewNNModel(mod, pipe, true)
+
 	assert.Nil(t, e)
 	WithCostFn(CrossEntropy)(nn)
+
 	epochs := 150
 	ft := NewFit(nn, epochs, pipe)
 	e = ft.Do()
+
 	assert.Nil(t, e)
-	wts := []float64{-2.06, -3.5, 1, -0.08} //glm logistic estimates
+
+	wts := []float64{-2.06, -3.5, 1, -0.08} // glm logistic estimates
 	n := nn.G().ByName("lWeights1").Nodes()[0].Value().Data().([]float64)
+
 	for ind, w := range wts {
 		assert.InEpsilon(t, n[ind], w, .15)
 	}
@@ -110,7 +127,7 @@ func ExampleWithOneHot() {
 	WithOneHot("x4oh", "x4")(pipe)
 
 	if e := pipe.Init(); e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	mod := ModSpec{
 		"Input(x1+x2+x3+x4oh)",
@@ -121,7 +138,7 @@ func ExampleWithOneHot() {
 	fmt.Println("x4 as one-hot")
 	nn, e := NewNNModel(mod, pipe, true)
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	fmt.Println(nn)
 	fmt.Println("x4 as embedding")
@@ -132,8 +149,9 @@ func ExampleWithOneHot() {
 	}
 	nn, e = NewNNModel(mod, pipe, true)
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	fmt.Println(nn)
 	// Target:
 	//x4 as one-hot
@@ -200,7 +218,6 @@ func ExampleWithOneHot() {
 	//Batch size: 100
 	//7 FC parameters
 	//60 Embedding parameters
-
 }
 
 func ExampleWithOneHot_example2() {
@@ -221,8 +238,9 @@ func ExampleWithOneHot_example2() {
 	nn, e := NewNNModel(mod, pipe, true,
 		WithCostFn(CrossEntropy),
 		WithName("Example With Dropouts"))
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	fmt.Println(nn)
 	// Target:
@@ -275,19 +293,24 @@ func ExampleFit_Do() {
 	}
 	// model is straight-forward with no hidden layers or dropouts.
 	nn, e := NewNNModel(mod, pipe, true, WithCostFn(CrossEntropy))
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	epochs := 150
 	ft := NewFit(nn, epochs, pipe)
 	e = ft.Do()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// Plot the in-sample cost in a browser (default: firefox)
-	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200,
+		Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// Target:
 }
@@ -309,24 +332,32 @@ func ExampleFit_Do_example2() {
 		"Target(yoh)",
 	}
 	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(CrossEntropy))
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	epochs := 150
 	ft := NewFit(nn, epochs, mPipe)
 	WithValidation(vPipe, 10)(ft)
 	e = ft.Do()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// Plot the in-sample cost in a browser (default: firefox)
-	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200,
+		Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
-	e = ft.OutCosts().Plot(&PlotDef{Title: "Validation Sample Cost Curve", Height: 1200, Width: 1200, Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+
+	e = ft.OutCosts().Plot(&PlotDef{Title: "Validation Sample Cost Curve", Height: 1200, Width: 1200,
+		Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// Target:
 }
@@ -347,33 +378,43 @@ func ExamplePredictNN() {
 	}
 	// model is straight-forward with no hidden layers or dropouts.
 	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(RMS))
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	epochs := 150
 	ft := NewFit(nn, epochs, mPipe)
 	e = ft.Do()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	sf := os.TempDir() + "/nnTest"
 	e = nn.Save(sf)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	pred, e := PredictNN(sf, vPipe, false)
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	fmt.Printf("out-of-sample correlation: %0.2f\n", stat.Correlation(pred.FitSlice(), pred.ObsSlice(), nil))
+
 	_ = os.Remove(sf + "P.nn")
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	_ = os.Remove(sf + "S.nn")
 	// Target:
 	// out-of-sample correlation: 0.84
-
 }
 
 func ExampleWithCallBack() {
@@ -394,23 +435,23 @@ func ExampleWithCallBack() {
 				fileName := dataPath + "/testVal.csv"
 				f, e := os.Open(fileName)
 				if e != nil {
-					log.Fatalln(e)
+					panic(e)
 				}
 				rdrx := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
 				if e := rdrx.Init("", chutils.MergeTree); e != nil {
-					log.Fatalln(e)
+					panic(e)
 				}
 				if e := rdrx.TableSpec().Impute(rdrx, 0, .99); e != nil {
-					log.Fatalln(e)
+					panic(e)
 				}
 				rows, _ := rdrx.CountLines()
 				fmt.Println("New data at end of epoch ", d.Epoch(-1))
 				fmt.Println("Number of rows ", rows)
 				WithReader(rdrx)(d)
-
 			}
 		}
 	}
+
 	WithCallBack(cb)(mPipe)
 
 	// This model is OLS
@@ -421,14 +462,17 @@ func ExampleWithCallBack() {
 	}
 	// model is straight-forward with no hidden layers or dropouts.
 	nn, e := NewNNModel(mod, mPipe, true, WithCostFn(RMS))
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
+
 	epochs := 150
 	ft := NewFit(nn, epochs, mPipe)
 	e = ft.Do()
+
 	if e != nil {
-		log.Fatalln(e)
+		panic(e)
 	}
 	// Target:
 	//New data at end of epoch  100

@@ -20,8 +20,50 @@
 //   - Numeric struct for (x,y) data and plotting and descriptive statistics.
 package seafan
 
+import "fmt"
+
 // Verbose controls amount of printing.
 var Verbose = true
 
 // Browser is the browser to use for plotting.
 var Browser = "firefox"
+
+type SeaError int
+
+const (
+	ErrPipe SeaError = 0 + iota
+	ErrData
+	ErrFields
+	ErrGData
+	ErrChData
+	ErrModSpec
+	ErrNNModel
+	ErrDiags
+)
+
+func (seaErr SeaError) Error() string {
+	switch seaErr {
+	case ErrPipe:
+		return "Pipeline error"
+	case ErrData:
+		return "Data error"
+	case ErrFields:
+		return "Fields error"
+	case ErrGData:
+		return "GData error"
+	case ErrChData:
+		return "ChData"
+	case ErrModSpec:
+		return "ModSpec error"
+	case ErrNNModel:
+		return "NNModel error"
+	case ErrDiags:
+		return "model diagnostics error"
+	}
+
+	return "error"
+}
+
+func Wrapper(e error, text string) error {
+	return fmt.Errorf("%v: %w", text, e)
+}

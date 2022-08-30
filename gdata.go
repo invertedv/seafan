@@ -4,9 +4,10 @@ package seafan
 
 import (
 	"fmt"
-	"gonum.org/v1/gonum/stat"
 	"reflect"
 	"strconv"
+
+	"gonum.org/v1/gonum/stat"
 )
 
 type GDatum struct {
@@ -21,25 +22,33 @@ type GData []*GDatum
 func (gd GData) check(name string) error {
 	if name != "" {
 		if gd.Get(name) != nil {
-			return fmt.Errorf("%s exists already", name)
+			return Wrapper(ErrGData, fmt.Sprintf("%s exists already", name))
 		}
 	}
+
 	n := 0
+
 	for _, d := range gd {
 		if d.Summary.nRow != n && n > 0 {
-			return fmt.Errorf("differing number of rows")
+			return Wrapper(ErrGData, "differing number of rows")
 		}
+
 		n = d.Summary.nRow
 	}
+
 	return nil
 }
 
 // AppendC appends a continuous feature
+//
+//goland:noinspection GoLinter,GoLinter,GoLinter,GoLinter,GoLinter,GoLinter
 func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GData, error) {
 	if e := gd.check(name); e != nil {
 		return nil, e
 	}
+
 	x := make([]float64, len(raw.Data))
+
 	for ind := 0; ind < len(x); ind++ {
 		switch raw.Kind {
 		case reflect.Float64:
@@ -57,28 +66,35 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 			if e != nil {
 				return nil, e
 			}
+
 			x[ind] = xx
 		default:
-			return nil, fmt.Errorf("cannot convert this type %T", x[0])
+			return nil, Wrapper(ErrGData, fmt.Sprintf("AppendC: cannot convert this type %T", x[0]))
 		}
 	}
+
 	ls := &FParam{}
+
 	switch {
 	case fp == nil:
 		ls = &FParam{Location: stat.Mean(x, nil), Scale: stat.StdDev(x, nil)}
 	case fp != nil:
 		ls = fp
 	}
+
 	if ls.Scale < 1e-8 {
-		return nil, fmt.Errorf("%s cannot be normalized--0 variance", name)
+		return nil, Wrapper(ErrGData, fmt.Sprintf("AppendC: %s cannot be normalized--0 variance", name))
 	}
+
 	if normalize {
 		for ind := 0; ind < len(x); ind++ {
 			x[ind] = (x[ind] - ls.Location) / ls.Scale
 		}
 	}
+
 	distr, _ := NewDesc(nil, name)
 	distr.Populate(x, true)
+
 	summ := Summary{
 		nRow:   len(x),
 		DistrC: distr,
@@ -99,9 +115,11 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 		Summary: summ,
 	}
 	gdOut := append(gd, c)
+
 	if e := gdOut.check(""); e != nil {
 		return nil, e
 	}
+
 	return gdOut, nil
 }
 
@@ -115,19 +133,23 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		lv := ByPtr(raw)
 		fp = &FParam{Lvl: lv}
 	}
+
 	ds := make([]int32, len(raw.Data))
 
 	for ind := 0; ind < len(ds); ind++ {
 		v := raw.Data[ind]
 		val, ok := fp.Lvl[v]
+
 		if !ok {
 			val, ok = fp.Lvl[fp.Default]
 			if !ok {
-				return nil, fmt.Errorf("default value %v not in dictionary", fp.Default)
+				return nil, Wrapper(ErrGData, fmt.Sprintf("AppendD: default value %v not in dictionary", fp.Default))
 			}
 		}
+
 		ds[ind] = val
 	}
+
 	distr := ByCounts(raw)
 	ft := &FType{
 		Name:       name,
@@ -149,27 +171,34 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 	if e := gdOut.check(""); e != nil {
 		return nil, e
 	}
+
 	return gdOut, nil
 }
 
 // MakeOneHot creates & appends a one hot feature from a discrete feature
-func (gd GData) MakeOneHot(from string, name string) (GData, error) {
+func (gd GData) MakeOneHot(from, name string) (GData, error) {
 	if e := gd.check(name); e != nil {
 		return nil, e
 	}
+
 	d := gd.Get(from)
+
 	if d == nil {
-		return nil, fmt.Errorf("MakeOneHot: 'from' feature %s not found", from)
+		return nil, Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: 'from' feature %s not found", from))
 	}
+
 	if d.FT.Role != FRCat {
-		return nil, fmt.Errorf("MakeOneHot: input %s is not discrete", from)
+		return nil, Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: input %s is not discrete", from))
 	}
+
 	nRow := d.Summary.nRow
 	nCat := len(d.FT.FP.Lvl)
 	oh := make([]float64, nRow*nCat)
+
 	for row := 0; row < nRow; row++ {
 		oh[int32(row*nCat)+d.Data.([]int32)[row]] = 1
 	}
+
 	summ := Summary{nRow: d.Summary.nRow}
 	ft := &FType{
 		Name:       name,
@@ -182,9 +211,11 @@ func (gd GData) MakeOneHot(from string, name string) (GData, error) {
 	}
 	oH := &GDatum{Data: oh, FT: ft, Summary: summ}
 	gdOut := append(gd, oH)
+
 	if e := gdOut.check(""); e != nil {
 		return nil, e
 	}
+
 	return gdOut, nil
 }
 
@@ -195,5 +226,6 @@ func (gd GData) Get(name string) *GDatum {
 			return g
 		}
 	}
+
 	return nil
 }

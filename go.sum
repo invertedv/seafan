@@ -4,6 +4,7 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/ClickHouse/clickhouse-go v1.5.4/go.mod h1:EaI/sW7Azgz9UATzd5ZdZHRUhHgv5+JMS9NSr2smCJI=
 github.com/ClickHouse/clickhouse-go/v2 v2.0.14 h1:7HW+MXPaQfVyCzPGEn/LciMc8K6cG58FZMUc7DXQmro=
 github.com/ClickHouse/clickhouse-go/v2 v2.0.14/go.mod h1:iq2DUGgpA4BBki2CVwrF8x43zqBjdgHtbexkFkh5a6M=
+github.com/DATA-DOG/go-sqlmock v1.5.0 h1:Shsta01QNfFxHCfpW6YH2STWB0MudeXXEWMr20OEh60=
 github.com/MetalBlueberry/go-plotly v0.4.0 h1:ld/FLZIwLmPdv09ljANonwEqSoI1uNn7myLYAVjBQ48=
 github.com/MetalBlueberry/go-plotly v0.4.0/go.mod h1:TWXjEOVRo7sm3rY3j18cKbbwRrRM3FtxjMxz8fNRsoM=
 github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
@@ -91,10 +92,6 @@ github.com/gorilla/handlers v1.4.2/go.mod h1:Qkdc/uu4tH4g6mTK6auzZ766c4CA0Ng8+o/
 github.com/gorilla/websocket v1.4.1/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/huandu/xstrings v1.3.2/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
-github.com/invertedv/chutils v1.1.8 h1:LWUiUOAroZKyoobhE9fyJZKupJFabks6mBiwAxa6fnQ=
-github.com/invertedv/chutils v1.1.8/go.mod h1:/8QRkzgtQEEQr4wj73Nx/tXikDEHT9Qn1wLGSVTMq78=
-github.com/invertedv/chutils v1.1.9 h1:uP55p6kgoaVxTiI9cVUNZ+hPWUs5YGECqr4w/lloIZQ=
-github.com/invertedv/chutils v1.1.9/go.mod h1:LbMXKKLJ1kQhsiGDUU7QfVFPTFBo5OdmJ6yAJuXp8gM=
 github.com/invertedv/chutils v1.1.10 h1:smUOn5R64H9LRCCY+RKOS+cZxytT94NgHkEIexbI03c=
 github.com/invertedv/chutils v1.1.10/go.mod h1:LbMXKKLJ1kQhsiGDUU7QfVFPTFBo5OdmJ6yAJuXp8gM=
 github.com/jmoiron/sqlx v1.2.0/go.mod h1:1FEQNm3xlJgrMD+FBdI9+xvCksHtbpVBBw5dYhBSsks=

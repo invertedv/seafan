@@ -4,10 +4,11 @@ package seafan
 
 import (
 	"fmt"
-	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
-	"gonum.org/v1/gonum/stat"
 	"reflect"
 	"sort"
+
+	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
+	"gonum.org/v1/gonum/stat"
 )
 
 // XY struct holds (x,y) pairs as distinct slices
@@ -17,16 +18,19 @@ type XY struct {
 }
 
 // NewXY creates a pointer to a new XY with error checking
-func NewXY(x []float64, y []float64) (*XY, error) {
+func NewXY(x, y []float64) (*XY, error) {
 	if x == nil && y == nil {
 		return &XY{}, nil
 	}
+
 	if (x == nil && y != nil) || (x != nil && y == nil) {
-		return nil, fmt.Errorf("one of x,y is nil and one not")
+		return nil, Wrapper(ErrData, "NewXY: one of x,y is nil and one is not")
 	}
+
 	if len(x) != len(y) {
-		return nil, fmt.Errorf("x has length %d and y has differnet length of %d", len(x), len(y))
+		return nil, Wrapper(ErrData, fmt.Sprintf("NewXY: x has length %d and y has different length of %d", len(x), len(y)))
 	}
+
 	return &XY{X: x, Y: y}, nil
 }
 
@@ -46,23 +50,29 @@ func (p *XY) Len() int {
 // Sort sorts with error checking
 func (p *XY) Sort() error {
 	if len(p.X) != len(p.Y) {
-		return fmt.Errorf("X and Y must have same length")
+		return Wrapper(ErrData, "(*XY).Sort: X and Y must have same length")
 	}
+
 	sort.Sort(p)
+
 	return nil
 }
 
 // Interp linearly interpolates XY at the points xNew.
 func (p *XY) Interp(xNew []float64) (*XY, error) {
 	if len(p.X) != len(p.Y) {
-		return nil, fmt.Errorf("X and Y must have same length")
+		return nil, Wrapper(ErrData, "(*XY).Interp: X and Y must have same length")
 	}
+
 	if !sort.Float64sAreSorted(p.X) {
 		sort.Sort(p)
 	}
+
 	yNew := make([]float64, len(xNew))
+
 	for ind, xn := range xNew {
 		i := sort.SearchFloat64s(p.X, xn)
+
 		switch {
 		case i == len(p.X):
 			yNew[ind] = p.Y[i-1]
@@ -75,6 +85,7 @@ func (p *XY) Interp(xNew []float64) (*XY, error) {
 			yNew[ind] = w*p.Y[i] + (1.0-w)*p.Y[i-1]
 		}
 	}
+
 	return &XY{X: xNew, Y: yNew}, nil
 }
 
@@ -83,21 +94,25 @@ func (p *XY) String() string {
 	for ind := 0; ind < len(p.X); ind++ {
 		s = fmt.Sprintf("%s%10f        %10f\n", s, p.X[ind], p.Y[ind])
 	}
+
 	return s
 }
 
 // Plot produces an XY Plotly plot
 func (p *XY) Plot(pd *PlotDef, scatter bool) error {
 	if len(p.X) != len(p.Y) {
-		return fmt.Errorf("X and Y must have same length")
+		return Wrapper(ErrData, "(*XY).Plot: X and Y must have same length")
 	}
+
 	var sType grob.ScatterMode
+
 	switch scatter {
 	case true:
 		sType = grob.ScatterModeMarkers
 	default:
 		sType = grob.ScatterModeLines
 	}
+
 	tr := &grob.Scatter{
 		Type: grob.TraceTypeScatter,
 		X:    p.X,
@@ -106,7 +121,9 @@ func (p *XY) Plot(pd *PlotDef, scatter bool) error {
 		Mode: sType,
 		Line: &grob.ScatterLine{Color: "black"},
 	}
+
 	fig := &grob.Fig{Data: grob.Traces{tr}}
+
 	return Plotter(fig, nil, pd)
 }
 
@@ -128,12 +145,16 @@ func NewDesc(u []float64, name string) (*Desc, error) {
 	if u == nil {
 		u = []float64{0, .1, .25, .5, .75, .9, 1.0}
 	}
+
 	sort.Float64s(u)
+
 	if u[0] < 0.0 || u[len(u)-1] > 1.0 {
-		return nil, fmt.Errorf("quantiles best be in [0,1]")
+		return nil, Wrapper(ErrData, "NewDesc: quantiles best be in [0,1]")
 	}
+
 	d := &Desc{U: u, Name: name}
 	d.Q = make([]float64, len(u))
+
 	return d, nil
 }
 
@@ -152,9 +173,11 @@ func (d *Desc) Populate(x []float64, noSort bool) {
 			sort.Float64s(xIn)
 		}
 	}
+
 	for ind, u := range d.U {
 		d.Q[ind] = stat.Quantile(u, stat.Empirical, xIn, nil)
 	}
+
 	d.N = len(x)
 	d.Mean = stat.Mean(x, nil)
 	d.Std = stat.StdDev(x, nil)
@@ -165,9 +188,11 @@ func (d *Desc) String() string {
 	s = fmt.Sprintf("%sn               %d\n", s, d.N)
 	s = fmt.Sprintf("%sMean            %f\n", s, d.Mean)
 	s = fmt.Sprintf("%sStd Dev         %f\n", s, d.Std)
+
 	for ind := 0; ind < len(d.U); ind++ {
 		s = fmt.Sprintf("%sQ(%0.2f)         %f\n", s, d.U[ind], d.Q[ind])
 	}
+
 	return s
 }
 
@@ -182,6 +207,7 @@ func NewRaw(x []any) *Raw {
 	if x == nil {
 		return nil
 	}
+
 	return &Raw{Data: x, Kind: reflect.TypeOf(x[0]).Kind()}
 }
 
@@ -192,9 +218,11 @@ func AllocRaw(n int, kind reflect.Kind) *Raw {
 
 func (r *Raw) Less(i, j int) bool {
 	v, err := AnyLess(r.Data[i], r.Data[j])
+
 	if err != nil {
 		return false
 	}
+
 	return v
 }
 
@@ -215,6 +243,7 @@ func ByCounts(data *Raw) Levels {
 	for _, v := range data.Data {
 		l[v]++
 	}
+
 	return l
 }
 
@@ -224,10 +253,13 @@ func ByPtr(data *Raw) Levels {
 	us := Unique(data.Data)
 	bm := NewRaw(us)
 	sort.Sort(bm)
+
 	l := make(Levels)
+
 	for ind := 0; ind < len(bm.Data); ind++ {
 		l[bm.Data[ind]] = int32(ind)
 	}
+
 	return l
 }
 
@@ -246,6 +278,7 @@ func (x *kv) Less(i, j int) bool {
 	if !x.ascend {
 		v = !v
 	}
+
 	return v
 }
 
@@ -264,16 +297,18 @@ func pad(maxLen, thisLen int) string {
 	for ind := 0; ind < maxLen-thisLen; ind++ {
 		sp += " "
 	}
+
 	return sp
 }
 
 // TopK returns the top k values either by name or by counts, ascending or descending
-func (l Levels) TopK(k int, byName bool, ascend bool) string {
+func (l Levels) TopK(k int, byName, ascend bool) string {
 	key := make([]any, len(l))
 	val := make([]any, len(l))
 	ord := make([]int, len(l))
 	ind := 0
 	maxLen := 11 // "Field Value" length
+
 	for kx, v := range l {
 		key[ind] = kx
 		val[ind] = v
@@ -281,47 +316,57 @@ func (l Levels) TopK(k int, byName bool, ascend bool) string {
 		maxLen = Max(maxLen, len(fmt.Sprintf("%v", kx)))
 		ind++
 	}
+
 	if k == 0 {
 		k = len(key)
 	}
+
 	switch byName {
 	case true:
 		kvx := &kv{ord: ord, kv: key, ascend: ascend}
 		sort.Sort(kvx)
-		str := fmt.Sprintf("Field Value%sCount\n", pad(maxLen, 11))
+		title := "Field Value"
+		str := fmt.Sprintf("%s%sCount\n", title, pad(maxLen, len(title)))
+
 		for ind := 0; ind < Min(k, len(key)); ind++ {
 			keyS := fmt.Sprintf("%v", key[ind])
 			str = fmt.Sprintf("%s%s%s%v\n", str, keyS, pad(maxLen, len(keyS)), val[ord[ind]])
 		}
+
 		return str
+
 	case false:
 		kvx := &kv{ord: ord, kv: val, ascend: ascend}
 		sort.Sort(kvx)
+
 		str := fmt.Sprintf("Field Value%sCount\n", pad(maxLen, 11))
+
 		for ind := 0; ind < Min(k, len(key)); ind++ {
 			keyS := fmt.Sprintf("%v", key[ord[ind]])
 			str = fmt.Sprintf("%s%s%s%v\n", str, keyS, pad(maxLen, len(keyS)), val[ind])
 		}
+
 		return str
 	}
+
 	return ""
 }
 
 // AnyLess returns x<y for select underlying types of "any"
 func AnyLess(x, y any) (bool, error) {
-	switch x.(type) {
+	switch xt := x.(type) {
 	case float64:
-		return x.(float64) < y.(float64), nil
+		return xt < y.(float64), nil
 	case float32:
-		return x.(float32) < y.(float32), nil
+		return xt < y.(float32), nil
 	case int64:
-		return x.(int64) < y.(int64), nil
+		return xt < y.(int64), nil
 	case int32:
-		return x.(int32) < y.(int32), nil
+		return xt < y.(int32), nil
 	case string:
-		return x.(string) < y.(string), nil
+		return xt < y.(string), nil
 	default:
-		return false, fmt.Errorf("no comparison")
+		return false, Wrapper(ErrData, "AnyLess: no comparison")
 	}
 }
 
@@ -330,6 +375,7 @@ func Min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -338,18 +384,22 @@ func Max(a, b int) int {
 	if a > b {
 		return a
 	}
+
 	return b
 }
 
 // Unique returns a slice of the unique values of xs
-func Unique(xs []any) (u []any) {
-	u = make([]any, 0)
+func Unique(xs []any) []any {
+	u := make([]any, 0)
 	l := make(map[any]int)
+
 	for _, x := range xs {
 		if _, ok := l[x]; !ok {
 			l[x] = 1
+
 			u = append(u, x)
 		}
 	}
+
 	return u
 }

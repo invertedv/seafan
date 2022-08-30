@@ -1,21 +1,19 @@
 package seafan
 
 import (
-	"github.com/stretchr/testify/assert"
-	"log"
 	"math/rand"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestXY_Interp(t *testing.T) {
 	x := []float64{3.0, 1.0, 2.0, 5.0}
 	y := []float64{1.0, 2.0, 3.0, 4.0}
 	xy, e := NewXY(x, y)
-	if e != nil {
-		log.Fatalln(e)
-	}
+	assert.Nil(t, e)
 	xNew := []float64{1.5, 2.2}
 	expectY := []float64{2.5, 3 - .2*2}
 	xyi, e := xy.Interp(xNew)
@@ -66,6 +64,7 @@ func TestDesc_Populate(t *testing.T) {
 	assert.Equal(t, true, sort.Float64sAreSorted(x))
 }
 
+//goland:noinspection GoLinter
 func TestAllocRaw(t *testing.T) {
 	n := 100
 	x := AllocRaw(n, reflect.Float64)

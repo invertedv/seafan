@@ -4,16 +4,18 @@ package seafan
 
 import (
 	"fmt"
-	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
-	"github.com/MetalBlueberry/go-plotly/offline"
 	"math/rand"
 	"os"
 	"os/exec"
 	"time"
+
+	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
+	"github.com/MetalBlueberry/go-plotly/offline"
 )
 
 // PlotDef specifies Plotly Layout features I commonly use.
 type PlotDef struct {
+	Show     bool    // Show - true = show graph in browser
 	Title    string  // Title - plot title
 	XTitle   string  // XTitle - x-axis title
 	YTitle   string  // Ytitle - y-axis title
@@ -21,7 +23,6 @@ type PlotDef struct {
 	Legend   bool    // Legend - true = show legend
 	Height   float64 // Height - height of graph, in pixels
 	Width    float64 // Width - width of graph, in pixels
-	Show     bool    // Show - true = show graph in browser
 	FileName string  // FileName - output file for graph (in html)
 }
 
@@ -33,6 +34,8 @@ type PlotDef struct {
 //	pd       PlotDef structure with plot options.
 //
 // lay can be initialized with any additional layout options needed.
+//
+//goland:noinspection GoLinter
 func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 	if lay == nil {
 		lay = &grob.Layout{}
@@ -46,16 +49,21 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 		xTitle += fmt.Sprintf("<br>%s", pd.STitle)
 	}
 	lay.Xaxis = &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: xTitle}}
+
 	if !pd.Legend {
 		lay.Showlegend = grob.False
 	}
+
 	if pd.Width > 0.0 {
 		lay.Width = pd.Width
 	}
+
 	if pd.Height > 0.0 {
 		lay.Height = pd.Height
 	}
+
 	fig.Layout = lay
+
 	if pd.FileName != "" {
 		offline.ToHtml(fig, pd.FileName)
 	}
@@ -67,18 +75,23 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 			rand.Seed(time.Now().UnixMicro())
 			pd.FileName = fmt.Sprintf("%s/plotly%d.html", os.TempDir(), rand.Uint32())
 		}
+
 		offline.ToHtml(fig, pd.FileName)
 		cmd := exec.Command(Browser, "-url", pd.FileName)
+
 		if e := cmd.Start(); e != nil {
 			return e
 		}
+
 		if tmp {
 			// need to pause while browser loads graph
 			time.Sleep(time.Second)
+
 			if e := os.Remove(pd.FileName); e != nil {
 				return e
 			}
 		}
 	}
+
 	return nil
 }
