@@ -58,6 +58,10 @@ func (m *NNModel) Name() string {
 	return m.name
 }
 
+func (m *NNModel) InputFT() FTypes {
+	return m.inputFT
+}
+
 func (m *NNModel) String() string {
 	if m.construct == nil {
 		return "No model"

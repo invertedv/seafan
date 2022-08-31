@@ -48,7 +48,7 @@ func TestDesc_Populate(t *testing.T) {
 	d, e := NewDesc(nil, "test")
 	assert.Nil(t, e)
 	// first populate without sorting underlying slice
-	d.Populate(x, true)
+	d.Populate(x, true, nil)
 	assert.ElementsMatch(t, expectQ, d.Q)
 	assert.Equal(t, expectN, d.N)
 	assert.Equal(t, expectMean, d.Mean)
@@ -56,7 +56,7 @@ func TestDesc_Populate(t *testing.T) {
 	assert.Equal(t, false, sort.Float64sAreSorted(x))
 
 	// now populate with sorting underlying slice
-	d.Populate(x, false)
+	d.Populate(x, false, nil)
 	assert.ElementsMatch(t, expectQ, d.Q)
 	assert.Equal(t, expectN, d.N)
 	assert.Equal(t, expectMean, d.Mean)
@@ -73,7 +73,7 @@ func TestAllocRaw(t *testing.T) {
 	for ind := range xx {
 		xx[ind] = rand.Float64()
 	}
-	x = NewRaw(xx)
+	x = NewRaw(xx, nil)
 	assert.Equal(t, sort.IsSorted(x), false)
 	sort.Sort(x)
 	assert.Equal(t, sort.IsSorted(x), true)
@@ -81,7 +81,7 @@ func TestAllocRaw(t *testing.T) {
 
 func TestByPtr(t *testing.T) {
 	x := []any{"z", "b", "a", "b", "c"}
-	r := NewRaw(x)
+	r := NewRaw(x, nil)
 	m := ByPtr(r)
 	exp := make(Levels)
 	exp["a"], exp["b"], exp["c"], exp["z"] = 0, 1, 2, 3
@@ -92,8 +92,8 @@ func TestByPtr(t *testing.T) {
 
 func TestByCounts(t *testing.T) {
 	x := []any{"z", "b", "a", "b", "c", "c", "c"}
-	r := NewRaw(x)
-	m := ByCounts(r)
+	r := NewRaw(x, nil)
+	m := ByCounts(r, nil)
 	exp := make(Levels)
 	exp["a"], exp["b"], exp["c"], exp["z"] = 1, 2, 3, 1
 	for k, v := range m {
@@ -103,8 +103,8 @@ func TestByCounts(t *testing.T) {
 
 func TestLevels_TopK(t *testing.T) {
 	x := []any{"z", "b", "a", "b", "c", "c", "c"}
-	r := NewRaw(x)
-	m := ByCounts(r)
+	r := NewRaw(x, nil)
+	m := ByCounts(r, nil)
 	s := m.TopK(2, true, true)
 	exp := `Field Value   Count
 a             1

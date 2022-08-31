@@ -39,6 +39,7 @@ const (
 	ErrModSpec
 	ErrNNModel
 	ErrDiags
+	ErrVecData
 )
 
 func (seaErr SeaError) Error() string {
@@ -59,6 +60,8 @@ func (seaErr SeaError) Error() string {
 		return "NNModel error"
 	case ErrDiags:
 		return "model diagnostics error"
+	case ErrVecData:
+		return "VecData error"
 	}
 
 	return "error"

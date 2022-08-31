@@ -9,7 +9,7 @@ import (
 
 func TestFTypes_Save(t *testing.T) {
 	d := []any{"z", "a", "r", "a", "b"}
-	lvl := ByPtr(NewRaw(d))
+	lvl := ByPtr(NewRaw(d, nil))
 	fp0 := &FParam{
 		Location: 0,
 		Scale:    0,

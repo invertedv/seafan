@@ -16,21 +16,21 @@ func TestGData_AppendC(t *testing.T) {
 		x0 = append(x0, float64(ind))
 	}
 
-	gd, e = gd.AppendC(NewRaw(x0), "Field0", false, nil)
+	gd, e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
 	assert.Nil(t, e)
 
 	xt := []any{"a", "b", "c"}
-	_, e = gd.AppendD(NewRaw(xt), "Field1", nil)
+	_, e = gd.AppendD(NewRaw(xt, nil), "Field1", nil)
 
 	assert.NotNil(t, e)
 
 	gd = make(GData, 0)
-	gd, e = gd.AppendC(NewRaw(x0), "Field0", false, nil)
+	gd, e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
 
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	gd, e = gd.AppendD(NewRaw(x1), "Field1", nil)
+	gd, e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
 
 	assert.Nil(t, e)
 
@@ -51,7 +51,7 @@ func TestGData_AppendC(t *testing.T) {
 		Default:  nil,
 		Lvl:      nil,
 	}
-	gd, e = gd.AppendC(NewRaw(x0), "Field2", true, fp)
+	gd, e = gd.AppendC(NewRaw(x0, nil), "Field2", true, fp)
 
 	assert.Nil(t, e)
 
@@ -72,11 +72,37 @@ func TestGData_AppendC(t *testing.T) {
 		Lvl:      lvl,
 	}
 	x3 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "r"}
-	gd, e = gd.AppendD(NewRaw(x3), "Field3", fp)
+	gd, e = gd.AppendD(NewRaw(x3, nil), "Field3", fp)
 
 	assert.Nil(t, e)
 
 	mapx = []int32{2, 3, 4, 2, 3, 4, 2, 4, 4, 3}
 	d3 := gd.Get("Field3")
 	assert.ElementsMatch(t, d3.Data, mapx)
+}
+
+func TestGData_Slice(t *testing.T) {
+	vecData := NewVecData("test", getData(t))
+	slice, e := NewSlice("x2", 0, vecData, nil)
+	assert.Nil(t, e)
+	x1Exp := make([][]float64, 3)
+	x1Exp[0], x1Exp[1], x1Exp[2] = []float64{1, 4, 8, 9, 10}, []float64{2}, []float64{3}
+	x2Exp := []int32{0, 1, 2}
+
+	x2OhExp := make([][]float64, 3)
+	x2OhExp[0], x2OhExp[1], x2OhExp[2] = []float64{1, 0, 0}, []float64{0, 1, 0}, []float64{0, 0, 1}
+
+	ind := 0
+	for slice.Iter() {
+		sl := slice.MakeSlicer()
+		sliced, e := vecData.GData().Slice(sl)
+		assert.Nil(t, e)
+		dx1 := sliced.Get("x1").Data.([]float64)
+		assert.ElementsMatch(t, x1Exp[ind], dx1)
+		dx2 := sliced.Get("x2").Data.([]int32)[0]
+		assert.Equal(t, dx2, x2Exp[ind])
+		dx2Oh := sliced.Get("x2Oh").Data.([]float64)
+		assert.ElementsMatch(t, x2OhExp[ind], dx2Oh[0:3])
+		ind++
+	}
 }

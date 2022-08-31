@@ -160,9 +160,20 @@ func NewDesc(u []float64, name string) (*Desc, error) {
 
 // Populate calculates the descriptive statistics based on x.
 // The slice is not sorted if noSort
-func (d *Desc) Populate(x []float64, noSort bool) {
+func (d *Desc) Populate(x []float64, noSort bool, sl Slicer) {
 	// see if we need to sort this
 	xIn := x
+
+	if sl != nil {
+		noSort = false
+		xIn = make([]float64, 0)
+		for row := 0; row < len(x); row++ {
+			if sl(row) {
+				xIn = append(xIn, x[row])
+			}
+		}
+	}
+
 	if !sort.Float64sAreSorted(xIn) {
 		switch noSort {
 		case false:
@@ -178,9 +189,8 @@ func (d *Desc) Populate(x []float64, noSort bool) {
 		d.Q[ind] = stat.Quantile(u, stat.Empirical, xIn, nil)
 	}
 
-	d.N = len(x)
-	d.Mean = stat.Mean(x, nil)
-	d.Std = stat.StdDev(x, nil)
+	d.N = len(xIn)
+	d.Mean, d.Std = stat.MeanStdDev(xIn, nil)
 }
 
 func (d *Desc) String() string {
@@ -203,12 +213,88 @@ type Raw struct {
 }
 
 // NewRaw creates a new raw slice from x.  This assumes all elements of x are the same Kind
-func NewRaw(x []any) *Raw {
+func NewRaw(x []any, sl Slicer) *Raw {
 	if x == nil {
 		return nil
 	}
 
+	if sl != nil {
+		xSlice := make([]any, 0)
+
+		for row := 0; row < len(x); row++ {
+			if sl(row) {
+				xSlice = append(xSlice, x[row])
+			}
+		}
+
+		return &Raw{Data: xSlice, Kind: reflect.TypeOf(xSlice[0]).Kind()}
+	}
+
 	return &Raw{Data: x, Kind: reflect.TypeOf(x[0]).Kind()}
+}
+
+func NewRawCast(x any, sl Slicer) *Raw {
+	xOut := make([]any, 0)
+	switch d := x.(type) {
+	case []string:
+		for row := 0; row < len(d); row++ {
+			switch sl == nil {
+			case true:
+				xOut = append(xOut, d[row])
+			case false:
+				if sl(row) {
+					xOut = append(xOut, d[row])
+				}
+			}
+		}
+	case []int32:
+		for row := 0; row < len(d); row++ {
+			switch sl == nil {
+			case true:
+				xOut = append(xOut, d[row])
+			case false:
+				if sl(row) {
+					xOut = append(xOut, d[row])
+				}
+			}
+		}
+	case []int64:
+		for row := 0; row < len(d); row++ {
+			switch sl == nil {
+			case true:
+				xOut = append(xOut, d[row])
+			case false:
+				if sl(row) {
+					xOut = append(xOut, d[row])
+				}
+			}
+		}
+	case []float64:
+		for row := 0; row < len(d); row++ {
+			switch sl == nil {
+			case true:
+				xOut = append(xOut, d[row])
+			case false:
+				if sl(row) {
+					xOut = append(xOut, d[row])
+				}
+			}
+		}
+	case []float32:
+		for row := 0; row < len(d); row++ {
+			switch sl == nil {
+			case true:
+				xOut = append(xOut, d[row])
+			case false:
+				if sl(row) {
+					xOut = append(xOut, d[row])
+				}
+			}
+		}
+	default:
+		return nil
+	}
+	return NewRaw(xOut, nil)
 }
 
 // AllocRaw creates an empty slice of type kind and len n
@@ -238,10 +324,18 @@ func (r *Raw) Len() int {
 type Levels map[any]int32
 
 // ByCounts builds a Levels map with the distribution of data
-func ByCounts(data *Raw) Levels {
+func ByCounts(data *Raw, sl Slicer) Levels {
 	l := make(Levels)
-	for _, v := range data.Data {
-		l[v]++
+	for row := 0; row < data.Len(); row++ {
+		v := data.Data[row]
+		switch sl == nil {
+		case true:
+			l[v]++
+		case false:
+			if sl(row) {
+				l[v]++
+			}
+		}
 	}
 
 	return l
@@ -251,7 +345,7 @@ func ByCounts(data *Raw) Levels {
 // smallest will have a mapped value of 0.
 func ByPtr(data *Raw) Levels {
 	us := Unique(data.Data)
-	bm := NewRaw(us)
+	bm := NewRaw(us, nil)
 	sort.Sort(bm)
 
 	l := make(Levels)
@@ -301,55 +395,62 @@ func pad(maxLen, thisLen int) string {
 	return sp
 }
 
-// TopK returns the top k values either by name or by counts, ascending or descending
-func (l Levels) TopK(k int, byName, ascend bool) string {
+// Sort sorts Levels, returns sorted map as Key, Value slices
+func (l Levels) Sort(byName, ascend bool) ([]any, []int32) {
 	key := make([]any, len(l))
 	val := make([]any, len(l))
 	ord := make([]int, len(l))
 	ind := 0
-	maxLen := 11 // "Field Value" length
 
 	for kx, v := range l {
 		key[ind] = kx
 		val[ind] = v
 		ord[ind] = ind
-		maxLen = Max(maxLen, len(fmt.Sprintf("%v", kx)))
 		ind++
 	}
-
-	if k == 0 {
-		k = len(key)
-	}
-
+	outK := make([]any, 0)
+	outV := make([]int32, 0)
 	switch byName {
 	case true:
 		kvx := &kv{ord: ord, kv: key, ascend: ascend}
 		sort.Sort(kvx)
-		title := "Field Value"
-		str := fmt.Sprintf("%s%sCount\n", title, pad(maxLen, len(title)))
-
-		for ind := 0; ind < Min(k, len(key)); ind++ {
-			keyS := fmt.Sprintf("%v", key[ind])
-			str = fmt.Sprintf("%s%s%s%v\n", str, keyS, pad(maxLen, len(keyS)), val[ord[ind]])
+		for indx := 0; indx < len(key); indx++ {
+			outK = append(outK, key[indx])
+			outV = append(outV, val[ord[indx]].(int32))
 		}
-
-		return str
 
 	case false:
 		kvx := &kv{ord: ord, kv: val, ascend: ascend}
 		sort.Sort(kvx)
-
-		str := fmt.Sprintf("Field Value%sCount\n", pad(maxLen, 11))
-
-		for ind := 0; ind < Min(k, len(key)); ind++ {
-			keyS := fmt.Sprintf("%v", key[ord[ind]])
-			str = fmt.Sprintf("%s%s%s%v\n", str, keyS, pad(maxLen, len(keyS)), val[ind])
+		for indx := 0; indx < len(key); indx++ {
+			outK = append(outK, key[ord[indx]])
+			outV = append(outV, val[indx].(int32))
 		}
+	}
+	return outK, outV
+}
 
-		return str
+// TopK returns the top k values either by name or by counts, ascending or descending
+func (l Levels) TopK(topNum int, byName, ascend bool) string {
+	keyS, valS := l.Sort(byName, ascend)
+
+	maxLen := 11 // "Field Value" length
+
+	for kx := range l {
+		maxLen = Max(maxLen, len(fmt.Sprintf("%v", kx)))
 	}
 
-	return ""
+	if topNum <= 0 {
+		topNum = len(keyS)
+	}
+
+	str := fmt.Sprintf("Field Value%sCount\n", pad(maxLen, 11))
+	for ind := 0; ind < Min(topNum, len(keyS)); ind++ {
+		keyS := fmt.Sprintf("%v", keyS[ind])
+		str = fmt.Sprintf("%s%s%s%v\n", str, keyS, pad(maxLen, len(keyS)), valS[ind])
+	}
+
+	return str
 }
 
 // AnyLess returns x<y for select underlying types of "any"

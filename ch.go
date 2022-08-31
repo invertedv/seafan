@@ -4,13 +4,11 @@ package seafan
 
 import (
 	"fmt"
-	"io"
-	"reflect"
-	"strings"
-
 	"github.com/invertedv/chutils"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
+	"io"
+	"reflect"
 )
 
 // ChData creates a Pipeline based on chutils.  This provides an interface into text files (delimited, fixed length)
@@ -219,7 +217,7 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 			panic(e)
 		}
 	}
-	// out of Data?  if nRow % bsize !=0, rows after the last full batch are unused.
+	// out of Data?  if NRows % bsize !=0, rows after the last full batch are unused.
 	if ch.cbRow+ch.bs > ch.nRow {
 		if !ch.cycle {
 			ch.pull = true
@@ -334,33 +332,12 @@ func (ch *ChData) BatchSize() int {
 
 // Describe describes a field.  If the field has role FRCat, the top k values (by frequency) are returned.
 func (ch *ChData) Describe(field string, topK int) string {
-	const (
-		maxCat = 100
-		minCat = 2
-	)
-
 	d := ch.Get(field)
 	if d == nil {
 		return ""
 	}
 
-	if topK <= 0 {
-		topK = 5
-	}
-
-	topK = Max(Min(topK, maxCat), minCat)
-
-	str := d.FT.String()
-
-	switch d.FT.Role {
-	case FRCts:
-		str = fmt.Sprintf("%s%s", str, "\t"+strings.ReplaceAll(d.Summary.DistrC.String(), "\n", "\n\t"))
-	case FRCat:
-		str = fmt.Sprintf("%s\tTop 5 Values\n", str)
-		str = fmt.Sprintf("%s%s", str, "\t"+strings.ReplaceAll(d.Summary.DistrD.TopK(topK, false, false), "\n", "\n\t"))
-	}
-
-	return str
+	return d.Describe(topK)
 }
 
 func (ch *ChData) String() string {
@@ -375,4 +352,17 @@ func (ch *ChData) String() string {
 	}
 
 	return str
+}
+
+// Slice returns a VecData Pipeline sliced according to sl
+func (ch *ChData) Slice(sl Slicer) (Pipeline, error) {
+	gData, e := ch.data.Slice(sl)
+	if e != nil {
+		return nil, Wrapper(e, "*ChData.Slice")
+	}
+
+	name := fmt.Sprintf("sliced from %s", ch.name)
+	vecData := NewVecData(name, gData)
+
+	return vecData, nil
 }

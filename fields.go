@@ -47,7 +47,7 @@ const (
 
 // Summary has descriptive statistics of a field using its current data.
 type Summary struct {
-	nRow   int    // size of the data
+	NRows  int    // size of the data
 	DistrC *Desc  // summary of continuous field
 	DistrD Levels // summary of discrete field
 }

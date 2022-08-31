@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"gonum.org/v1/gonum/stat"
 )
@@ -18,6 +19,25 @@ type GDatum struct {
 
 type GData []*GDatum
 
+// Describe returns summary statistics. topK is # of values to return for discrete fields
+func (g *GDatum) Describe(topK int) string {
+	str := g.FT.String()
+
+	switch g.FT.Role {
+	case FRCts:
+		str = fmt.Sprintf("%s%s", str, "\t"+strings.ReplaceAll(g.Summary.DistrC.String(), "\n", "\n\t"))
+	case FRCat:
+		str = fmt.Sprintf("%s\tTop 5 Values\n", str)
+		str = fmt.Sprintf("%s%s", str, "\t"+strings.ReplaceAll(g.Summary.DistrD.TopK(topK, false, false), "\n", "\n\t"))
+	}
+
+	return str
+}
+
+func (g *GDatum) String() string {
+	return g.Describe(0)
+}
+
 // check performs a sanity check on GData
 func (gd GData) check(name string) error {
 	if name != "" {
@@ -29,11 +49,11 @@ func (gd GData) check(name string) error {
 	n := 0
 
 	for _, d := range gd {
-		if d.Summary.nRow != n && n > 0 {
+		if d.Summary.NRows != n && n > 0 {
 			return Wrapper(ErrGData, "differing number of rows")
 		}
 
-		n = d.Summary.nRow
+		n = d.Summary.NRows
 	}
 
 	return nil
@@ -77,7 +97,8 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 
 	switch {
 	case fp == nil:
-		ls = &FParam{Location: stat.Mean(x, nil), Scale: stat.StdDev(x, nil)}
+		m, s := stat.MeanStdDev(x, nil)
+		ls = &FParam{Location: m, Scale: s}
 	case fp != nil:
 		ls = fp
 	}
@@ -93,10 +114,10 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 	}
 
 	distr, _ := NewDesc(nil, name)
-	distr.Populate(x, true)
+	distr.Populate(x, true, nil)
 
 	summ := Summary{
-		nRow:   len(x),
+		NRows:  len(x),
 		DistrC: distr,
 		DistrD: nil,
 	}
@@ -150,7 +171,7 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		ds[ind] = val
 	}
 
-	distr := ByCounts(raw)
+	distr := ByCounts(raw, nil)
 	ft := &FType{
 		Name:       name,
 		Role:       FRCat,
@@ -161,7 +182,7 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		FP:         fp,
 	}
 	summ := Summary{
-		nRow:   len(ds),
+		NRows:  len(ds),
 		DistrC: nil,
 		DistrD: distr,
 	}
@@ -191,7 +212,7 @@ func (gd GData) MakeOneHot(from, name string) (GData, error) {
 		return nil, Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: input %s is not discrete", from))
 	}
 
-	nRow := d.Summary.nRow
+	nRow := d.Summary.NRows
 	nCat := len(d.FT.FP.Lvl)
 	oh := make([]float64, nRow*nCat)
 
@@ -199,7 +220,7 @@ func (gd GData) MakeOneHot(from, name string) (GData, error) {
 		oh[int32(row*nCat)+d.Data.([]int32)[row]] = 1
 	}
 
-	summ := Summary{nRow: d.Summary.nRow}
+	summ := Summary{NRows: d.Summary.NRows}
 	ft := &FType{
 		Name:       name,
 		Role:       FROneHot,
@@ -228,4 +249,117 @@ func (gd GData) Get(name string) *GDatum {
 	}
 
 	return nil
+}
+
+// Slice creates a new GData sliced according to sl
+func (gd GData) Slice(sl Slicer) (GData, error) {
+
+	if sl == nil {
+		return gd, nil
+	}
+
+	gOut := make(GData, 0)
+
+	for _, g := range gd {
+		ft := g.FT
+		switch role := ft.Role; role {
+		// These are all float64, but FROneHot and FREmbed are matrices
+		case FRCts, FROneHot, FREmbed:
+			cats := 1
+			if role == FROneHot || role == FREmbed {
+				cats = ft.Cats
+			}
+			d := make([]float64, 0)
+			for row := 0; row < g.Summary.NRows; row++ {
+				if sl(row) {
+					for r := 0; r < cats; r++ {
+						d = append(d, g.Data.([]float64)[row*cats+r])
+					}
+				}
+			}
+			if len(d) == 0 {
+				return nil, Wrapper(ErrGData, "slice result is empty")
+			}
+			var fp *FParam
+			if ft.FP != nil {
+				fp = &FParam{Location: ft.FP.Location, Scale: ft.FP.Location}
+			}
+			ftNew := &FType{
+				Name:       ft.Name,
+				Role:       ft.Role,
+				Cats:       ft.Cats,
+				EmbCols:    ft.EmbCols,
+				Normalized: ft.Normalized,
+				From:       ft.From,
+				FP:         fp,
+			}
+			desc, e := NewDesc(nil, ft.Name)
+			if e != nil {
+				return nil, Wrapper(e, fmt.Sprintf("Slice: error adding categorical field %s", ft.Name))
+			}
+
+			desc.Populate(d, true, nil)
+
+			summ := Summary{
+				NRows:  len(d),
+				DistrC: desc,
+				DistrD: nil,
+			}
+			datum := &GDatum{
+				FT:      ftNew,
+				Summary: summ,
+				Data:    d,
+			}
+			gOut = append(gOut, datum)
+
+		case FRCat:
+			d := make([]int32, 0)
+			for row := 0; row < g.Summary.NRows; row++ {
+				if sl(row) {
+					d = append(d, g.Data.([]int32)[row])
+				}
+			}
+
+			if len(d) == 0 {
+				return nil, Wrapper(ErrGData, "slice result is empty")
+			}
+
+			fp := &FParam{Lvl: ft.FP.Lvl, Default: ft.FP.Default}
+			ftNew := &FType{
+				Name:       ft.Name,
+				Role:       ft.Role,
+				Cats:       ft.Cats,
+				EmbCols:    0,
+				Normalized: false,
+				From:       "",
+				FP:         fp,
+			}
+			// This will be by the mapped value
+			lvlsInt32 := ByCounts(NewRawCast(d, nil), nil)
+			lvls := make(Levels)
+
+			// keys array: inverse map of ft.FP.Lvl, so ith element is key that maps to i
+			keys := make([]any, len(ft.FP.Lvl))
+			for k, v := range ft.FP.Lvl {
+				keys[v] = k
+			}
+			for k, v := range lvlsInt32 {
+				lvls[keys[k.(int32)]] = v
+			}
+
+			summ := Summary{
+				NRows:  len(d),
+				DistrC: nil,
+				DistrD: lvls,
+			}
+			datum := &GDatum{
+				FT:      ftNew,
+				Summary: summ,
+				Data:    d,
+			}
+			gOut = append(gOut, datum)
+		}
+	}
+
+	return gOut, nil
 }

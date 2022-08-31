@@ -10,18 +10,20 @@ import (
 // The Pipeline interface specifies the methods required to be a Data Pipeline. The Pipeline is the middleware between
 // the data and the fitting routines.
 type Pipeline interface {
-	Init() error                    // initialize the pipeline
-	Rows() int                      // # of observations in the pipeline (size of the epoch)
-	Batch(inputs G.Nodes) bool      // puts the next batch in the input nodes
-	Epoch(setTo int) int            // manage epoch count
-	IsNormalized(field string) bool // true if feature is normalized
-	IsCat(field string) bool        // true if feature is one-hot encoded
-	Cols(field string) int          // # of columns in the feature
-	IsCts(field string) bool        // true if the feature is continuous
-	GetFType(field string) *FType   // Get FType for the feature
-	BatchSize() int                 // batch size
-	FieldList() []string            // fields available
-	Get(field string) *GDatum       // return data for field
+	Init() error                       // initialize the pipeline
+	Rows() int                         // # of observations in the pipeline (size of the epoch)
+	Batch(inputs G.Nodes) bool         // puts the next batch in the input nodes
+	Epoch(setTo int) int               // manage epoch count
+	IsNormalized(field string) bool    // true if feature is normalized
+	IsCat(field string) bool           // true if feature is one-hot encoded
+	Cols(field string) int             // # of columns in the feature
+	IsCts(field string) bool           // true if the feature is continuous
+	GetFType(field string) *FType      // Get FType for the feature
+	BatchSize() int                    // batch size
+	FieldList() []string               // fields available
+	GData() GData                      // return underlying GData
+	Get(field string) *GDatum          // return data for field
+	Slice(sl Slicer) (Pipeline, error) // slice the pipeline
 }
 
 // Opts function sets an option to a Pipeline
@@ -32,6 +34,8 @@ func WithBatchSize(bsize int) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
 		case *ChData:
+			d.bs = bsize
+		case *VecData:
 			d.bs = bsize
 		}
 	}

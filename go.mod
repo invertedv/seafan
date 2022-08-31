@@ -7,7 +7,7 @@ require (
 	github.com/MetalBlueberry/go-plotly v0.4.0
 	github.com/invertedv/chutils v1.1.10
 	github.com/stretchr/testify v1.7.1
-	gonum.org/v1/gonum v0.8.2
+	gonum.org/v1/gonum v0.11.0
 	gorgonia.org/golgi v0.0.0-20220131005349-747de8e7aa06
 	gorgonia.org/gorgonia v0.9.17
 	gorgonia.org/tensor v0.9.21
