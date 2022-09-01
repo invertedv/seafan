@@ -400,9 +400,9 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 	return n, precision, recall, accuracy, obs, fit, err
 }
 
-func Marginal(nnFile string, feat string, pipe Pipeline) error {
+// TODO: add general condition ..remove ao_dq_upto_12
+func Marginal(nnFile string, feat string, target []int, pipe Pipeline) error {
 	const take = 1000
-
 	var e error
 
 	name := feat
@@ -412,15 +412,16 @@ func Marginal(nnFile string, feat string, pipe Pipeline) error {
 
 	WithBatchSize(pipe.Rows())(pipe)
 
+	// Create a Pipeline that has the fitted values as a field
 	nn1, e := PredictNN(nnFile, pipe, false)
 	if e != nil {
 		panic(e)
 	}
 
 	nCat := nn1.Obs().Nodes()[0].Shape()[1]
-	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, []int{4, 5, 6, 7, 8, 9, 10, 11, 12}, false, nil)
+	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 	if e != nil {
-		return Wrapper(e, "Margianl")
+		return Wrapper(e, "Marginal")
 	}
 
 	gData := pipe.GData()
@@ -454,7 +455,7 @@ func Marginal(nnFile string, feat string, pipe Pipeline) error {
 
 	sl0 := sliceCur.MakeSlicer()
 	traces := make(grob.Traces, 0)
-	plotNo := 8
+	plotNo := 8 // used as a basis to know which plot we're working on
 
 	for slice.Iter() {
 		sl := slice.MakeSlicer()
@@ -534,12 +535,13 @@ func Marginal(nnFile string, feat string, pipe Pipeline) error {
 			}
 		}
 
-		nn2, e := PredictNN(nnFile, newPipe, false)
+		// predict on data we just created
+		nn1, e = PredictNN(nnFile, newPipe, false)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
 
-		xy, e = Coalesce(nn2.ObsSlice(), nn2.FitSlice(), nCat, []int{4, 5, 6, 7, 8, 9, 10, 11, 12}, false, nil)
+		xy, e = Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
