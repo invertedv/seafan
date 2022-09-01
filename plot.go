@@ -41,14 +41,24 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 		lay = &grob.Layout{}
 	}
 	lay.Title = &grob.LayoutTitle{Text: pd.Title}
-	lay.Yaxis = &grob.LayoutYaxis{Title: &grob.LayoutYaxisTitle{Text: pd.YTitle}}
+
+	if lay.Yaxis == nil {
+		lay.Yaxis = &grob.LayoutYaxis{Title: &grob.LayoutYaxisTitle{Text: pd.YTitle}}
+	} else {
+		lay.Yaxis.Title = &grob.LayoutYaxisTitle{Text: pd.YTitle}
+	}
 	lay.Yaxis.Showline = grob.True // oddly this is false by default
+
 	xTitle := pd.XTitle
+	if lay.Xaxis == nil {
+		lay.Xaxis = &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: xTitle}}
+	} else {
+		lay.Xaxis.Title = &grob.LayoutXaxisTitle{Text: pd.YTitle}
+	}
 
 	if pd.STitle != "" {
 		xTitle += fmt.Sprintf("<br>%s", pd.STitle)
 	}
-	lay.Xaxis = &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: xTitle}}
 
 	if !pd.Legend {
 		lay.Showlegend = grob.False

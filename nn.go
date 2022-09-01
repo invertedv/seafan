@@ -522,6 +522,11 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 			return nil, err
 		}
 	}
+	inps, e := modSpec.Inputs(p)
+	if e != nil {
+		return nil, Wrapper(e, "LoadNN")
+	}
+	nn.inputFT = inps
 
 	return nn, nil
 }

@@ -282,7 +282,7 @@ func (gd GData) Slice(sl Slicer) (GData, error) {
 			}
 			var fp *FParam
 			if ft.FP != nil {
-				fp = &FParam{Location: ft.FP.Location, Scale: ft.FP.Location}
+				fp = &FParam{Location: ft.FP.Location, Scale: ft.FP.Scale}
 			}
 			ftNew := &FType{
 				Name:       ft.Name,
