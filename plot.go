@@ -34,8 +34,6 @@ type PlotDef struct {
 //	pd       PlotDef structure with plot options.
 //
 // lay can be initialized with any additional layout options needed.
-//
-//goland:noinspection GoLinter
 func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 	if lay == nil {
 		lay = &grob.Layout{}
@@ -50,6 +48,7 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 	lay.Yaxis.Showline = grob.True // oddly this is false by default
 
 	xTitle := pd.XTitle
+
 	if lay.Xaxis == nil {
 		lay.Xaxis = &grob.LayoutXaxis{Title: &grob.LayoutXaxisTitle{Text: xTitle}}
 	} else {
@@ -92,10 +91,10 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 		if e := cmd.Start(); e != nil {
 			return e
 		}
+		time.Sleep(time.Second)
 
 		if tmp {
 			// need to pause while browser loads graph
-			time.Sleep(time.Second)
 
 			if e := os.Remove(pd.FileName); e != nil {
 				return e

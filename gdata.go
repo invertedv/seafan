@@ -1,14 +1,17 @@
 package seafan
 
+import (
+	"fmt"
+	"strings"
+)
+
+// TODO: Shuffle method
 // gdata.go implements structures and methods to produce gorgonia-ready data
 
 import (
-	"fmt"
+	"gonum.org/v1/gonum/stat"
 	"reflect"
 	"strconv"
-	"strings"
-
-	"gonum.org/v1/gonum/stat"
 )
 
 type GDatum struct {

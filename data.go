@@ -395,6 +395,16 @@ func pad(maxLen, thisLen int) string {
 	return sp
 }
 
+// FindValue returns key that maps to val
+func (l Levels) FindValue(val int32) any {
+	for k, v := range l {
+		if v == val {
+			return k
+		}
+	}
+	return nil
+}
+
 // Sort sorts Levels, returns sorted map as Key, Value slices
 func (l Levels) Sort(byName, ascend bool) ([]any, []int32) {
 	key := make([]any, len(l))

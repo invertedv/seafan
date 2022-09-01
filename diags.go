@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"gonum.org/v1/gonum/stat"
@@ -397,4 +398,167 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 
 	obs.Populate(xy.Y, true, nil)
 	return n, precision, recall, accuracy, obs, fit, err
+}
+
+func Marginal(nnFile string, feat string, pipe Pipeline) error {
+	const take = 1000
+
+	var e error
+
+	name := feat
+	lay := &grob.Layout{}
+	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: 4, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
+	fig := &grob.Fig{}
+
+	WithBatchSize(pipe.Rows())(pipe)
+
+	nn1, e := PredictNN(nnFile, pipe, false)
+	if e != nil {
+		panic(e)
+	}
+
+	nCat := nn1.Obs().Nodes()[0].Shape()[1]
+	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, []int{4, 5, 6, 7, 8, 9, 10, 11, 12}, false, nil)
+	if e != nil {
+		return Wrapper(e, "Margianl")
+	}
+
+	gData := pipe.GData()
+	f120R := NewRawCast(xy.X, nil)
+	gData, e = gData.AppendC(f120R, "d120", false, nil)
+	if e != nil {
+		return Wrapper(e, "Marginal")
+	}
+
+	pipeFit := NewVecData("with d120", gData)
+
+	WithBatchSize(pipeFit.Rows())(pipeFit)
+
+	fts := nn1.InputFT()
+	targFt := fts.Get(feat)
+	if targFt == nil {
+		return Wrapper(ErrDiags, fmt.Sprintf("Marginal: feature %s not in model", feat))
+	}
+
+	slice, e := NewSlice("d120", 0, pipeFit, nil)
+	if e != nil {
+		return Wrapper(e, "Marginal")
+	}
+
+	sliceCur, e := NewSlice("ao_dq_upto_12", 0, pipeFit, []any{"0"})
+	if e != nil {
+		return Wrapper(e, fmt.Sprintf("Marginal: feature %s not in pipeline", feat))
+	}
+
+	sliceCur.Iter()
+
+	sl0 := sliceCur.MakeSlicer()
+	traces := make(grob.Traces, 0)
+	plotNo := 8
+
+	for slice.Iter() {
+		sl := slice.MakeSlicer()
+		both := SlicerAnd(sl, sl0)
+		newPipe, e := pipeFit.Slice(both)
+		if e != nil {
+			return Wrapper(e, "Marginal")
+		}
+
+		n := Min(newPipe.Rows(), take)
+
+		WithBatchSize(n)(newPipe)
+		WithBatchSize(newPipe.Rows())(newPipe)
+
+		xs1 := make([]string, n)
+		gd := newPipe.Get(feat)
+		xAxis, yAxis := fmt.Sprintf("x%d", plotNo), fmt.Sprintf("y%d", plotNo)
+
+		switch gd.FT.Role {
+		case FRCts:
+			x := make([]float64, n)
+
+			for ind := 0; ind < n; ind++ {
+				x[ind] = gd.Data.([]float64)[ind]*gd.FT.FP.Scale + gd.FT.FP.Location
+			}
+
+			tr := &grob.Histogram{Xaxis: xAxis, Yaxis: yAxis, X: x, Type: grob.TraceTypeHistogram}
+
+			fig.AddTraces(tr)
+
+			qs := gd.Summary.DistrC.Q
+			dp := (qs[6] - qs[0]) / 5
+			nper := n / 4
+			data := gd.Data
+
+			for row := 0; row < n; row++ {
+				grp := 1 + Min(row/nper, 3)
+				xx := qs[0] + dp*float64(grp)
+				data.([]float64)[row] = xx
+				xs1[row] = fmt.Sprintf("%0.2f", xx*gd.FT.FP.Scale+gd.FT.FP.Location)
+			}
+		case FROneHot, FREmbed:
+			gdFrom := newPipe.Get(gd.FT.From)
+			name = gd.FT.From
+			key, _ := gdFrom.FT.FP.Lvl.Sort(false, true)
+			keyStr := make([]string, len(key))
+
+			for ind := 0; ind < len(key); ind++ {
+				keyStr[ind] = fmt.Sprintf("%v", key[ind])
+			}
+
+			x := make([]string, n)
+
+			for ind := 0; ind < n; ind++ {
+				x[ind] = keyStr[gdFrom.Data.([]int32)[ind]]
+			}
+
+			sort.Strings(x)
+
+			tr := &grob.Histogram{Xaxis: xAxis, Yaxis: yAxis, X: x, Type: grob.TraceTypeHistogram}
+
+			fig.AddTraces(tr)
+
+			cats := gd.FT.Cats
+			nper := n / cats
+			data := gd.Data
+
+			for row := 0; row < n; row++ {
+				grp := Min(row/nper, cats-1)
+
+				for c := 0; c < cats; c++ {
+					data.([]float64)[row*cats+c] = 0.0
+				}
+
+				data.([]float64)[row*cats+grp] = 1.0
+				xs1[row] = keyStr[grp]
+			}
+		}
+
+		nn2, e := PredictNN(nnFile, newPipe, false)
+		if e != nil {
+			return Wrapper(e, "Marginal")
+		}
+
+		xy, e = Coalesce(nn2.ObsSlice(), nn2.FitSlice(), nCat, []int{4, 5, 6, 7, 8, 9, 10, 11, 12}, false, nil)
+		if e != nil {
+			return Wrapper(e, "Marginal")
+		}
+
+		xAxis, yAxis = fmt.Sprintf("x%d", plotNo-4), fmt.Sprintf("y%d", plotNo-4)
+		plotNo--
+		tr := &grob.Box{X: xs1, Y: xy.X, Type: grob.TraceTypeBox, Xaxis: xAxis, Yaxis: yAxis}
+
+		fig.AddTraces(tr)
+
+		traces = append(traces, tr)
+	}
+	title := "Marginal Effect of <field><br>By Quartile of Fitted Value (Low to High)"
+
+	title = strings.Replace(title, "<field>", name, 1)
+
+	if e := Plotter(fig, lay, &PlotDef{Show: true, Height: 1200, Width: 1200, Title: title, Legend: false, FileName: "/home/will/tmp/plotly.html"}); e != nil {
+		return Wrapper(e, "Marginal")
+	}
+
+	return nil
 }
