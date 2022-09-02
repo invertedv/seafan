@@ -35,7 +35,7 @@ func NewSlice(feat string, minCnt int, pipe Pipeline, restrict []any) (*Slice, e
 		return nil, Wrapper(ErrDiags, fmt.Sprintf("NewSlice: cannot slice type %v", d.FT.Role))
 	}
 
-	s := &Slice{feat: feat, minCnt: minCnt, pipe: pipe, index: -1, val: nil, data: d, restrict: restrict} //nolint:exhaustivestruct
+	s := &Slice{feat: feat, minCnt: minCnt, pipe: pipe, index: -1, val: nil, data: d, restrict: restrict}
 
 	return s, nil
 }

@@ -24,6 +24,7 @@ type Pipeline interface {
 	GData() GData                      // return underlying GData
 	Get(field string) *GDatum          // return data for field
 	Slice(sl Slicer) (Pipeline, error) // slice the pipeline
+	Shuffle()                          // shuffle data
 }
 
 // Opts function sets an option to a Pipeline

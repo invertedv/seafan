@@ -366,3 +366,7 @@ func (ch *ChData) Slice(sl Slicer) (Pipeline, error) {
 
 	return vecData, nil
 }
+
+func (ch *ChData) Shuffle() {
+	ch.data.Shuffle()
+}

@@ -245,3 +245,7 @@ func (vec *VecData) String() string {
 
 	return str
 }
+
+func (vec *VecData) Shuffle() {
+	vec.data.Shuffle()
+}

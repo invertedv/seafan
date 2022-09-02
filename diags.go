@@ -400,20 +400,9 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 	return n, precision, recall, accuracy, obs, fit, err
 }
 
-// TODO: add general condition ..remove ao_dq_upto_12
-func Marginal(nnFile string, feat string, target []int, pipe Pipeline) error {
-	const take = 1000
-	var e error
-
-	name := feat
-	lay := &grob.Layout{}
-	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: 4, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
-	fig := &grob.Fig{}
-
-	WithBatchSize(pipe.Rows())(pipe)
-
-	// Create a Pipeline that has the fitted values as a field
-	nn1, e := PredictNN(nnFile, pipe, false)
+// AddFitted creates a new Pipeline that adds a NNModel fitted value
+func AddFitted(pipeIn Pipeline, nnFile string, target []int) (Pipeline, error) {
+	nn1, e := PredictNN(nnFile, pipeIn, false)
 	if e != nil {
 		panic(e)
 	}
@@ -421,57 +410,85 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline) error {
 	nCat := nn1.Obs().Nodes()[0].Shape()[1]
 	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 	if e != nil {
-		return Wrapper(e, "Marginal")
+		return nil, Wrapper(e, "Marginal")
 	}
 
-	gData := pipe.GData()
+	gData := pipeIn.GData()
 	f120R := NewRawCast(xy.X, nil)
-	gData, e = gData.AppendC(f120R, "d120", false, nil)
+	gData, e = gData.AppendC(f120R, "fitted", false, nil)
+	if e != nil {
+		return nil, Wrapper(e, "AddFit")
+	}
+
+	return NewVecData("with fitted", gData), nil
+
+}
+
+// Marginal produces a set of plots to aid in understanding the effect of a feature.
+// The plot takes the model output and creates four segments based on the quartiles of the model output.
+// For each segment, the feature being analyzed various across its range within the quartile (continuous)
+// its values (discrete).
+// The bottom row shows the distribution of the feature within the quartile range.
+func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict *Slice) error {
+	const take = 1000 // # of obs to use for graph
+	var e error
+
+	name := feat
+	lay := &grob.Layout{}
+	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: 4, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
+	fig := &grob.Fig{}
+
+	bSize := pipe.BatchSize()
+	defer WithBatchSize(bSize)(pipe)
+
+	WithBatchSize(pipe.Rows())(pipe)
+
+	pipeFit, e := AddFitted(pipe, nnFile, target)
 	if e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
-	pipeFit := NewVecData("with d120", gData)
+	// load up restriction
+	if restrict != nil {
+		restrict.Iter()
+		sl0 := restrict.MakeSlicer() // to slice through the values of feat
+		pipeFit, e = pipeFit.Slice(sl0)
+		if e != nil {
+			return Wrapper(e, "Marginal")
+		}
+	}
 
 	WithBatchSize(pipeFit.Rows())(pipeFit)
 
-	fts := nn1.InputFT()
-	targFt := fts.Get(feat)
+	targFt := pipeFit.Get(feat) // feature we're working on
 	if targFt == nil {
 		return Wrapper(ErrDiags, fmt.Sprintf("Marginal: feature %s not in model", feat))
 	}
 
-	slice, e := NewSlice("d120", 0, pipeFit, nil)
+	slice, e := NewSlice("fitted", 0, pipeFit, nil)
 	if e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
-	sliceCur, e := NewSlice("ao_dq_upto_12", 0, pipeFit, []any{"0"})
-	if e != nil {
-		return Wrapper(e, fmt.Sprintf("Marginal: feature %s not in pipeline", feat))
-	}
-
-	sliceCur.Iter()
-
-	sl0 := sliceCur.MakeSlicer()
 	traces := make(grob.Traces, 0)
 	plotNo := 8 // used as a basis to know which plot we're working on
 
 	for slice.Iter() {
 		sl := slice.MakeSlicer()
-		both := SlicerAnd(sl, sl0)
-		newPipe, e := pipeFit.Slice(both)
+		newPipe, e := pipeFit.Slice(sl)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
 
+		newPipe.Shuffle()
+
 		n := Min(newPipe.Rows(), take)
 
 		WithBatchSize(n)(newPipe)
-		WithBatchSize(newPipe.Rows())(newPipe)
 
 		xs1 := make([]string, n)
 		gd := newPipe.Get(feat)
+		// sets the plot to work on:
 		xAxis, yAxis := fmt.Sprintf("x%d", plotNo), fmt.Sprintf("y%d", plotNo)
 
 		switch gd.FT.Role {
@@ -536,12 +553,13 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline) error {
 		}
 
 		// predict on data we just created
-		nn1, e = PredictNN(nnFile, newPipe, false)
+		nn1, e := PredictNN(nnFile, newPipe, false)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
 
-		xy, e = Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
+		nCat := nn1.Obs().Nodes()[0].Shape()[1]
+		xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
@@ -554,9 +572,13 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline) error {
 
 		traces = append(traces, tr)
 	}
-	title := "Marginal Effect of <field><br>By Quartile of Fitted Value (Low to High)"
 
+	title := "Marginal Effect of <field><br>By Quartile of Fitted Value (Low to High)"
 	title = strings.Replace(title, "<field>", name, 1)
+
+	if restrict != nil {
+		title = fmt.Sprintf("%s<br>Restricted to: %s", title, restrict.Title())
+	}
 
 	if e := Plotter(fig, lay, &PlotDef{Show: true, Height: 1200, Width: 1200, Title: title, Legend: false, FileName: "/home/will/tmp/plotly.html"}); e != nil {
 		return Wrapper(e, "Marginal")

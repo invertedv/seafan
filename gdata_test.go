@@ -1,6 +1,8 @@
 package seafan
 
 import (
+	"math"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,5 +106,46 @@ func TestGData_Slice(t *testing.T) {
 		dx2Oh := sliced.Get("x2Oh").Data.([]float64)
 		assert.ElementsMatch(t, x2OhExp[ind], dx2Oh[0:3])
 		ind++
+	}
+}
+
+func TestGData_Shuffle(t *testing.T) {
+	rand.Seed(494949)
+	gd := make(GData, 0)
+	x0 := make([]any, 0)
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(ind))
+	}
+
+	gd, e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	assert.Nil(t, e)
+
+	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
+	exp := []int32{0, 1, 2, 0, 1, 2, 0, 2, 2, 2}
+	gd, e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	assert.Nil(t, e)
+	gd, e = gd.MakeOneHot("Field1", "Field2")
+	assert.Nil(t, e)
+	gd.Shuffle()
+
+	d0 := gd.Get("Field0")
+	assert.NotNil(t, d0)
+
+	d1 := gd.Get("Field1")
+	assert.NotNil(t, d1)
+
+	d2 := gd.Get("Field2")
+	assert.NotNil(t, d2)
+
+	d0a := d0.Data.([]float64)
+	d1a := d1.Data.([]int32)
+	d2a := d2.Data.([]float64)
+	// check that all fields moved together
+	for ind := 0; ind < len(d0a); ind++ {
+		indx := int32(d0a[ind])
+		assert.Equal(t, exp[indx], d1a[ind])
+		ohind := ind*3 + int(d1a[ind])
+		assert.Condition(t, func() bool { return math.Abs(d2a[ohind]-1) < 0.0001 })
 	}
 }

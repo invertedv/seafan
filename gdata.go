@@ -2,10 +2,12 @@ package seafan
 
 import (
 	"fmt"
+	"math/rand"
+	"sort"
 	"strings"
+	"time"
 )
 
-// TODO: Shuffle method
 // gdata.go implements structures and methods to produce gorgonia-ready data
 
 import (
@@ -268,13 +270,13 @@ func (gd GData) Slice(sl Slicer) (GData, error) {
 		switch role := ft.Role; role {
 		// These are all float64, but FROneHot and FREmbed are matrices
 		case FRCts, FROneHot, FREmbed:
-			cats := 1
-			if role == FROneHot || role == FREmbed {
-				cats = ft.Cats
-			}
+			cats := Max(1, ft.Cats)
+
 			d := make([]float64, 0)
+			n := 0
 			for row := 0; row < g.Summary.NRows; row++ {
 				if sl(row) {
+					n++
 					for r := 0; r < cats; r++ {
 						d = append(d, g.Data.([]float64)[row*cats+r])
 					}
@@ -304,7 +306,7 @@ func (gd GData) Slice(sl Slicer) (GData, error) {
 			desc.Populate(d, true, nil)
 
 			summ := Summary{
-				NRows:  len(d),
+				NRows:  n,
 				DistrC: desc,
 				DistrD: nil,
 			}
@@ -365,4 +367,40 @@ func (gd GData) Slice(sl Slicer) (GData, error) {
 	}
 
 	return gOut, nil
+}
+
+func (g GData) Swap(i, j int) {
+	for ind := 0; ind < len(g); ind++ {
+		switch g[ind].FT.Role {
+		case FRCts:
+			g[ind].Data.([]float64)[i], g[ind].Data.([]float64)[j] = g[ind].Data.([]float64)[j], g[ind].Data.([]float64)[i]
+		case FRCat:
+			g[ind].Data.([]int32)[i], g[ind].Data.([]int32)[j] = g[ind].Data.([]int32)[j], g[ind].Data.([]int32)[i]
+
+		case FROneHot, FREmbed:
+			cats := g[ind].FT.Cats
+			for c := 0; c < cats; c++ {
+				g[ind].Data.([]float64)[i*cats+c], g[ind].Data.([]float64)[j*cats+c] = g[ind].Data.([]float64)[j*cats+c], g[ind].Data.([]float64)[i*cats+c]
+			}
+		}
+	}
+}
+
+func (g GData) Len() int {
+	return g[0].Summary.NRows
+}
+
+func (g GData) Sort(field string) {
+	data, _ := g.Get(field).Data.([]float64)
+	less := func(i, j int) bool {
+		l := data[i] < data[j]
+		return l
+	}
+	type gd GDatum
+	sort.Slice(g, less)
+}
+
+func (g GData) Shuffle() {
+	rand.Seed(time.Now().UnixMicro())
+	rand.Shuffle(g.Len(), g.Swap)
 }
