@@ -7,22 +7,22 @@ import (
 	G "gorgonia.org/gorgonia"
 )
 
-func getData(t *testing.T) GData {
+func getData(t *testing.T) *GData {
 	x1 := []float64{1, 2, 3, 4, 8, 9, 10}
 	x2 := []string{"a", "b", "c", "a", "a", "a", "a"}
 	x3 := []int32{4, 5, 6, 1, 2, 2, 2}
 
-	gData := make(GData, 0)
-	gData, e := gData.AppendC(NewRawCast(x1, nil), "x1", false, nil)
+	gData := NewGData()
+	e := gData.AppendC(NewRawCast(x1, nil), "x1", false, nil)
 	assert.Nil(t, e)
 
-	gData, e = gData.AppendD(NewRawCast(x2, nil), "x2", nil)
+	e = gData.AppendD(NewRawCast(x2, nil), "x2", nil)
 	assert.Nil(t, e)
 
-	gData, e = gData.AppendD(NewRawCast(x3, nil), "x3", nil)
+	e = gData.AppendD(NewRawCast(x3, nil), "x3", nil)
 	assert.Nil(t, e)
 
-	gData, e = gData.MakeOneHot("x2", "x2Oh")
+	e = gData.MakeOneHot("x2", "x2Oh")
 
 	return gData
 }
@@ -83,5 +83,4 @@ func TestSliceVecData(t *testing.T) {
 
 		ind++
 	}
-
 }

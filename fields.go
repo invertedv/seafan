@@ -24,6 +24,24 @@ type FType struct {
 
 type FTypes []*FType
 
+// DropFields will drop fields from the FTypes
+func (fts FTypes) DropFields(dropFields []string) FTypes {
+	ftOut := make(FTypes, 0)
+	for _, ft := range fts {
+		keep := true
+		for _, nm := range dropFields {
+			if ft.Name == nm {
+				keep = false
+				break
+			}
+			if keep {
+				ftOut = append(ftOut, ft)
+			}
+		}
+	}
+	return ftOut
+}
+
 // FParam -- field parameters -- is summary data about a field. These values may not be derived from the current
 // data but are applied to the current data.
 type FParam struct {

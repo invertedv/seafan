@@ -582,6 +582,7 @@ type Fit struct {
 	wait      int
 	bestEpoch int
 	l2Penalty float64
+	shuffle   int
 }
 
 // FitOpts functions add options
@@ -600,6 +601,7 @@ func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 		p:       p,
 		outFile: outFile,
 		tmpFile: tmpFile,
+		shuffle: 0,
 	}
 
 	for _, o := range opts {
@@ -613,6 +615,16 @@ func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 func WithL2Reg(penalty float64) FitOpts {
 	f := func(ft *Fit) {
 		ft.l2Penalty = penalty
+	}
+
+	return f
+}
+
+// WithShuffle shuffles after interval epochs
+// Default is 0 (don't shuffle ever)
+func WithShuffle(interval int) FitOpts {
+	f := func(ft *Fit) {
+		ft.shuffle = interval
 	}
 
 	return f
@@ -695,6 +707,9 @@ func (ft *Fit) Do() (err error) {
 	cVal := make([]float64, 0)
 
 	for ep := 1; ep <= ft.epochs; ep++ {
+		if ft.shuffle > 0 && ep%ft.shuffle == 0 {
+			ft.p.Shuffle()
+		}
 		// check for user specified learning rate
 		if ft.lrStart > 0.0 {
 			lr := ft.lrEnd + (ft.lrStart-ft.lrEnd)*(1.0-float64(ep)/float64(ft.epochs))

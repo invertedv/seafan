@@ -22,7 +22,18 @@ type GDatum struct {
 	Data    any     // Data. This will be either []float64 (FRCts, FROneHot, FREmbed) or []int32 (FRCat)
 }
 
-type GData []*GDatum
+type GData struct {
+	data          []*GDatum
+	rows          int
+	sortField     string
+	sortData      *GDatum
+	sortAscending bool
+}
+
+func NewGData() *GData {
+	data := make([]*GDatum, 0)
+	return &GData{data: data, rows: 0}
+}
 
 // Describe returns summary statistics. topK is # of values to return for discrete fields
 func (g *GDatum) Describe(topK int) string {
@@ -44,32 +55,26 @@ func (g *GDatum) String() string {
 }
 
 // check performs a sanity check on GData
-func (gd GData) check(name string) error {
+func (gd *GData) check(name string) error {
 	if name != "" {
 		if gd.Get(name) != nil {
 			return Wrapper(ErrGData, fmt.Sprintf("%s exists already", name))
 		}
 	}
 
-	n := 0
-
-	for _, d := range gd {
-		if d.Summary.NRows != n && n > 0 {
+	for _, d := range gd.data {
+		if d.Summary.NRows != gd.rows {
 			return Wrapper(ErrGData, "differing number of rows")
 		}
-
-		n = d.Summary.NRows
 	}
 
 	return nil
 }
 
 // AppendC appends a continuous feature
-//
-//goland:noinspection GoLinter,GoLinter,GoLinter,GoLinter,GoLinter,GoLinter
-func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GData, error) {
+func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) error {
 	if e := gd.check(name); e != nil {
-		return nil, e
+		return e
 	}
 
 	x := make([]float64, len(raw.Data))
@@ -89,12 +94,12 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 		case reflect.String:
 			xx, e := strconv.ParseFloat(raw.Data[ind].(string), 64)
 			if e != nil {
-				return nil, e
+				return e
 			}
 
 			x[ind] = xx
 		default:
-			return nil, Wrapper(ErrGData, fmt.Sprintf("AppendC: cannot convert this type %T", x[0]))
+			return Wrapper(ErrGData, fmt.Sprintf("AppendC: cannot convert this type %T", x[0]))
 		}
 	}
 
@@ -109,7 +114,7 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 	}
 
 	if ls.Scale < 1e-8 {
-		return nil, Wrapper(ErrGData, fmt.Sprintf("AppendC: %s cannot be normalized--0 variance", name))
+		return Wrapper(ErrGData, fmt.Sprintf("AppendC: %s cannot be normalized--0 variance", name))
 	}
 
 	if normalize {
@@ -140,19 +145,20 @@ func (gd GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) (GDat
 		FT:      ft,
 		Summary: summ,
 	}
-	gdOut := append(gd, c)
+	gd.data = append(gd.data, c)
+	gd.rows = len(c.Data.([]float64))
 
-	if e := gdOut.check(""); e != nil {
-		return nil, e
+	if e := gd.check(""); e != nil {
+		return e
 	}
 
-	return gdOut, nil
+	return nil
 }
 
 // AppendD appends a discrete feature
-func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
+func (gd *GData) AppendD(raw *Raw, name string, fp *FParam) error {
 	if e := gd.check(name); e != nil {
-		return nil, e
+		return e
 	}
 
 	if fp == nil {
@@ -169,7 +175,7 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		if !ok {
 			val, ok = fp.Lvl[fp.Default]
 			if !ok {
-				return nil, Wrapper(ErrGData, fmt.Sprintf("AppendD: default value %v not in dictionary", fp.Default))
+				return Wrapper(ErrGData, fmt.Sprintf("AppendD: default value %v not in dictionary", fp.Default))
 			}
 		}
 
@@ -192,29 +198,30 @@ func (gd GData) AppendD(raw *Raw, name string, fp *FParam) (GData, error) {
 		DistrD: distr,
 	}
 	d := &GDatum{Data: ds, FT: ft, Summary: summ}
-	gdOut := append(gd, d)
+	gd.data = append(gd.data, d)
+	gd.rows = len(d.Data.([]int32))
 
-	if e := gdOut.check(""); e != nil {
-		return nil, e
+	if e := gd.check(""); e != nil {
+		return e
 	}
 
-	return gdOut, nil
+	return nil
 }
 
 // MakeOneHot creates & appends a one hot feature from a discrete feature
-func (gd GData) MakeOneHot(from, name string) (GData, error) {
+func (gd *GData) MakeOneHot(from, name string) error {
 	if e := gd.check(name); e != nil {
-		return nil, e
+		return e
 	}
 
 	d := gd.Get(from)
 
 	if d == nil {
-		return nil, Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: 'from' feature %s not found", from))
+		return Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: 'from' feature %s not found", from))
 	}
 
 	if d.FT.Role != FRCat {
-		return nil, Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: input %s is not discrete", from))
+		return Wrapper(ErrGData, fmt.Sprintf("MakeOneHot: input %s is not discrete", from))
 	}
 
 	nRow := d.Summary.NRows
@@ -236,18 +243,34 @@ func (gd GData) MakeOneHot(from, name string) (GData, error) {
 		FP:         nil,
 	}
 	oH := &GDatum{Data: oh, FT: ft, Summary: summ}
-	gdOut := append(gd, oH)
+	gd.data = append(gd.data, oH)
 
-	if e := gdOut.check(""); e != nil {
-		return nil, e
+	if e := gd.check(""); e != nil {
+		return e
 	}
 
-	return gdOut, nil
+	return nil
+}
+
+func (gd *GData) Rows() int {
+	return gd.rows
+}
+
+func (gd *GData) FieldCount() int {
+	return len(gd.data)
+}
+
+func (gd *GData) FieldList() []string {
+	fl := make([]string, 0)
+	for _, field := range gd.data {
+		fl = append(fl, field.FT.Name)
+	}
+	return fl
 }
 
 // Get returns a single feature from GData
-func (gd GData) Get(name string) *GDatum {
-	for _, g := range gd {
+func (gd *GData) Get(name string) *GDatum {
+	for _, g := range gd.data {
 		if g.FT.Name == name {
 			return g
 		}
@@ -257,15 +280,15 @@ func (gd GData) Get(name string) *GDatum {
 }
 
 // Slice creates a new GData sliced according to sl
-func (gd GData) Slice(sl Slicer) (GData, error) {
+func (gd *GData) Slice(sl Slicer) (*GData, error) {
 
 	if sl == nil {
 		return gd, nil
 	}
 
-	gOut := make(GData, 0)
+	gOut := NewGData()
 
-	for _, g := range gd {
+	for _, g := range gd.data {
 		ft := g.FT
 		switch role := ft.Role; role {
 		// These are all float64, but FROneHot and FREmbed are matrices
@@ -315,7 +338,8 @@ func (gd GData) Slice(sl Slicer) (GData, error) {
 				Summary: summ,
 				Data:    d,
 			}
-			gOut = append(gOut, datum)
+			gOut.data = append(gOut.data, datum)
+			gOut.rows = n
 
 		case FRCat:
 			d := make([]int32, 0)
@@ -362,45 +386,94 @@ func (gd GData) Slice(sl Slicer) (GData, error) {
 				Summary: summ,
 				Data:    d,
 			}
-			gOut = append(gOut, datum)
+			gOut.rows = len(d)
+			gOut.data = append(gOut.data, datum)
 		}
 	}
-
+	if e := gOut.check(""); e != nil {
+		return nil, Wrapper(e, "(*Gdata) Slice")
+	}
 	return gOut, nil
 }
 
-func (g GData) Swap(i, j int) {
-	for ind := 0; ind < len(g); ind++ {
-		switch g[ind].FT.Role {
+func (gd *GData) Swap(i, j int) {
+	for ind := 0; ind < len(gd.data); ind++ {
+		switch gd.data[ind].FT.Role {
 		case FRCts:
-			g[ind].Data.([]float64)[i], g[ind].Data.([]float64)[j] = g[ind].Data.([]float64)[j], g[ind].Data.([]float64)[i]
+			gd.data[ind].Data.([]float64)[i], gd.data[ind].Data.([]float64)[j] = gd.data[ind].Data.([]float64)[j], gd.data[ind].Data.([]float64)[i]
 		case FRCat:
-			g[ind].Data.([]int32)[i], g[ind].Data.([]int32)[j] = g[ind].Data.([]int32)[j], g[ind].Data.([]int32)[i]
+			gd.data[ind].Data.([]int32)[i], gd.data[ind].Data.([]int32)[j] = gd.data[ind].Data.([]int32)[j], gd.data[ind].Data.([]int32)[i]
 
 		case FROneHot, FREmbed:
-			cats := g[ind].FT.Cats
+			cats := gd.data[ind].FT.Cats
 			for c := 0; c < cats; c++ {
-				g[ind].Data.([]float64)[i*cats+c], g[ind].Data.([]float64)[j*cats+c] = g[ind].Data.([]float64)[j*cats+c], g[ind].Data.([]float64)[i*cats+c]
+				gd.data[ind].Data.([]float64)[i*cats+c], gd.data[ind].Data.([]float64)[j*cats+c] =
+					gd.data[ind].Data.([]float64)[j*cats+c], gd.data[ind].Data.([]float64)[i*cats+c]
 			}
 		}
 	}
 }
 
-func (g GData) Len() int {
-	return g[0].Summary.NRows
+func (gd *GData) Len() int {
+	return gd.rows
 }
 
-func (g GData) Sort(field string) {
-	data, _ := g.Get(field).Data.([]float64)
-	less := func(i, j int) bool {
-		l := data[i] < data[j]
-		return l
+func (gd *GData) Less(i, j int) bool {
+	switch gd.sortData.FT.Role {
+	case FRCts:
+		if gd.sortAscending {
+			return gd.sortData.Data.([]float64)[i] < gd.sortData.Data.([]float64)[j]
+		}
+		return gd.sortData.Data.([]float64)[i] > gd.sortData.Data.([]float64)[j]
+	case FRCat:
+		if gd.sortAscending {
+			return gd.sortData.Data.([]int32)[i] < gd.sortData.Data.([]int32)[j]
+		}
+		return gd.sortData.Data.([]int32)[i] > gd.sortData.Data.([]int32)[j]
 	}
-	type gd GDatum
-	sort.Slice(g, less)
+
+	return false
 }
 
-func (g GData) Shuffle() {
+// Sort sorts the GData on field.  Calling Sort.Sort directly will cause a panic.
+func (gd *GData) Sort(field string, ascending bool) error {
+	defer func() { gd.sortData = nil }()
+
+	gd.sortField = ""
+	gd.sortAscending = ascending
+	gDatum := gd.Get(field)
+	if gDatum == nil {
+		return Wrapper(ErrGData, fmt.Sprintf("(*GData) Sort: no such field %s", field))
+	}
+
+	// Sort on "From" field instead
+	if gDatum.FT.Role == FROneHot || gDatum.FT.Role == FREmbed {
+		if e := gd.Sort(gDatum.FT.From, ascending); e != nil {
+			return e
+		}
+		gd.sortField = field
+		return nil
+	}
+
+	gd.sortData = gDatum
+	sort.Sort(gd)
+	gd.sortField = field
+	return nil
+}
+
+// IsSorted returns true if GData has been sorted by SortField
+func (gd *GData) IsSorted() bool {
+	return gd.sortField != ""
+}
+
+// SortField returns the field the GData is sorted on
+func (gd *GData) SortField() string {
+	return gd.sortField
+}
+
+// Shuffle shuffles the GData fields as a unit
+func (gd *GData) Shuffle() {
+	gd.sortField = ""
 	rand.Seed(time.Now().UnixMicro())
-	rand.Shuffle(g.Len(), g.Swap)
+	rand.Shuffle(gd.Len(), gd.Swap)
 }

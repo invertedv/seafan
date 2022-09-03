@@ -11,28 +11,28 @@ import (
 func TestGData_AppendC(t *testing.T) {
 	var e error
 
-	gd := make(GData, 0)
+	gd := NewGData()
 	x0 := make([]any, 0)
 
 	for ind := 0; ind < 10; ind++ {
 		x0 = append(x0, float64(ind))
 	}
 
-	gd, e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
 	assert.Nil(t, e)
 
 	xt := []any{"a", "b", "c"}
-	_, e = gd.AppendD(NewRaw(xt, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(xt, nil), "Field1", nil)
 
 	assert.NotNil(t, e)
 
-	gd = make(GData, 0)
-	gd, e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	gd = NewGData()
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
 
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	gd, e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
 
 	assert.Nil(t, e)
 
@@ -53,7 +53,7 @@ func TestGData_AppendC(t *testing.T) {
 		Default:  nil,
 		Lvl:      nil,
 	}
-	gd, e = gd.AppendC(NewRaw(x0, nil), "Field2", true, fp)
+	e = gd.AppendC(NewRaw(x0, nil), "Field2", true, fp)
 
 	assert.Nil(t, e)
 
@@ -74,7 +74,7 @@ func TestGData_AppendC(t *testing.T) {
 		Lvl:      lvl,
 	}
 	x3 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "r"}
-	gd, e = gd.AppendD(NewRaw(x3, nil), "Field3", fp)
+	e = gd.AppendD(NewRaw(x3, nil), "Field3", fp)
 
 	assert.Nil(t, e)
 
@@ -111,21 +111,21 @@ func TestGData_Slice(t *testing.T) {
 
 func TestGData_Shuffle(t *testing.T) {
 	rand.Seed(494949)
-	gd := make(GData, 0)
+	gd := NewGData()
 	x0 := make([]any, 0)
 
 	for ind := 0; ind < 10; ind++ {
 		x0 = append(x0, float64(ind))
 	}
 
-	gd, e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
 	exp := []int32{0, 1, 2, 0, 1, 2, 0, 2, 2, 2}
-	gd, e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
 	assert.Nil(t, e)
-	gd, e = gd.MakeOneHot("Field1", "Field2")
+	e = gd.MakeOneHot("Field1", "Field2")
 	assert.Nil(t, e)
 	gd.Shuffle()
 
@@ -148,4 +148,44 @@ func TestGData_Shuffle(t *testing.T) {
 		ohind := ind*3 + int(d1a[ind])
 		assert.Condition(t, func() bool { return math.Abs(d2a[ohind]-1) < 0.0001 })
 	}
+}
+
+func TestGData_Sort(t *testing.T) {
+	gd := NewGData()
+	x0 := make([]any, 0)
+	expX0 := make([]float64, 0)
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(9-ind))
+		expX0 = append(expX0, float64(ind))
+	}
+
+	e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	assert.Nil(t, e)
+
+	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	expX1 := []int32{0, 0, 0, 1, 1, 2, 2, 2, 2, 2}
+
+	assert.Nil(t, e)
+
+	e = gd.MakeOneHot("Field1", "Field2")
+
+	assert.Nil(t, e)
+
+	e = gd.Sort("Field1", true)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, expX1, gd.Get("Field1").Data.([]int32))
+
+	e = gd.Sort("Field0", true)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, expX0, gd.Get("Field0").Data.([]float64))
+
+	e = gd.Sort("Field2", true)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, expX1, gd.Get("Field1").Data.([]int32))
+
+	e = gd.Sort("Field0", false)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, x0, gd.Get("Field0").Data.([]float64))
 }

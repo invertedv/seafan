@@ -47,7 +47,7 @@ func (seaErr SeaError) Error() string {
 	case ErrPipe:
 		return "Pipeline error"
 	case ErrData:
-		return "Data error"
+		return "data error"
 	case ErrFields:
 		return "Fields error"
 	case ErrGData:

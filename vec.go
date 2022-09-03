@@ -10,19 +10,19 @@ type VecData struct {
 	bs         int    // batch size
 	cbRow      int    // current batch starting row
 	nRow       int    // # rows in dataset
-	data       GData  // processed data
+	data       *GData // processed data
 	epochCount int    // current epoch
 	ftypes     FTypes // user input selections
 	callback   Opts   // user callbacks executed at the start of Init()
 	name       string // pipeline name
 }
 
-func NewVecData(name string, data GData, opts ...Opts) *VecData {
+func NewVecData(name string, data *GData, opts ...Opts) *VecData {
 	vec := &VecData{bs: 1, data: data, name: name}
-	vec.nRow = vec.data[0].Summary.NRows
+	vec.nRow = vec.data.data[0].Summary.NRows
 
 	//	vec.ftypes = make(FTypes, 0)
-	for _, gd := range vec.data {
+	for _, gd := range vec.data.data {
 		vec.ftypes = append(vec.ftypes, gd.FT)
 	}
 	for _, o := range opts {
@@ -49,7 +49,7 @@ func (vec *VecData) Init() error {
 }
 
 func (vec *VecData) Batch(inputs G.Nodes) bool {
-	// out of Data?  if NRows % bsize !=0, rows after the last full batvec are unused.
+	// out of data?  if NRows % bsize !=0, rows after the last full batvec are unused.
 	if vec.cbRow+vec.bs > vec.nRow {
 		vec.cbRow = 0
 		// user callbacks
@@ -100,7 +100,7 @@ func (vec *VecData) Rows() int {
 // GetFTypes returns FTypes for vec Pipeline.
 func (vec *VecData) GetFTypes() FTypes {
 	fts := make(FTypes, 0)
-	for _, d := range vec.data {
+	for _, d := range vec.data.data {
 		fts = append(fts, d.FT)
 	}
 
@@ -151,7 +151,7 @@ func (vec *VecData) IsCat(field string) bool {
 }
 
 // GData returns the Pipelines' GData
-func (vec *VecData) GData() GData {
+func (vec *VecData) GData() *GData {
 	d := vec.data
 
 	return d
@@ -195,7 +195,7 @@ func (vec *VecData) Epoch(setTo int) int {
 // FieldList returns a slice of field names in the Pipeline
 func (vec *VecData) FieldList() []string {
 	fl := make([]string, 0)
-	for _, ft := range vec.data {
+	for _, ft := range vec.data.data {
 		fl = append(fl, ft.FT.Name)
 	}
 
@@ -248,4 +248,20 @@ func (vec *VecData) String() string {
 
 func (vec *VecData) Shuffle() {
 	vec.data.Shuffle()
+}
+
+func (vec *VecData) Sort(field string, ascending bool) error {
+	e := vec.data.Sort(field, ascending)
+	if e != nil {
+		return Wrapper(e, "(*ChData) Sort")
+	}
+	return nil
+}
+
+func (vec *VecData) IsSorted() bool {
+	return vec.data.IsSorted()
+}
+
+func (vec *VecData) SortField() string {
+	return vec.data.SortField()
 }

@@ -415,7 +415,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int) (Pipeline, error) {
 
 	gData := pipeIn.GData()
 	f120R := NewRawCast(xy.X, nil)
-	gData, e = gData.AppendC(f120R, "fitted", false, nil)
+	e = gData.AppendC(f120R, "fitted", false, nil)
 	if e != nil {
 		return nil, Wrapper(e, "AddFit")
 	}

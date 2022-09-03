@@ -7,7 +7,7 @@ import (
 	G "gorgonia.org/gorgonia"
 )
 
-// The Pipeline interface specifies the methods required to be a Data Pipeline. The Pipeline is the middleware between
+// The Pipeline interface specifies the methods required to be a data Pipeline. The Pipeline is the middleware between
 // the data and the fitting routines.
 type Pipeline interface {
 	Init() error                       // initialize the pipeline
@@ -21,7 +21,7 @@ type Pipeline interface {
 	GetFType(field string) *FType      // Get FType for the feature
 	BatchSize() int                    // batch size
 	FieldList() []string               // fields available
-	GData() GData                      // return underlying GData
+	GData() *GData                     // return underlying GData
 	Get(field string) *GDatum          // return data for field
 	Slice(sl Slicer) (Pipeline, error) // slice the pipeline
 	Shuffle()                          // shuffle data
@@ -45,7 +45,7 @@ func WithBatchSize(bsize int) Opts {
 }
 
 // WithCycle sets the cycle bool.  If false, the intent is for the Pipeline to generate a new
-// Data set is generated for each epoch.
+// data set is generated for each epoch.
 func WithCycle(cycle bool) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
@@ -76,6 +76,21 @@ func WithCats(names ...string) Opts {
 				}
 				d.ftypes = append(d.ftypes, ft)
 			}
+		case *VecData:
+			for _, nm := range names {
+				ft := d.ftypes.Get(nm)
+				if ft != nil {
+					ft.Role = FRCat
+
+					continue
+				}
+
+				ft = &FType{
+					Name: nm,
+					Role: FRCat,
+				}
+				d.ftypes = append(d.ftypes, ft)
+			}
 		}
 	}
 
@@ -86,6 +101,21 @@ func WithOneHot(name, from string) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
 		case *ChData:
+			ft := d.ftypes.Get(name)
+			if ft != nil {
+				ft.From = from
+				ft.Role = FROneHot
+
+				return
+			}
+
+			ft = &FType{
+				Name: name,
+				Role: FROneHot,
+				From: from,
+			}
+			d.ftypes = append(d.ftypes, ft)
+		case *VecData:
 			ft := d.ftypes.Get(name)
 			if ft != nil {
 				ft.From = from
@@ -127,6 +157,23 @@ func WithNormalized(names ...string) Opts {
 				}
 				d.ftypes = append(d.ftypes, ft)
 			}
+		case *VecData:
+			for _, nm := range names {
+				ft := d.ftypes.Get(nm)
+				if ft != nil {
+					ft.Role = FRCts
+					ft.Normalized = true
+
+					continue
+				}
+
+				ft = &FType{
+					Name:       nm,
+					Role:       FRCts,
+					Normalized: true,
+				}
+				d.ftypes = append(d.ftypes, ft)
+			}
 		}
 	}
 
@@ -139,6 +186,8 @@ func WithFtypes(fts FTypes) Opts {
 		switch d := c.(type) {
 		case *ChData:
 			d.ftypes = fts
+		case *VecData:
+			d.ftypes = fts
 		}
 	}
 
@@ -150,6 +199,8 @@ func WithCallBack(cb Opts) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
 		case *ChData:
+			d.callback = cb
+		case *VecData:
 			d.callback = cb
 		}
 	}

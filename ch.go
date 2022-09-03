@@ -22,7 +22,7 @@ type ChData struct {
 	cbRow      int           // current batch starting row
 	nRow       int           // # rows in dataset
 	rdr        chutils.Input // data reader
-	data       GData         // processed data
+	data       *GData        // processed data
 	epochCount int           // current epoch
 	ftypes     FTypes        // user input selections
 	callback   Opts          // user callbacks executed at the start of Init()
@@ -41,7 +41,7 @@ func NewChData(name string, opts ...Opts) *ChData {
 // GetFTypes returns FTypes for ch Pipeline.
 func (ch *ChData) GetFTypes() FTypes {
 	fts := make(FTypes, 0)
-	for _, d := range ch.data {
+	for _, d := range ch.data.data {
 		fts = append(fts, d.FT)
 	}
 
@@ -92,7 +92,7 @@ func (ch *ChData) IsCat(field string) bool {
 }
 
 // GData returns the Pipelines' GData
-func (ch *ChData) GData() GData {
+func (ch *ChData) GData() *GData {
 	d := ch.data
 
 	return d
@@ -151,12 +151,12 @@ func (ch *ChData) Init() (err error) {
 		}
 	}
 
-	gd := make(GData, 0)
+	gd := NewGData()
 
 	// work through fields, add to GData
 	for ind, nm := range names {
 		// if this isn't in our array, add it
-		ft := ch.getFType(nm)
+		ft := ch.getFType(nm) // note: this version gets user-inputs
 		if ft == nil {
 			ft = &FType{}
 
@@ -170,11 +170,11 @@ func (ch *ChData) Init() (err error) {
 
 		switch ft.Role {
 		case FRCts:
-			if gd, err = gd.AppendC(trans[ind], nm, ft.Normalized, ft.FP); err != nil {
+			if err = gd.AppendC(trans[ind], nm, ft.Normalized, ft.FP); err != nil {
 				return Wrapper(err, "(*ChData).Init")
 			}
 		default:
-			if gd, err = gd.AppendD(trans[ind], names[ind], ft.FP); err != nil {
+			if err = gd.AppendD(trans[ind], names[ind], ft.FP); err != nil {
 				return Wrapper(err, "(*ChData).Init")
 			}
 		}
@@ -183,11 +183,11 @@ func (ch *ChData) Init() (err error) {
 	for _, ft := range ch.ftypes {
 		switch ft.Role {
 		case FROneHot:
-			if gd, err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
+			if err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
 				return Wrapper(err, "(*ChData).Init")
 			}
 		case FREmbed:
-			if gd, err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
+			if err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
 				return Wrapper(err, "(*ChData).Init")
 			}
 		}
@@ -217,7 +217,7 @@ func (ch *ChData) Batch(inputs G.Nodes) bool {
 			panic(e)
 		}
 	}
-	// out of Data?  if NRows % bsize !=0, rows after the last full batch are unused.
+	// out of data?  if NRows % bsize !=0, rows after the last full batch are unused.
 	if ch.cbRow+ch.bs > ch.nRow {
 		if !ch.cycle {
 			ch.pull = true
@@ -303,7 +303,7 @@ func (ch *ChData) Epoch(setTo int) int {
 // FieldList returns a slice of field names in the Pipeline
 func (ch *ChData) FieldList() []string {
 	fl := make([]string, 0)
-	for _, ft := range ch.data {
+	for _, ft := range ch.data.data {
 		fl = append(fl, ft.FT.Name)
 	}
 
@@ -369,4 +369,20 @@ func (ch *ChData) Slice(sl Slicer) (Pipeline, error) {
 
 func (ch *ChData) Shuffle() {
 	ch.data.Shuffle()
+}
+
+func (ch *ChData) Sort(field string, ascending bool) error {
+	e := ch.data.Sort(field, ascending)
+	if e != nil {
+		return Wrapper(e, "(*ChData) Sort")
+	}
+	return nil
+}
+
+func (ch *ChData) IsSorted() bool {
+	return ch.data.IsSorted()
+}
+
+func (ch *ChData) SortField() string {
+	return ch.data.SortField()
 }
