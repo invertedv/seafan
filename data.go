@@ -341,7 +341,7 @@ func ByCounts(data *Raw, sl Slicer) Levels {
 	return l
 }
 
-// ByPtr returns a mapping of values of xs to []int32 for modeling.  The values of xs are sorted, so the
+// ByPtr returns a mapping of values of data to []int32 for modeling.  The values of data are sorted, so the
 // smallest will have a mapped value of 0.
 func ByPtr(data *Raw) Levels {
 	us := Unique(data.Data)
@@ -405,39 +405,39 @@ func (l Levels) FindValue(val int32) any {
 	return nil
 }
 
-// Sort sorts Levels, returns sorted map as Key, Value slices
-func (l Levels) Sort(byName, ascend bool) ([]any, []int32) {
-	key := make([]any, len(l))
-	val := make([]any, len(l))
+// Sort sorts Levels, returns sorted map as key, val slices
+func (l Levels) Sort(byName, ascend bool) (key []any, val []int32) {
+	inKey := make([]any, len(l))
+	inVal := make([]any, len(l))
 	ord := make([]int, len(l))
 	ind := 0
 
 	for kx, v := range l {
-		key[ind] = kx
-		val[ind] = v
+		inKey[ind] = kx
+		inVal[ind] = v
 		ord[ind] = ind
 		ind++
 	}
-	outK := make([]any, 0)
-	outV := make([]int32, 0)
+	key = make([]any, 0)
+	val = make([]int32, 0)
 	switch byName {
 	case true:
-		kvx := &kv{ord: ord, kv: key, ascend: ascend}
+		kvx := &kv{ord: ord, kv: inKey, ascend: ascend}
 		sort.Sort(kvx)
-		for indx := 0; indx < len(key); indx++ {
-			outK = append(outK, key[indx])
-			outV = append(outV, val[ord[indx]].(int32))
+		for indx := 0; indx < len(inKey); indx++ {
+			key = append(key, inKey[indx])
+			val = append(val, inVal[ord[indx]].(int32))
 		}
 
 	case false:
-		kvx := &kv{ord: ord, kv: val, ascend: ascend}
+		kvx := &kv{ord: ord, kv: inVal, ascend: ascend}
 		sort.Sort(kvx)
-		for indx := 0; indx < len(key); indx++ {
-			outK = append(outK, key[ord[indx]])
-			outV = append(outV, val[indx].(int32))
+		for indx := 0; indx < len(inKey); indx++ {
+			key = append(key, inKey[ord[indx]])
+			val = append(val, inVal[indx].(int32))
 		}
 	}
-	return outK, outV
+	return key, val
 }
 
 // TopK returns the top k values either by name or by counts, ascending or descending

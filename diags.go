@@ -23,8 +23,6 @@ const thresh = 0.5 // threshold for declaring y[i] to be a 1
 //	logodds   if true, fit is in log odds space
 //
 // An XY struct of the coalesced outcome (Y) & fitted values (X) is returned
-//
-//goland:noinspection GoLinter
 func Coalesce(y, fit []float64, nCat int, trg []int, logodds bool, sl Slicer) (*XY, error) {
 
 	if len(y) != len(fit) {
@@ -107,8 +105,6 @@ func Coalesce(y, fit []float64, nCat int, trg []int, logodds bool, sl Slicer) (*
 //	target     Desc struct of fitted values of target outcomes
 //
 // Target: html plot file and/or plot in browser.
-//
-//goland:noinspection GoLinter
 func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err error) {
 	const nPoints = 101 // # of points for ks plot
 	const divisor = float64(nPoints - 1)
@@ -197,7 +193,6 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 			Line: &grob.ScatterLine{Color: "red"},
 		}
 		fig := &grob.Fig{Data: grob.Traces{t0, t1}}
-		//goland:noinspection GoLinter
 		plt.Title = fmt.Sprintf("%s<br>KS %v at %v", plt.Title, math.Round(10.0*ks)/10.0, math.Round(1000*at)/1000)
 
 		if plt.XTitle == "" {
@@ -228,8 +223,6 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 //	plt       PlotDef plot options.  If plt is nil an error is generated.
 //
 // Target: html plot file and/or plot in browser.
-//
-//goland:noinspection GoLinter
 func Decile(xy *XY, plt *PlotDef) error {
 	if plt == nil {
 		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
@@ -421,7 +414,6 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int) (Pipeline, error) {
 	}
 
 	return NewVecData("with fitted", gData), nil
-
 }
 
 // Marginal produces a set of plots to aid in understanding the effect of a feature.
@@ -470,7 +462,6 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict 
 		return Wrapper(e, "Marginal")
 	}
 
-	traces := make(grob.Traces, 0)
 	plotNo := 8 // used as a basis to know which plot we're working on
 
 	for slice.Iter() {
@@ -569,8 +560,6 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict 
 		tr := &grob.Box{X: xs1, Y: xy.X, Type: grob.TraceTypeBox, Xaxis: xAxis, Yaxis: yAxis}
 
 		fig.AddTraces(tr)
-
-		traces = append(traces, tr)
 	}
 
 	title := "Marginal Effect of <field><br>By Quartile of Fitted Value (Low to High)"
@@ -580,7 +569,11 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict 
 		title = fmt.Sprintf("%s<br>Restricted to: %s", title, restrict.Title())
 	}
 
-	if e := Plotter(fig, lay, &PlotDef{Show: true, Height: 1200, Width: 1200, Title: title, Legend: false, FileName: "/home/will/tmp/plotly.html"}); e != nil {
+	if e := Plotter(fig, lay,
+		&PlotDef{Show: true,
+			Height: 1200, Width: 1200,
+			Title: title, Legend: false,
+			FileName: "/home/will/tmp/plotly.html"}); e != nil {
 		return Wrapper(e, "Marginal")
 	}
 

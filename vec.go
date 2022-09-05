@@ -2,6 +2,7 @@ package seafan
 
 import (
 	"fmt"
+
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )
@@ -21,7 +22,6 @@ func NewVecData(name string, data *GData, opts ...Opts) *VecData {
 	vec := &VecData{bs: 1, data: data, name: name}
 	vec.nRow = vec.data.data[0].Summary.NRows
 
-	//	vec.ftypes = make(FTypes, 0)
 	for _, gd := range vec.data.data {
 		vec.ftypes = append(vec.ftypes, gd.FT)
 	}
@@ -182,8 +182,7 @@ func (vec *VecData) Cols(field string) int {
 	return 0
 }
 
-// Epoch sets the epoch to setTo if setTo >=0.
-// Returns epoch #.
+// Epoch sets the epoch to setTo if setTo >=0 and returns epoch #.
 func (vec *VecData) Epoch(setTo int) int {
 	if setTo >= 0 {
 		vec.epochCount = setTo
@@ -246,10 +245,12 @@ func (vec *VecData) String() string {
 	return str
 }
 
+// Shuffle shuffles the data.
 func (vec *VecData) Shuffle() {
 	vec.data.Shuffle()
 }
 
+// Sort sorts the data on "field".
 func (vec *VecData) Sort(field string, ascending bool) error {
 	e := vec.data.Sort(field, ascending)
 	if e != nil {
@@ -258,10 +259,12 @@ func (vec *VecData) Sort(field string, ascending bool) error {
 	return nil
 }
 
+// IsSorted returns true if the data has been sorted.
 func (vec *VecData) IsSorted() bool {
 	return vec.data.IsSorted()
 }
 
+// SortField returns the name of the sort field.
 func (vec *VecData) SortField() string {
 	return vec.data.SortField()
 }

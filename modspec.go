@@ -90,8 +90,6 @@ func MakeArgs(s string) (keyval Args, err error) {
 }
 
 // Get returns a val from Args coercing to type kind.  Nil if fails.
-//
-//goland:noinspection GoLinter,GoLinter,GoLinter
 func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 	val = nil
 	valStr, ok := kv[key]
@@ -130,8 +128,6 @@ func (kv Args) Get(key string, kind reflect.Kind) (val any) {
 }
 
 // StrAct takes a string and returns corresponding Activation and any parameter.  Nil if fails.
-//
-//goland:noinspection GoLinter,GoLinter
 func StrAct(s string) (*Activation, float64) {
 	parm := float64(0)
 
@@ -200,8 +196,6 @@ func FCParse(s string) (fc *FCLayer, err error) {
 }
 
 // DropOutParse parses the arguments to a drop out layer
-//
-//goland:noinspection GoLinter
 func DropOutParse(s string) (*DOLayer, error) {
 	_, args, err := Strip(s)
 	if err != nil {
@@ -309,8 +303,6 @@ func (m ModSpec) FC(loc int) *FCLayer {
 }
 
 // Inputs returns the FTypes of the input features
-//
-//goland:noinspection GoLinter
 func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 	var err error
 

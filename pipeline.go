@@ -1,7 +1,6 @@
 package seafan
 
-// pipeline.go has interface and "With" funcs for Pipelines.
-
+// pipeline.go has the interface and "With" funcs for Pipelines.
 import (
 	"github.com/invertedv/chutils"
 	G "gorgonia.org/gorgonia"
@@ -97,6 +96,7 @@ func WithCats(names ...string) Opts {
 	return f
 }
 
+// WithOneHot adds a one-hot field "name" based of field "from"
 func WithOneHot(name, from string) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {

@@ -71,8 +71,6 @@ func SlicerOr(s1, s2 Slicer) Slicer {
 
 // MakeSlicer makes a Slicer function for the current value (discrete) or range (continuous) of the feature.
 // Continuous features are sliced at the lower quartile, median and upper quartile, producing 4 slices.
-//
-//nolint:cyclop
 func (s *Slice) MakeSlicer() Slicer {
 	fx := func(row int) bool {
 		switch s.data.FT.Role {

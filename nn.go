@@ -154,8 +154,6 @@ func (m *NNModel) Fitted() G.Result {
 }
 
 // Inputs returns input (continuous+embedded+observed) inputs
-//
-//goland:noinspection GoLinter,GoLinter,GoLinter
 func (m *NNModel) Inputs() G.Nodes {
 	n := append(m.inputsC, m.inputsE...)
 
@@ -589,8 +587,6 @@ type Fit struct {
 type FitOpts func(*Fit)
 
 // NewFit creates a new *Fit.
-//
-//goland:noinspection GoLinter
 func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 	rand.Seed(time.Now().UnixMicro())
 	outFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
@@ -681,8 +677,6 @@ func (ft *Fit) OutCosts() *XY {
 }
 
 // Do is the fitting loop.
-//
-//goland:noinspection GoLinter
 func (ft *Fit) Do() (err error) {
 	best := math.MaxFloat64
 	ft.bestEpoch = 0

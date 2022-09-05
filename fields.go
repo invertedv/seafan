@@ -25,7 +25,7 @@ type FType struct {
 type FTypes []*FType
 
 // DropFields will drop fields from the FTypes
-func (fts FTypes) DropFields(dropFields []string) FTypes {
+func (fts FTypes) DropFields(dropFields ...string) FTypes {
 	ftOut := make(FTypes, 0)
 	for _, ft := range fts {
 		keep := true
@@ -34,9 +34,9 @@ func (fts FTypes) DropFields(dropFields []string) FTypes {
 				keep = false
 				break
 			}
-			if keep {
-				ftOut = append(ftOut, ft)
-			}
+		}
+		if keep {
+			ftOut = append(ftOut, ft)
 		}
 	}
 	return ftOut
@@ -184,8 +184,6 @@ func (fts FTypes) Save(fileName string) (err error) {
 }
 
 // LoadFTypes loads a file created by the FTypes Save method
-//
-//goland:noinspection GoLinter,GoLinter
 func LoadFTypes(fileName string) (fts FTypes, err error) {
 	fts = nil
 	err = nil

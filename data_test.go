@@ -64,7 +64,6 @@ func TestDesc_Populate(t *testing.T) {
 	assert.Equal(t, true, sort.Float64sAreSorted(x))
 }
 
-//goland:noinspection GoLinter
 func TestAllocRaw(t *testing.T) {
 	n := 100
 	x := AllocRaw(n, reflect.Float64)

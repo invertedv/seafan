@@ -23,6 +23,7 @@ func getData(t *testing.T) *GData {
 	assert.Nil(t, e)
 
 	e = gData.MakeOneHot("x2", "x2Oh")
+	assert.Nil(t, e)
 
 	return gData
 }

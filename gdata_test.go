@@ -189,3 +189,50 @@ func TestGData_Sort(t *testing.T) {
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, x0, gd.Get("Field0").Data.([]float64))
 }
+
+func TestGData_GetRaw(t *testing.T) {
+	gd := NewGData()
+	x0 := make([]any, 0)
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(9-ind))
+	}
+
+	e := gd.AppendC(NewRaw(x0, nil), "Field0", true, nil)
+	assert.Nil(t, e)
+	e = gd.AppendC(NewRaw(x0, nil), "Field3", false, nil)
+	assert.Nil(t, e)
+
+	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	assert.Nil(t, e)
+
+	e = gd.MakeOneHot("Field1", "Field2")
+
+	assert.Nil(t, e)
+
+	x1Test, e := gd.GetRaw("Field1")
+
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, x1, x1Test.Data)
+
+	x0Test, e := gd.GetRaw("Field0")
+	assert.Nil(t, e)
+
+	for ind := 0; ind < len(x0); ind++ {
+		assert.Condition(t, func() bool { return math.Abs(x0[ind].(float64)-x0Test.Data[ind].(float64)) < 0.00001 })
+	}
+
+	x0Test, e = gd.GetRaw("Field3")
+	assert.Nil(t, e)
+
+	for ind := 0; ind < len(x0); ind++ {
+		assert.Condition(t, func() bool { return math.Abs(x0[ind].(float64)-x0Test.Data[ind].(float64)) < 0.00001 })
+	}
+
+	x1Test, e = gd.GetRaw("Field2")
+
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, x1, x1Test.Data)
+
+}

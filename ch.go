@@ -4,17 +4,15 @@ package seafan
 
 import (
 	"fmt"
+	"io"
+	"reflect"
+
 	"github.com/invertedv/chutils"
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
-	"io"
-	"reflect"
 )
 
-// ChData creates a Pipeline based on chutils.  This provides an interface into text files (delimited, fixed length)
-// and ClickHouse.
-// If !cycle, Init is called after each epoch.
-// callback is called at the start of each Init.
+// ChData provides a Pipeline interface into text files (delimited, fixed length) and ClickHouse.
 type ChData struct {
 	cycle      bool          // if true, resuses data, false fetches new data after each epoch
 	pull       bool          // if true, pull the data from ClickHouse on next call to Batch
@@ -99,8 +97,6 @@ func (ch *ChData) GData() *GData {
 }
 
 // Init initializes the Pipeline.
-//
-//nolint:funlen
 func (ch *ChData) Init() (err error) {
 	err = nil
 
@@ -310,7 +306,7 @@ func (ch *ChData) FieldList() []string {
 	return fl
 }
 
-// GetFType returns the fields FType
+// GetFType returns the field's FType
 func (ch *ChData) GetFType(field string) *FType {
 	d := ch.Get(field)
 	if d == nil {
@@ -325,7 +321,7 @@ func (ch *ChData) Name() string {
 	return ch.name
 }
 
-// BatchSize returns Pipeline batch size
+// BatchSize returns Pipeline batch size.  Use WithBatchSize to set this.
 func (ch *ChData) BatchSize() int {
 	return ch.bs
 }
@@ -367,10 +363,12 @@ func (ch *ChData) Slice(sl Slicer) (Pipeline, error) {
 	return vecData, nil
 }
 
+// Shuffle shuffles the data
 func (ch *ChData) Shuffle() {
 	ch.data.Shuffle()
 }
 
+// Sort sorts the data
 func (ch *ChData) Sort(field string, ascending bool) error {
 	e := ch.data.Sort(field, ascending)
 	if e != nil {
@@ -379,10 +377,12 @@ func (ch *ChData) Sort(field string, ascending bool) error {
 	return nil
 }
 
+// IsSorted returns true if the data has been sorted.
 func (ch *ChData) IsSorted() bool {
 	return ch.data.IsSorted()
 }
 
+// SortField returns the field the data is sorted on.
 func (ch *ChData) SortField() string {
 	return ch.data.SortField()
 }

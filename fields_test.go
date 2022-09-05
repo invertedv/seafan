@@ -87,3 +87,64 @@ func TestFTypes_Save(t *testing.T) {
 		}
 	}
 }
+
+func TestFTypes_DropFields(t *testing.T) {
+	d := []any{"z", "a", "r", "a", "b"}
+	lvl := ByPtr(NewRaw(d, nil))
+	fp0 := &FParam{
+		Location: 0,
+		Scale:    0,
+		Default:  "z",
+		Lvl:      lvl,
+	}
+	ft0 := &FType{
+		Name:       "Field0",
+		Role:       FRCat,
+		Cats:       3,
+		EmbCols:    0,
+		Normalized: false,
+		From:       "",
+		FP:         fp0,
+	}
+
+	fp1 := &FParam{
+		Location: 2.0,
+		Scale:    22.0,
+		Default:  nil,
+		Lvl:      nil,
+	}
+	ft1 := &FType{
+		Name:       "Field1",
+		Role:       FRCts,
+		Cats:       0,
+		EmbCols:    0,
+		Normalized: true,
+		From:       "",
+		FP:         fp1,
+	}
+
+	fp2 := &FParam{
+		Location: 0,
+		Scale:    0,
+		Default:  nil,
+		Lvl:      nil,
+	}
+	ft2 := &FType{
+		Name:       "Field2",
+		Role:       FROneHot,
+		Cats:       3,
+		EmbCols:    0,
+		Normalized: false,
+		From:       "Field0",
+		FP:         fp2,
+	}
+	fts := FTypes{ft0, ft1, ft2}
+	ftNew := fts.DropFields("Field1")
+	ft := ftNew.Get("Field1")
+	assert.Nil(t, ft)
+	for _, ftName := range []string{"Field0", "Field2"} {
+		ft := ftNew.Get(ftName)
+		assert.NotNil(t, ft)
+	}
+
+}

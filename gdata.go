@@ -3,18 +3,16 @@ package seafan
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"gonum.org/v1/gonum/stat"
 )
 
 // gdata.go implements structures and methods to produce gorgonia-ready data
-
-import (
-	"gonum.org/v1/gonum/stat"
-	"reflect"
-	"strconv"
-)
 
 type GDatum struct {
 	FT      *FType  // FT stores the details of the field: it's role, # categories, mappings
@@ -23,13 +21,14 @@ type GDatum struct {
 }
 
 type GData struct {
-	data          []*GDatum
-	rows          int
-	sortField     string
-	sortData      *GDatum
-	sortAscending bool
+	data          []*GDatum // data array
+	rows          int       // # of observations in each GDatum
+	sortField     string    // field data is sorted on (empty if not sorted)
+	sortData      *GDatum   // *GDatum of sortField
+	sortAscending bool      // sorts ascending, if true
 }
 
+// NewGData returns a new instance of GData
 func NewGData() *GData {
 	data := make([]*GDatum, 0)
 	return &GData{data: data, rows: 0}
@@ -252,19 +251,23 @@ func (gd *GData) MakeOneHot(from, name string) error {
 	return nil
 }
 
+// Rows returns # of obserations in each element of GData
 func (gd *GData) Rows() int {
 	return gd.rows
 }
 
+// FieldCount returns the number of fields in GData
 func (gd *GData) FieldCount() int {
 	return len(gd.data)
 }
 
+// FieldList returns the names of the fields in GData
 func (gd *GData) FieldList() []string {
 	fl := make([]string, 0)
 	for _, field := range gd.data {
 		fl = append(fl, field.FT.Name)
 	}
+
 	return fl
 }
 
@@ -436,6 +439,7 @@ func (gd *GData) Less(i, j int) bool {
 }
 
 // Sort sorts the GData on field.  Calling Sort.Sort directly will cause a panic.
+// Sorting a OneHot or Embedded field sorts on the underlying Categorical field
 func (gd *GData) Sort(field string, ascending bool) error {
 	defer func() { gd.sortData = nil }()
 
@@ -474,6 +478,38 @@ func (gd *GData) SortField() string {
 // Shuffle shuffles the GData fields as a unit
 func (gd *GData) Shuffle() {
 	gd.sortField = ""
+
 	rand.Seed(time.Now().UnixMicro())
 	rand.Shuffle(gd.Len(), gd.Swap)
+}
+
+// GetRaw returns the raw data for the field.
+func (gd *GData) GetRaw(field string) (*Raw, error) {
+	fd := gd.Get(field)
+	if fd == nil {
+		return nil, Wrapper(ErrGData, fmt.Sprintf("(*GData) GetRaw: field %s not field", field))
+	}
+	switch fd.FT.Role {
+	case FRCts:
+		switch fd.FT.Normalized {
+		case false:
+			return NewRawCast(fd.Data.([]float64), nil), nil
+		case true:
+			x := make([]any, gd.rows)
+			for ind := 0; ind < len(x); ind++ {
+				x[ind] = fd.Data.([]float64)[ind]*fd.FT.FP.Scale + fd.FT.FP.Location
+			}
+			return NewRaw(x, nil), nil
+		}
+	case FRCat:
+		key, _ := fd.FT.FP.Lvl.Sort(false, true)
+		x := make([]any, gd.rows)
+		for ind := 0; ind < len(x); ind++ {
+			x[ind] = key[int(fd.Data.([]int32)[ind])]
+		}
+		return NewRaw(x, nil), nil
+	case FROneHot, FREmbed:
+		return gd.GetRaw(fd.FT.From)
+	}
+	return nil, Wrapper(ErrGData, "(*GData) GetRaw: unexpected error")
 }
