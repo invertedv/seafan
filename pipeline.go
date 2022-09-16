@@ -18,6 +18,7 @@ type Pipeline interface {
 	Cols(field string) int             // # of columns in the feature
 	IsCts(field string) bool           // true if the feature is continuous
 	GetFType(field string) *FType      // Get FType for the feature
+	GetFTypes() FTypes                 // Get Ftypes for pipeline
 	BatchSize() int                    // batch size
 	FieldList() []string               // fields available
 	GData() *GData                     // return underlying GData
