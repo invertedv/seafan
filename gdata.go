@@ -112,11 +112,10 @@ func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) erro
 		ls = fp
 	}
 
-	if ls.Scale < 1e-8 {
-		return Wrapper(ErrGData, fmt.Sprintf("AppendC: %s cannot be normalized--0 variance", name))
-	}
-
 	if normalize {
+		if ls.Scale < 1e-8 {
+			return Wrapper(ErrGData, fmt.Sprintf("AppendC: %s cannot be normalized--0 variance", name))
+		}
 		for ind := 0; ind < len(x); ind++ {
 			x[ind] = (x[ind] - ls.Location) / ls.Scale
 		}

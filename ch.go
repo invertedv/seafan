@@ -344,7 +344,7 @@ func (ch *ChData) String() string {
 
 	for _, f := range fl {
 		ff := ch.Describe(f, numCats)
-		str += ff
+		str += "\n" + ff
 	}
 
 	return str
