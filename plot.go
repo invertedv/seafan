@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
@@ -35,6 +36,12 @@ type PlotDef struct {
 //
 // lay can be initialized with any additional layout options needed.
 func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
+	// convert newlines to <br>
+	pd.Title = strings.ReplaceAll(pd.Title, "\n", "<br>")
+	pd.STitle = strings.ReplaceAll(pd.STitle, "\n", "<br>")
+	pd.XTitle = strings.ReplaceAll(pd.XTitle, "\n", "<br>")
+	pd.YTitle = strings.ReplaceAll(pd.YTitle, "\n", "<br>")
+
 	if lay == nil {
 		lay = &grob.Layout{}
 	}

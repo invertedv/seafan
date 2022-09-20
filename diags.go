@@ -4,12 +4,10 @@ package seafan
 
 import (
 	"fmt"
-	"math"
-	"sort"
-	"strings"
-
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"gonum.org/v1/gonum/stat"
+	"math"
+	"sort"
 )
 
 const thresh = 0.5 // threshold for declaring y[i] to be a 1
@@ -421,7 +419,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int) (Pipeline, error) {
 // For each segment, the feature being analyzed various across its range within the quartile (continuous)
 // its values (discrete).
 // The bottom row shows the distribution of the feature within the quartile range.
-func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict *Slice) error {
+func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotDef) error {
 	const take = 1000 // # of obs to use for graph
 	var e error
 
@@ -438,16 +436,6 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict 
 	pipeFit, e := AddFitted(pipe, nnFile, target)
 	if e != nil {
 		return Wrapper(e, "Marginal")
-	}
-
-	// load up restriction
-	if restrict != nil {
-		restrict.Iter()
-		sl0 := restrict.MakeSlicer() // to slice through the values of feat
-		pipeFit, e = pipeFit.Slice(sl0)
-		if e != nil {
-			return Wrapper(e, "Marginal")
-		}
 	}
 
 	WithBatchSize(pipeFit.Rows())(pipeFit)
@@ -541,6 +529,8 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict 
 				data.([]float64)[row*cats+grp] = 1.0
 				xs1[row] = keyStr[grp]
 			}
+		default:
+			return Wrapper(ErrDiags, fmt.Sprintf("Marginal: feature %s is discrete -- need OneHot", feat))
 		}
 
 		// predict on data we just created
@@ -562,18 +552,9 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, restrict 
 		fig.AddTraces(tr)
 	}
 
-	title := "Marginal Effect of <field><br>By Quartile of Fitted Value (Low to High)"
-	title = strings.Replace(title, "<field>", name, 1)
+	pd.Title = fmt.Sprintf("Marginal Effect of %s by Quartile of Fitted Value (Low to High)<br>%s", name, pd.Title)
 
-	if restrict != nil {
-		title = fmt.Sprintf("%s<br>Restricted to: %s", title, restrict.Title())
-	}
-
-	if e := Plotter(fig, lay,
-		&PlotDef{Show: true,
-			Height: 1200, Width: 1200,
-			Title: title, Legend: false,
-			FileName: "/home/will/tmp/plotly.html"}); e != nil {
+	if e := Plotter(fig, lay, pd); e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
