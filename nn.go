@@ -699,8 +699,8 @@ func (ft *Fit) Do() (err error) {
 
 	cv := make([]float64, 0)
 	cVal := make([]float64, 0)
-
-	for ep := 1; ep <= ft.epochs; ep++ {
+	cte := true
+	for ep := 1; ep <= ft.epochs && cte; ep++ {
 		if ft.shuffle > 0 && ep%ft.shuffle == 0 {
 			ft.p.Shuffle()
 		}
@@ -763,7 +763,7 @@ func (ft *Fit) Do() (err error) {
 			}
 			// check for early stopping
 			if ft.wait > 0 && ep-ft.bestEpoch > ft.wait {
-				break
+				cte = false
 			}
 		}
 	}
