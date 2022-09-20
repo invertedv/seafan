@@ -33,6 +33,9 @@ type Opts func(c Pipeline)
 // WithBatchSize sets the batch size for the pipeline
 func WithBatchSize(bsize int) Opts {
 	f := func(c Pipeline) {
+		if bsize == 0 {
+			bsize = c.Rows()
+		}
 		switch d := c.(type) {
 		case *ChData:
 			d.bs = bsize

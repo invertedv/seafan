@@ -110,6 +110,10 @@ func (ch *ChData) Init() (err error) {
 	}
 
 	ch.nRow = nRow
+	if ch.bs == 0 {
+		ch.bs = nRow
+	}
+
 	if ch.bs > ch.nRow {
 		return Wrapper(ErrChData, fmt.Sprintf("Init: batch size = %d > dataset rows = %d", ch.bs, ch.nRow))
 	}

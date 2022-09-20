@@ -44,6 +44,9 @@ func (vec *VecData) Slice(sl Slicer) (Pipeline, error) {
 
 func (vec *VecData) Init() error {
 	vec.cbRow = 0
+	if vec.bs == 0 {
+		vec.bs = vec.Rows()
+	}
 
 	return nil
 }

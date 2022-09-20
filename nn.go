@@ -762,19 +762,8 @@ func (ft *Fit) Do() (err error) {
 				}
 			}
 			// check for early stopping
-			if ft.wait > 0 && ep > ft.wait {
-				checkVal := cVal[len(cVal)-1-ft.wait]
-				minC := math.MaxFloat64
-
-				for ind := len(cVal) - ft.wait; ind < len(cVal); ind++ {
-					if cVal[ind] < minC {
-						minC = cVal[ind]
-					}
-				}
-
-				if minC > checkVal {
-					break
-				}
+			if ft.wait > 0 && ep-ft.bestEpoch > ft.wait {
+				break
 			}
 		}
 	}
