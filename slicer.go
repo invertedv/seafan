@@ -127,6 +127,7 @@ func (s *Slice) Iter() bool {
 
 			return false
 		}
+		s.val = fmt.Sprintf("Q%v", s.index+1)
 
 		return true
 	case FRCat:
