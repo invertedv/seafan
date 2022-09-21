@@ -392,7 +392,7 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 }
 
 // AddFitted creates a new Pipeline that adds a NNModel fitted value
-func AddFitted(pipeIn Pipeline, nnFile string, target []int) (Pipeline, error) {
+func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string) (Pipeline, error) {
 	nn1, e := PredictNN(nnFile, pipeIn, false)
 	if e != nil {
 		panic(e)
@@ -406,7 +406,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int) (Pipeline, error) {
 
 	gData := pipeIn.GData()
 	f120R := NewRawCast(xy.X, nil)
-	e = gData.AppendC(f120R, "fitted", false, nil)
+	e = gData.AppendC(f120R, name, false, nil)
 	if e != nil {
 		return nil, Wrapper(e, "AddFit")
 	}
@@ -433,7 +433,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	WithBatchSize(pipe.Rows())(pipe)
 
-	pipeFit, e := AddFitted(pipe, nnFile, target)
+	pipeFit, e := AddFitted(pipe, nnFile, target, "fitted")
 	if e != nil {
 		return Wrapper(e, "Marginal")
 	}

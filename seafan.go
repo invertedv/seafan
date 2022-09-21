@@ -1,4 +1,4 @@
-// Package seafan is a set of tools for building DNN modes. The build engine is gorgonia (https://pkg.go.dev/gorgonia.org/gorgonia).
+// Package seafan is a set of tools for building DNN models. The build engine is gorgonia (https://pkg.go.dev/gorgonia.org/gorgonia).
 //
 // Seafan features:
 //
