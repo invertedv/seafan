@@ -420,7 +420,10 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string) (Pipel
 // its values (discrete).
 // The bottom row shows the distribution of the feature within the quartile range.
 func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotDef) error {
-	const take = 1000 // # of obs to use for graph
+	const (
+		take    = 1000 // # of obs to use for graph
+		maxCats = 10   // max # of levels of a categorical field to show in plot
+	)
 	var e error
 
 	name := feat
@@ -496,38 +499,33 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 		case FROneHot, FREmbed:
 			gdFrom := newPipe.Get(gd.FT.From)
 			name = gd.FT.From
-			key, _ := gdFrom.FT.FP.Lvl.Sort(false, true)
-			keyStr := make([]string, len(key))
+			keys, vals := gdFrom.Summary.DistrD.Sort(false, false)
 
-			for ind := 0; ind < len(key); ind++ {
-				keyStr[ind] = fmt.Sprintf("%v", key[ind])
+			// convert counts to rates
+			rate := make([]float64, len(vals))
+			for ind := 0; ind < len(vals); ind++ {
+				rate[ind] = float64(vals[ind]) / float64(gd.Summary.NRows)
 			}
 
-			x := make([]string, n)
-
-			for ind := 0; ind < n; ind++ {
-				x[ind] = keyStr[gdFrom.Data.([]int32)[ind]]
-			}
-
-			sort.Strings(x)
-
-			tr := &grob.Histogram{Xaxis: xAxis, Yaxis: yAxis, X: x, Type: grob.TraceTypeHistogram}
+			cats := Min(len(keys), maxCats)
+			tr := &grob.Bar{Xaxis: xAxis, Yaxis: yAxis, X: keys[0:cats], Y: rate[0:cats], Type: grob.TraceTypeBar}
 
 			fig.AddTraces(tr)
 
-			cats := gd.FT.Cats
 			nper := n / cats
 			data := gd.Data
 
 			for row := 0; row < n; row++ {
 				grp := Min(row/nper, cats-1)
+				grpKey := keys[grp]
+				grpVal := int(gdFrom.FT.FP.Lvl[grpKey])
 
 				for c := 0; c < cats; c++ {
 					data.([]float64)[row*cats+c] = 0.0
 				}
 
-				data.([]float64)[row*cats+grp] = 1.0
-				xs1[row] = keyStr[grp]
+				data.([]float64)[row*cats+grpVal] = 1.0
+				xs1[row] = fmt.Sprintf("%v", grpKey)
 			}
 		default:
 			return Wrapper(ErrDiags, fmt.Sprintf("Marginal: feature %s is discrete -- need OneHot", feat))
@@ -552,7 +550,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 		fig.AddTraces(tr)
 	}
 
-	pd.Title = fmt.Sprintf("Marginal Effect of %s by Quartile of Fitted Value (Low to High)<br>%s", name, pd.Title)
+	pd.Title = fmt.Sprintf("Marginal Effect of %s by Quartile of Fitted Value (High to Low)<br>%s", name, pd.Title)
 
 	if e := Plotter(fig, lay, pd); e != nil {
 		return Wrapper(e, "Marginal")

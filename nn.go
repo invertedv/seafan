@@ -153,6 +153,11 @@ func (m *NNModel) Fitted() G.Result {
 	return m.output
 }
 
+// OutputCols returns the number of columns in the output
+func (m *NNModel) OutputCols() int {
+	return m.output.Nodes()[0].Shape()[1]
+}
+
 // Inputs returns input (continuous+embedded+observed) inputs
 func (m *NNModel) Inputs() G.Nodes {
 	n := append(m.inputsC, m.inputsE...)
