@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 // FType represents a single field. It holds key information about the feature: its role, dimensions, summary info.
@@ -144,18 +145,27 @@ func (fts FTypes) Save(fileName string) (err error) {
 		fpStr := &fps{}
 
 		if ft.Role == FRCts || ft.Role == FRCat {
-			var t reflect.Kind
+			var dataType string
 
 			lvl := make(map[string]int32)
 
 			for k, v := range ft.FP.Lvl {
-				lvl[fmt.Sprintf("%v", k)] = v
-				t = reflect.TypeOf(k).Kind()
+				dataType = reflect.TypeOf(k).Kind().String()
+				kOut := fmt.Sprintf("%v", k)
+				if dataType == "struct" {
+					val, ok := k.(time.Time)
+					if !ok {
+						return Wrapper(ErrFields, fmt.Sprintf("(FTypes) Save: unexpect struct type, field %s", ft.Name))
+					}
+					dataType = "date"
+					kOut = val.Format(time.RFC3339)
+				}
+				lvl[kOut] = v
 			}
 
 			fpStr = &fps{Location: ft.FP.Location, Scale: ft.FP.Scale, Default: ft.FP.Default}
 			fpStr.Lvl = lvl
-			fpStr.Kind = t.String()
+			fpStr.Kind = dataType
 		}
 
 		ftype := fType{
@@ -239,6 +249,12 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 				}
 
 				lvl[i] = v
+			case "date":
+				dt, e := time.Parse(time.RFC3339, k)
+				if e != nil {
+					return nil, Wrapper(ErrFields, fmt.Sprintf("LoadFTypes: cannot convert %s to date", k))
+				}
+				lvl[dt] = v
 			}
 		}
 
