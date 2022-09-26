@@ -512,3 +512,59 @@ func (gd *GData) GetRaw(field string) (*Raw, error) {
 	}
 	return nil, Wrapper(ErrGData, "(*GData) GetRaw: unexpected error")
 }
+
+// UpdateFts produces a new *GData using the given FTypes.  The return only has those fields contained in newFts
+func (gd *GData) UpdateFts(newFts FTypes) (*GData, error) {
+	newGd := NewGData()
+	newGd.rows = gd.rows
+
+	for ind := 0; ind < len(gd.data); ind++ {
+		oldFt := gd.data[ind].FT
+
+		newFt := newFts.Get(oldFt.Name)
+		// drop fields not in newFts
+		if newFt == nil || newFt.Role == FROneHot || newFt.Role == FREmbed {
+			continue
+		}
+
+		if newFt.Role != oldFt.Role {
+			return nil, Wrapper(ErrGData, fmt.Sprintf("(*GData) UpdateFts: FRole differ for %s: %v (old) %v (new)",
+				newFt.Name, oldFt.Role, newFt.Role))
+		}
+
+		// retrieve raw data to reprocess.
+		raw, e := gd.GetRaw(oldFt.Name)
+		if e != nil {
+			return nil, e
+		}
+
+		switch newFt.Role {
+		case FRCts:
+			if e := newGd.AppendC(raw, newFt.Name, newFt.Normalized, newFt.FP); e != nil {
+				return nil, e
+			}
+		case FRCat:
+			if e := newGd.AppendD(raw, newFt.Name, newFt.FP); e != nil {
+				return nil, e
+			}
+		}
+	}
+
+	for _, newFt := range newFts {
+		if newFt.Role == FRCts || newFt.Role == FRCat {
+			continue
+		}
+
+		if e := newGd.MakeOneHot(newFt.From, newFt.Name); e != nil {
+			return nil, e
+		}
+
+		if newFt.Role == FREmbed {
+			datum := newGd.Get(newFt.Name)
+			datum.FT.Role = FREmbed
+			datum.FT.EmbCols = newFt.EmbCols
+		}
+	}
+
+	return newGd, nil
+}

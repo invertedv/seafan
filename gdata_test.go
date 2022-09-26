@@ -8,6 +8,89 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestGData_UpdateFts(t *testing.T) {
+	var e error
+
+	x0 := make([]any, 0)
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(ind+1))
+	}
+
+	gd := NewGData()
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	assert.Nil(t, e)
+
+	newFt := &FType{
+		Name:       "Field0",
+		Role:       FRCts,
+		Cats:       0,
+		EmbCols:    0,
+		Normalized: false,
+		From:       "",
+		FP:         nil,
+	}
+	newGd, e := gd.UpdateFts(FTypes{newFt})
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, gd.data[0].Data.([]float64), newGd.data[0].Data.([]float64))
+	gd = NewGData()
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", true, nil)
+	assert.Nil(t, e)
+
+	fp := &FParam{
+		Location: 0,
+		Scale:    1,
+		Default:  nil,
+		Lvl:      nil,
+	}
+	newFt = &FType{
+		Name:       "Field0",
+		Role:       FRCts,
+		Cats:       0,
+		EmbCols:    0,
+		Normalized: true,
+		From:       "",
+		FP:         fp,
+	}
+	newGd, e = gd.UpdateFts(FTypes{newFt})
+	assert.Nil(t, e)
+	for ind, x := range x0 {
+		assert.InEpsilon(t, x, newGd.data[0].Data.([]float64)[ind], .001)
+	}
+}
+
+func TestGData_UpdateFts2(t *testing.T) {
+	var e error
+
+	gd := NewGData()
+
+	xt := []any{"d", "e", "a", "b", "c"}
+	e = gd.AppendD(NewRaw(xt, nil), "Field1", nil)
+	assert.Nil(t, e)
+
+	xt1 := []any{"e", "b", "c", "d"}
+	lvls := ByPtr(NewRaw(xt1, nil))
+	fp := &FParam{
+		Location: 0,
+		Scale:    0,
+		Default:  "d",
+		Lvl:      lvls,
+	}
+	ft := &FType{
+		Name:       "Field1",
+		Role:       FRCat,
+		Cats:       4,
+		EmbCols:    0,
+		Normalized: false,
+		From:       "",
+		FP:         fp,
+	}
+	newGd, e := gd.UpdateFts(FTypes{ft})
+	assert.Nil(t, e)
+	result := []int32{2, 3, 2, 0, 1}
+	assert.ElementsMatch(t, result, newGd.data[0].Data.([]int32))
+}
+
 func TestGData_AppendC(t *testing.T) {
 	var e error
 
