@@ -790,8 +790,8 @@ func (ft *Fit) Do() (err error) {
 
 // PredictNN reads in a NNModel from a file and populates it with a batch from p.
 // Methods such as FitSlice and ObsSlice are immediately available.
-func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
-	nn, err = LoadNN(fileRoot, p, build)
+func PredictNN(fileRoot string, pipe Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
+	nn, err = LoadNN(fileRoot, pipe, build)
 	for _, o := range opts {
 		o(nn)
 	}
@@ -800,7 +800,7 @@ func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNM
 		return
 	}
 
-	for !p.Batch(nn.Inputs()) {
+	for !pipe.Batch(nn.Inputs()) {
 	}
 
 	vms := G.NewTapeMachine(nn.G())
@@ -810,6 +810,25 @@ func PredictNN(fileRoot string, p Pipeline, build bool, opts ...NNOpts) (nn *NNM
 	if err = vms.RunAll(); err != nil {
 		return
 	}
+
+	return
+}
+
+// PredictNNwFts updates the input pipe to have the FTypes specified by fts. For instance, if one has normalized a
+// continuous input, the normalization factor used in the NN must be the same as its build values.
+func PredictNNwFts(fileRoot string, pipe Pipeline, build bool, fts FTypes, opts ...NNOpts) (nn *NNModel, err error) {
+	if fts == nil {
+		return PredictNN(fileRoot, pipe, build, opts...)
+	}
+
+	gd := pipe.GData()
+	newGd, e := gd.UpdateFts(fts)
+	if e != nil {
+		return nil, e
+	}
+
+	vecPipe := NewVecData("inputModel", newGd)
+	nn, err = PredictNN(fileRoot, vecPipe, build, opts...)
 
 	return
 }

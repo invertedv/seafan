@@ -4,10 +4,11 @@ package seafan
 
 import (
 	"fmt"
-	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
-	"gonum.org/v1/gonum/stat"
 	"math"
 	"sort"
+
+	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
+	"gonum.org/v1/gonum/stat"
 )
 
 const thresh = 0.5 // threshold for declaring y[i] to be a 1
@@ -392,10 +393,10 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 }
 
 // AddFitted creates a new Pipeline that adds a NNModel fitted value
-func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string) (Pipeline, error) {
-	nn1, e := PredictNN(nnFile, pipeIn, false)
+func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes) (Pipeline, error) {
+	nn1, e := PredictNNwFts(nnFile, pipeIn, false, fts)
 	if e != nil {
-		panic(e)
+		return nil, e
 	}
 
 	nCat := nn1.Obs().Nodes()[0].Shape()[1]
@@ -436,7 +437,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	WithBatchSize(pipe.Rows())(pipe)
 
-	pipeFit, e := AddFitted(pipe, nnFile, target, "fitted")
+	pipeFit, e := AddFitted(pipe, nnFile, target, "fitted", nil)
 	if e != nil {
 		return Wrapper(e, "Marginal")
 	}
