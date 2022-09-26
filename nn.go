@@ -827,7 +827,7 @@ func PredictNNwFts(fileRoot string, pipe Pipeline, build bool, fts FTypes, opts 
 		return nil, e
 	}
 
-	vecPipe := NewVecData("inputModel", newGd)
+	vecPipe := NewVecData("inputModel", newGd, WithBatchSize(pipe.BatchSize()))
 	nn, err = PredictNN(fileRoot, vecPipe, build, opts...)
 
 	return

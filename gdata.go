@@ -164,6 +164,10 @@ func (gd *GData) AppendD(raw *Raw, name string, fp *FParam) error {
 		fp = &FParam{Lvl: lv}
 	}
 
+	if raw.Kind != reflect.String && raw.Kind != reflect.Int64 && raw.Kind != reflect.Int32 {
+		return Wrapper(ErrGData, fmt.Sprintf("field %s cannot be FRCat (wrong type)", name))
+	}
+
 	ds := make([]int32, len(raw.Data))
 
 	for ind := 0; ind < len(ds); ind++ {
