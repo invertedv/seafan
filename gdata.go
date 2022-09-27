@@ -572,3 +572,15 @@ func (gd *GData) UpdateFts(newFts FTypes) (*GData, error) {
 
 	return newGd, nil
 }
+
+// Drop drops a field from *GData
+func (gd *GData) Drop(field string) {
+	newGd := make([]*GDatum, 0)
+	for ind := 0; ind < len(gd.data); ind++ {
+		if gd.data[ind].FT.Name != field {
+			newGd = append(newGd, gd.data[ind])
+		}
+	}
+	gd.data = newGd
+
+}

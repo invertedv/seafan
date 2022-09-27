@@ -392,27 +392,34 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 	return n, precision, recall, accuracy, obs, fit, err
 }
 
-// AddFitted creates a new Pipeline that adds a NNModel fitted value
-func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes) (Pipeline, error) {
+// AddFitted addes fitted values to a Pipeline
+// pipeIn -- input Pipeline to run the model on
+// nnFile -- root directory of NNModel
+// target -- target columns of the model output to coalesce
+// name -- name of fitted value in Pipeline
+// fts -- options FTypes to use for normalizing pipeIn
+func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes) error {
 	nn1, e := PredictNNwFts(nnFile, pipeIn, false, fts)
 	if e != nil {
-		return nil, e
+		return e
 	}
 
 	nCat := nn1.Obs().Nodes()[0].Shape()[1]
 	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 	if e != nil {
-		return nil, Wrapper(e, "Marginal")
+		return Wrapper(e, "Marginal")
 	}
 
 	gData := pipeIn.GData()
 	f120R := NewRawCast(xy.X, nil)
-	e = gData.AppendC(f120R, name, false, nil)
-	if e != nil {
-		return nil, Wrapper(e, "AddFit")
+
+	// drop field if it's already there
+	gData.Drop(name)
+	if e = gData.AppendC(f120R, name, false, nil); e != nil {
+		return Wrapper(e, "AddFit")
 	}
 
-	return NewVecData("with fitted", gData), nil
+	return nil
 }
 
 // Marginal produces a set of plots to aid in understanding the effect of a feature.
@@ -437,19 +444,16 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	WithBatchSize(pipe.Rows())(pipe)
 
-	pipeFit, e := AddFitted(pipe, nnFile, target, "fitted", nil)
-	if e != nil {
+	if e = AddFitted(pipe, nnFile, target, "fitted", nil); e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
-	WithBatchSize(pipeFit.Rows())(pipeFit)
-
-	targFt := pipeFit.Get(feat) // feature we're working on
+	targFt := pipe.Get(feat) // feature we're working on
 	if targFt == nil {
 		return Wrapper(ErrDiags, fmt.Sprintf("Marginal: feature %s not in model", feat))
 	}
 
-	slice, e := NewSlice("fitted", 0, pipeFit, nil)
+	slice, e := NewSlice("fitted", 0, pipe, nil)
 	if e != nil {
 		return Wrapper(e, "Marginal")
 	}
@@ -458,7 +462,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	for slice.Iter() {
 		sl := slice.MakeSlicer()
-		newPipe, e := pipeFit.Slice(sl)
+		newPipe, e := pipe.Slice(sl)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
