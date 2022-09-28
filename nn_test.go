@@ -63,6 +63,8 @@ func TestNNModel_Save(t *testing.T) {
 
 	assert.Nil(t, e)
 
+	assert.Equal(t, 2, nn.Cols())
+
 	exp := make([]float64, 0)
 
 	for _, n := range nn.paramsW {

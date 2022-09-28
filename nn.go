@@ -51,11 +51,17 @@ type NNModel struct {
 	build     bool         // build mode includes drop out layers
 	inputFT   FTypes       // FTypes of input features
 	targetFT  *FType       // FType of output (target)
+	outCols   int          // columns in output
 }
 
 // Name returns model name
 func (m *NNModel) Name() string {
 	return m.name
+}
+
+// Cols returns # of columns in NNModel output
+func (m *NNModel) Cols() int {
+	return m.outCols
 }
 
 func (m *NNModel) InputFT() FTypes {
@@ -281,6 +287,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 	parW := make(G.Nodes, 0)
 	parB := make(G.Nodes, 0)
 
+	adder := 0 // add 1 if the output is softmax
 	for ind := 0; ind < len(modSpec); ind++ {
 		ly, e := modSpec.LType(ind)
 		if e != nil {
@@ -304,6 +311,9 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 				return nil, Wrapper(ErrNNModel, "NewNNModel: obs not one-hot but softmax activation")
 			}
 			cols--
+			adder = 1
+		} else {
+			adder = 0
 		}
 
 		nmw := "lWeights" + strconv.Itoa(ind)
@@ -320,16 +330,11 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 		parW = append(parW, w)
 	}
 
+	outputCols := lastCols + adder
+
 	if yoh != nil {
-		switch obsF.Role {
-		case FRCts:
-			if yoh.Shape()[1] != lastCols {
-				return nil, Wrapper(ErrNNModel, "NewNNModel: output node and obs node have differing columns")
-			}
-		case FROneHot:
-			if yoh.Shape()[1] != lastCols+1 {
-				return nil, Wrapper(ErrNNModel, "NewNNModel: output node and obs node have differing columns")
-			}
+		if yoh.Shape()[1] != outputCols {
+			return nil, Wrapper(ErrNNModel, "NewNNModel: output node and obs node have differing columns")
 		}
 	}
 
@@ -345,6 +350,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 		build:     build,
 		inputFT:   inps,
 		targetFT:  obsF,
+		outCols:   outputCols,
 	}
 
 	nn.Fwd() // init forward pass

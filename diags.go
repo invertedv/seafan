@@ -404,8 +404,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 		return e
 	}
 
-	nCat := nn1.Obs().Nodes()[0].Shape()[1]
-	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
+	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nn1.Cols(), target, false, nil)
 	if e != nil {
 		return Wrapper(e, "Marginal")
 	}
