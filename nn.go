@@ -293,7 +293,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 		cols := fc.Size
 
 		if fc.Act == SoftMax {
-			if obsF.Role != FROneHot {
+			if obsF != nil && obsF.Role != FROneHot {
 				return nil, Wrapper(ErrNNModel, "NewNNModel: obs not one-hot but softmax activation")
 			}
 			cols--
@@ -429,7 +429,7 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 		return
 	}
 
-	defer func() { err = f.Close() }()
+	defer func() { _ = f.Close() }()
 
 	ps := make([]saveNode, 0)
 
@@ -483,7 +483,7 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 		return
 	}
 
-	defer func() { err = f.Close() }()
+	defer func() { _ = f.Close() }()
 
 	js, err := io.ReadAll(f)
 
@@ -692,7 +692,7 @@ func (ft *Fit) Do() (err error) {
 
 	vm := G.NewTapeMachine(ft.nn.G(), G.BindDualValues(ft.nn.Params()...))
 
-	defer func() { err = vm.Close() }()
+	defer func() { _ = vm.Close() }()
 
 	t := time.Now()
 	itv := make([]float64, 0)
@@ -805,7 +805,7 @@ func PredictNN(fileRoot string, pipe Pipeline, build bool, opts ...NNOpts) (nn *
 
 	vms := G.NewTapeMachine(nn.G())
 
-	defer func() { err = vms.Close() }()
+	defer func() { _ = vms.Close() }()
 
 	if err = vms.RunAll(); err != nil {
 		return
@@ -825,6 +825,16 @@ func PredictNNwFts(fileRoot string, pipe Pipeline, build bool, fts FTypes, opts 
 	newGd, e := gd.UpdateFts(fts)
 	if e != nil {
 		return nil, e
+	}
+
+	// if something is in here as a FRCat, FREmbed then we need to add a one-hot field
+	for _, fld := range newGd.FieldList() {
+		ft := newGd.Get(fld).FT
+		if ft.Role == FRCat || ft.Role == FREmbed {
+			if e = newGd.MakeOneHot(ft.Name, ft.Name+"Oh"); e != nil {
+				return nil, e
+			}
+		}
 	}
 
 	vecPipe := NewVecData("predict with FTypes", newGd, WithBatchSize(pipe.BatchSize()))

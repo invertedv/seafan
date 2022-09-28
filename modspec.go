@@ -416,7 +416,7 @@ func (m ModSpec) Save(fileName string) (err error) {
 		return
 	}
 
-	defer func() { err = f.Close() }()
+	defer func() { _ = f.Close() }()
 
 	for ind := 0; ind < len(m); ind++ {
 		line := strings.ReplaceAll(strings.ReplaceAll(m[ind], " ", ""), "\n", "")
@@ -437,7 +437,7 @@ func LoadModSpec(fileName string) (ms ModSpec, err error) {
 		return
 	}
 
-	defer func() { err = f.Close() }()
+	defer func() { _ = f.Close() }()
 
 	buf := bufio.NewReader(f)
 

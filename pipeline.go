@@ -190,8 +190,39 @@ func WithFtypes(fts FTypes) Opts {
 	f := func(c Pipeline) {
 		switch d := c.(type) {
 		case *ChData:
+			for _, ft := range fts {
+				ok := false
+				// see if it's already there
+				for ind := 0; ind < len(d.ftypes); ind++ {
+					if d.ftypes[ind].Name == ft.Name {
+						d.ftypes[ind] = ft
+						ok = true
+						break
+					}
+				}
+
+				if !ok {
+					d.ftypes = append(d.ftypes, ft)
+				}
+			}
+
 			d.ftypes = fts
 		case *VecData:
+			for _, ft := range fts {
+				ok := false
+				for ind := 0; ind < len(d.ftypes); ind++ {
+					if d.ftypes[ind].Name == ft.Name {
+						d.ftypes[ind] = ft
+						ok = true
+						break
+					}
+				}
+
+				if !ok {
+					d.ftypes = append(d.ftypes, ft)
+				}
+			}
+
 			d.ftypes = fts
 		}
 	}

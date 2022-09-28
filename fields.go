@@ -137,7 +137,7 @@ func (fts FTypes) Save(fileName string) (err error) {
 		return
 	}
 
-	defer func() { err = f.Close() }()
+	defer func() { _ = f.Close() }()
 
 	out := make([]fType, 0)
 
@@ -203,7 +203,7 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 		return
 	}
 
-	defer func() { err = f.Close() }()
+	defer func() { _ = f.Close() }()
 
 	js, err := io.ReadAll(f)
 	if err != nil {
