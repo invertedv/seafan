@@ -135,6 +135,9 @@ func (m *NNModel) FitSlice() []float64 {
 
 // ObsSlice returns target values as a slice
 func (m *NNModel) ObsSlice() []float64 {
+	if m.obs == nil {
+		return nil
+	}
 	return m.obs.Value().Data().([]float64)
 }
 
@@ -161,6 +164,10 @@ func (m *NNModel) OutputCols() int {
 // Inputs returns input (continuous+embedded+observed) inputs
 func (m *NNModel) Inputs() G.Nodes {
 	n := append(m.inputsC, m.inputsE...)
+
+	if m.obs == nil {
+		return n
+	}
 
 	return append(n, m.obs)
 }
