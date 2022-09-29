@@ -221,7 +221,7 @@ func WithName(name string) NNOpts {
 // NewNNModel creates a new NN model.
 // Specs for fields in modSpec are pulled from pipe.
 // if build is true, DropOut layers are included.
-func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNModel, error) {
+func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, nnOpts ...NNOpts) (*NNModel, error) {
 	bSize := pipe.BatchSize()
 	g := G.NewGraph()
 	xs := make(G.Nodes, 0)
@@ -306,6 +306,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 
 		cols := fc.Size
 
+		// adder will reflect the type of the last FC layer
 		if fc.Act == SoftMax {
 			if obsF != nil && obsF.Role != FROneHot {
 				return nil, Wrapper(ErrNNModel, "NewNNModel: obs not one-hot but softmax activation")
@@ -354,8 +355,9 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, no ...NNOpts) (*NNMo
 	}
 
 	nn.Fwd() // init forward pass
+
 	// add user opts
-	for _, o := range no {
+	for _, o := range nnOpts {
 		o(nn)
 	}
 
@@ -795,6 +797,7 @@ func (ft *Fit) Do() (err error) {
 
 	ft.inCosts, err = NewXY(itv, cv)
 	ft.outCosts, err = NewXY(itv, cVal)
+
 	// clean up
 	_ = os.Remove(ft.tmpFile + "P.nn")
 	_ = os.Remove(ft.tmpFile + "S.nn")
@@ -827,9 +830,11 @@ func PredictNN(fileRoot string, pipe Pipeline, build bool, opts ...NNOpts) (nn *
 	return
 }
 
-// PredictNNwFts updates the input pipe to have the FTypes specified by fts. For instance, if one has normalized a
-// continuous input, the normalization factor used in the NN must be the same as its build values.
+// PredictNNwFts creates a new Pipeline that updates the input pipe to have the FTypes specified by fts.
+// For instance, if one has normalized a continuous input, the normalization factor used in the NN must
+// be the same as its build values.  One should save the FTypes from the model build pass them here.
 func PredictNNwFts(fileRoot string, pipe Pipeline, build bool, fts FTypes, opts ...NNOpts) (nn *NNModel, err error) {
+	// if fts is nil, then no need to update the Pipeline
 	if fts == nil {
 		return PredictNN(fileRoot, pipe, build, opts...)
 	}
@@ -840,7 +845,7 @@ func PredictNNwFts(fileRoot string, pipe Pipeline, build bool, fts FTypes, opts 
 		return nil, e
 	}
 
-	// if something is in here as a FRCat, FREmbed then we need to add a one-hot field
+	// if something is in here as a FRCat or FREmbed then we need to add a one-hot field
 	for _, fld := range newGd.FieldList() {
 		ft := newGd.Get(fld).FT
 		if ft.Role == FRCat || ft.Role == FREmbed {

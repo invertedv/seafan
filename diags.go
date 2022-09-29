@@ -392,7 +392,8 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 	return n, precision, recall, accuracy, obs, fit, err
 }
 
-// AddFitted addes fitted values to a Pipeline
+// AddFitted addes fitted values to a Pipeline. The features can be re-normalized/re-mapped to align pipeIn with
+// the model build
 // pipeIn -- input Pipeline to run the model on
 // nnFile -- root directory of NNModel
 // target -- target columns of the model output to coalesce
@@ -404,18 +405,24 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 		return e
 	}
 
-	xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nn1.Cols(), target, false, nil)
-	if e != nil {
-		return Wrapper(e, "Marginal")
+	// Coalesce the output
+	bigFit := nn1.FitSlice()
+
+	fit := make([]float64, pipeIn.Rows())
+	outCols := nn1.Cols()
+	for row := 0; row < len(fit); row++ {
+		for col := range target {
+			fit[row] += bigFit[row*outCols+col]
+		}
 	}
 
 	gData := pipeIn.GData()
-	f120R := NewRawCast(xy.X, nil)
+	fitRaw := NewRawCast(fit, nil)
 
 	// drop field if it's already there
 	gData.Drop(name)
-	if e = gData.AppendC(f120R, name, false, nil); e != nil {
-		return Wrapper(e, "AddFit")
+	if e = gData.AppendC(fitRaw, name, false, nil); e != nil {
+		return e
 	}
 
 	return nil
