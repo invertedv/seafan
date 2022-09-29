@@ -229,8 +229,31 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 			FP:         nil,
 		}
 		fp := FParam{Location: d.FP.Location, Scale: d.FP.Scale, Default: d.FP.Default}
-		lvl := make(Levels)
 
+		switch d.FP.Kind {
+		case "string":
+			fp.Default = fmt.Sprintf("%v", d.FP.Default)
+		case "int32":
+			val, ok := d.FP.Default.(int32)
+			if !ok {
+				return nil, Wrapper(ErrFields, fmt.Sprintf("LoadTypes: cannot convert default value %v to int32", d.FP.Default))
+			}
+			fp.Default = val
+		case "int64":
+			val, ok := d.FP.Default.(int64)
+			if !ok {
+				return nil, Wrapper(ErrFields, fmt.Sprintf("LoadTypes: cannot convert default value %v to int64", d.FP.Default))
+			}
+			fp.Default = val
+		case "date":
+			val, e := time.Parse(time.RFC3339, fmt.Sprintf("%s", d.FP.Default))
+			if e != nil {
+				return nil, Wrapper(ErrFields, fmt.Sprintf("LoadTypes: cannot convert default value %v to date", d.FP.Default))
+			}
+			fp.Default = val
+		}
+
+		lvl := make(Levels)
 		for k, v := range d.FP.Lvl {
 			switch d.FP.Kind {
 			case "string":

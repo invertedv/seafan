@@ -16,7 +16,7 @@ func TestFTypes_Save(t *testing.T) {
 	fp0 := &FParam{
 		Location: 0,
 		Scale:    0,
-		Default:  "z",
+		Default:  d[0],
 		Lvl:      lvl,
 	}
 	ft0 := &FType{
