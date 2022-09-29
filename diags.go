@@ -400,6 +400,10 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 // name -- name of fitted value in Pipeline
 // fts -- options FTypes to use for normalizing pipeIn
 func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes) error {
+
+	// operate on all data
+	bSize := pipeIn.BatchSize()
+	WithBatchSize(0)(pipeIn) // all rows
 	nn1, e := PredictNNwFts(nnFile, pipeIn, false, fts)
 	if e != nil {
 		return e
@@ -411,7 +415,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 	fit := make([]float64, pipeIn.Rows())
 	outCols := nn1.Cols()
 	for row := 0; row < len(fit); row++ {
-		for col := range target {
+		for _, col := range target {
 			fit[row] += bigFit[row*outCols+col]
 		}
 	}
@@ -421,9 +425,12 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 
 	// drop field if it's already there
 	gData.Drop(name)
+
 	if e = gData.AppendC(fitRaw, name, false, nil); e != nil {
 		return e
 	}
+
+	WithBatchSize(bSize)(pipeIn)
 
 	return nil
 }
