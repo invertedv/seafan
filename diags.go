@@ -555,7 +555,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 			return Wrapper(e, "Marginal")
 		}
 
-		nCat := nn1.Obs().Nodes()[0].Shape()[1]
+		nCat := nn1.Cols()
 		xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 		if e != nil {
 			return Wrapper(e, "Marginal")

@@ -32,6 +32,7 @@ type NNet interface {
 	Fwd()                       // forward pass
 	G() *G.ExprGraph            // return graph
 	Save(fileRoot string) error // save model
+	Cols() int                  // # of columns in output
 }
 
 // NNModel structure
@@ -550,7 +551,7 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 }
 
 func SoftRMS(model NNet) (cost *G.Node) {
-	nCats := model.Obs().Shape()[1]
+	nCats := model.Cols() // model.Obs().Shape()[1]
 	for ind := 1; ind < nCats; ind++ {
 		back := make([]float64, nCats)
 		back[ind] = 1.0

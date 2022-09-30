@@ -234,16 +234,10 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 		case "string":
 			fp.Default = fmt.Sprintf("%v", d.FP.Default)
 		case "int32":
-			val, ok := d.FP.Default.(int32)
-			if !ok {
-				return nil, Wrapper(ErrFields, fmt.Sprintf("LoadTypes: cannot convert default value %v to int32", d.FP.Default))
-			}
+			val := int32(d.FP.Default.(float64))
 			fp.Default = val
 		case "int64":
-			val, ok := d.FP.Default.(int64)
-			if !ok {
-				return nil, Wrapper(ErrFields, fmt.Sprintf("LoadTypes: cannot convert default value %v to int64", d.FP.Default))
-			}
+			val := int64(d.FP.Default.(float64))
 			fp.Default = val
 		case "date":
 			val, e := time.Parse(time.RFC3339, fmt.Sprintf("%s", d.FP.Default))
