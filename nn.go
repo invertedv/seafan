@@ -18,22 +18,7 @@ import (
 )
 
 // CostFunc function prototype for cost functions
-type CostFunc func(model NNet) *G.Node
-
-// NNet interface for NN models
-type NNet interface {
-	Inputs() G.Nodes            // input nodes
-	Features() G.Nodes          // predictors
-	Fitted() G.Result           // model output
-	Params() G.Nodes            // model weights
-	Obs() *G.Node               // observed values
-	CostFn() CostFunc           // cost function of fitting
-	Cost() *G.Node              // cost node in graph
-	Fwd()                       // forward pass
-	G() *G.ExprGraph            // return graph
-	Save(fileRoot string) error // save model
-	Cols() int                  // # of columns in output
-}
+type CostFunc func(model *NNModel) *G.Node
 
 // NNModel structure
 type NNModel struct {
@@ -53,6 +38,17 @@ type NNModel struct {
 	inputFT   FTypes       // FTypes of input features
 	targetFT  *FType       // FType of output (target)
 	outCols   int          // columns in output
+	opts      []NNOpts     // input options
+}
+
+// Opts returns user-input With options
+func (m *NNModel) Opts() []NNOpts {
+	return m.opts
+}
+
+// ModSpec returns the ModSpec for the model
+func (m *NNModel) ModSpec() ModSpec {
+	return m.construct
 }
 
 // Name returns model name
@@ -248,7 +244,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, nnOpts ...NNOpts) (*
 		case FREmbed:
 			xemb := G.NewTensor(g, tensor.Float64, 2, G.WithName(f.Name), G.WithShape(bSize, f.Cats))
 			xEmInp = append(xEmInp, xemb)
-			wemb := G.NewTensor(g, G.Float64, 2, G.WithName(f.Name+"Embed"), G.WithShape(f.Cats, f.EmbCols), G.WithInit(G.GlorotU(1)))
+			wemb := G.NewTensor(g, G.Float64, 2, G.WithName(f.Name+"Embed"), G.WithShape(f.Cats, f.EmbCols), G.WithInit(G.GlorotN(1)))
 			embParm = append(embParm, wemb)
 			z := G.Must(G.Mul(xemb, wemb))
 			xEmProd = append(xEmProd, z)
@@ -353,6 +349,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, nnOpts ...NNOpts) (*
 		inputFT:   inps,
 		targetFT:  obsF,
 		outCols:   outputCols,
+		opts:      nnOpts,
 	}
 
 	nn.Fwd() // init forward pass
@@ -434,6 +431,21 @@ type saveNode struct {
 	Parms []float64 `json:"parms"`
 }
 
+func noNaN(parms G.Nodes) (hasNans bool) {
+	hasNans = false
+
+	for _, node := range parms {
+		data := node.Value().Data().([]float64)
+		for _, x := range data {
+			if math.IsNaN(x) {
+				return true
+			}
+		}
+	}
+
+	return
+}
+
 // Save saves a model to disk.  Two files are created: <fileRoot>S.nn for the ModSpec and
 // <fileRoot>P.nn form the parameters.
 func (m *NNModel) Save(fileRoot string) (err error) {
@@ -451,6 +463,7 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 
 	for ind := 0; ind < len(m.Params()); ind++ {
 		n := m.Params()[ind]
+
 		p := saveNode{
 			Name:  n.Name(),
 			Dims:  n.Shape(),
@@ -550,7 +563,7 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 	return nn, nil
 }
 
-func SoftRMS(model NNet) (cost *G.Node) {
+func SoftRMS(model *NNModel) (cost *G.Node) {
 	nCats := model.Cols() // model.Obs().Shape()[1]
 	for ind := 1; ind < nCats; ind++ {
 		back := make([]float64, nCats)
@@ -571,7 +584,7 @@ func SoftRMS(model NNet) (cost *G.Node) {
 }
 
 // CrossEntropy cost function
-func CrossEntropy(model NNet) (cost *G.Node) {
+func CrossEntropy(model *NNModel) (cost *G.Node) {
 	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(model.Fitted().Nodes()[0])), model.Obs()))))))
 	G.WithName("CrossEntropy")(cost)
 
@@ -579,7 +592,7 @@ func CrossEntropy(model NNet) (cost *G.Node) {
 }
 
 // RMS cost function
-func RMS(model NNet) (cost *G.Node) {
+func RMS(model *NNModel) (cost *G.Node) {
 	cost = G.Must(golgi.RMS(model.Fitted().Nodes()[0], model.Obs()))
 	G.WithName("RMS")(cost)
 
@@ -588,7 +601,7 @@ func RMS(model NNet) (cost *G.Node) {
 
 // Fit struct for fitting a NNModel
 type Fit struct {
-	nn        NNet
+	nn        *NNModel
 	p         Pipeline
 	epochs    int
 	lrStart   float64
@@ -608,7 +621,7 @@ type Fit struct {
 type FitOpts func(*Fit)
 
 // NewFit creates a new *Fit.
-func NewFit(nn NNet, epochs int, p Pipeline, opts ...FitOpts) *Fit {
+func NewFit(nn *NNModel, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 	rand.Seed(time.Now().UnixMicro())
 	outFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
 	tmpFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
@@ -677,6 +690,11 @@ func WithOutFile(fileName string) FitOpts {
 	return f
 }
 
+// NNModel returns model
+func (ft *Fit) NNModel() *NNModel {
+	return ft.nn
+}
+
 // OutFile returns the output file name
 func (ft *Fit) OutFile() string {
 	return ft.outFile
@@ -707,7 +725,6 @@ func (ft *Fit) Do() (err error) {
 	}
 
 	vm := G.NewTapeMachine(ft.nn.G(), G.BindDualValues(ft.nn.Params()...))
-
 	defer func() { _ = vm.Close() }()
 
 	t := time.Now()
@@ -742,6 +759,23 @@ func (ft *Fit) Do() (err error) {
 
 			vm.Reset()
 		}
+
+		if Verbose {
+			fmt.Printf("finished epoch %d,current best epoch %d\n", ft.p.Epoch(-1), ft.bestEpoch)
+		}
+		// see if there is a problem (as evidenced by NaNs in the parameters)
+		if noNaN(ft.nn.Params()) {
+			fmt.Println("restarting")
+
+			var e error
+			ft.nn, e = NewNNModel(ft.nn.ModSpec(), ft.p, true, ft.nn.Opts()...)
+			if e != nil {
+				return e
+			}
+			ft.p.Epoch(0)
+			return ft.Do()
+		}
+
 		// increment epoch counter in pipeline
 		ft.p.Epoch(ft.p.Epoch(-1) + 1)
 
@@ -761,7 +795,7 @@ func (ft *Fit) Do() (err error) {
 			}
 		case false:
 			// find validation cost, save model and load to new graph
-			if e := ft.nn.Save(ft.tmpFile); err != nil {
+			if e := ft.nn.Save(ft.tmpFile); e != nil {
 				return e
 			}
 
@@ -809,12 +843,12 @@ func (ft *Fit) Do() (err error) {
 // Methods such as FitSlice and ObsSlice are immediately available.
 func PredictNN(fileRoot string, pipe Pipeline, build bool, opts ...NNOpts) (nn *NNModel, err error) {
 	nn, err = LoadNN(fileRoot, pipe, build)
-	for _, o := range opts {
-		o(nn)
-	}
-
 	if err != nil {
 		return
+	}
+
+	for _, o := range opts {
+		o(nn)
 	}
 
 	for !pipe.Batch(nn.Inputs()) {

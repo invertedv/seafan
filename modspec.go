@@ -411,7 +411,6 @@ func (m ModSpec) Save(fileName string) (err error) {
 	}
 
 	f, err := os.Create(fileName)
-
 	if err != nil {
 		return
 	}
