@@ -585,7 +585,12 @@ func SoftRMS(model *NNModel) (cost *G.Node) {
 
 // CrossEntropy cost function
 func CrossEntropy(model *NNModel) (cost *G.Node) {
-	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(model.Fitted().Nodes()[0])), model.Obs()))))))
+	// if a fitted value is 0, we drop it from the calculation.
+	isZero := G.Must(G.Eq(model.Fitted().Nodes()[0], G.NewConstant(0.0), true))
+	fit := G.Must(G.Add(model.Fitted().Nodes()[0], isZero))
+
+	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(fit)), model.Obs()))))))
+
 	G.WithName("CrossEntropy")(cost)
 
 	return
@@ -594,6 +599,7 @@ func CrossEntropy(model *NNModel) (cost *G.Node) {
 // RMS cost function
 func RMS(model *NNModel) (cost *G.Node) {
 	cost = G.Must(golgi.RMS(model.Fitted().Nodes()[0], model.Obs()))
+
 	G.WithName("RMS")(cost)
 
 	return
@@ -761,7 +767,7 @@ func (ft *Fit) Do() (err error) {
 		}
 
 		if Verbose {
-			fmt.Printf("finished epoch %d,current best epoch %d\n", ft.p.Epoch(-1), ft.bestEpoch)
+			fmt.Printf("finished epoch %d, current best epoch %d\n", ft.p.Epoch(-1), ft.bestEpoch)
 		}
 		// see if there is a problem (as evidenced by NaNs in the parameters)
 		if noNaN(ft.nn.Params()) {
@@ -780,7 +786,7 @@ func (ft *Fit) Do() (err error) {
 		ft.p.Epoch(ft.p.Epoch(-1) + 1)
 
 		itv = append(itv, float64(ep))
-		cv = append(cv, ft.nn.Cost().Value().Data().(float64))
+		cv = append(cv, ft.nn.CostFlt())
 
 		switch ft.pVal == nil {
 		case true:
