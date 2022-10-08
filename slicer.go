@@ -75,38 +75,18 @@ func (s *Slice) MakeSlicer() Slicer {
 	fx := func(row int) bool {
 		switch s.data.FT.Role {
 		case FRCat:
-			s.title = fmt.Sprintf("field %s = %v", s.feat, s.val)
 			return s.data.Data.([]int32)[row] == s.index
 		case FRCts:
 			q := s.data.Summary.DistrC.Q
-			qLab := make([]float64, len(q))
-			copy(qLab, q)
-			// if the feature is normalized, return it to original units for display
-			if s.data.FT.Normalized {
-				m := s.data.FT.FP.Location
-				std := s.data.FT.FP.Scale
-
-				for ind := 0; ind < len(qLab); ind++ {
-					qLab[ind] = qLab[ind]*std + m
-				}
-			}
 
 			switch s.index {
 			case 0:
-				s.title = fmt.Sprintf("%s Less Than Lower Quartile (%0.2f)", s.feat, qLab[2])
-
 				return s.data.Data.([]float64)[row] < q[2] // under lower quartile
 			case 1:
-				s.title = fmt.Sprintf("%s Between Lower Quartile (%0.2f) and Median (%0.2f)", s.feat, qLab[2], qLab[3])
-
 				return s.data.Data.([]float64)[row] >= q[2] && s.data.Data.([]float64)[row] < q[3] // lower quartile to median
 			case 2:
-				s.title = fmt.Sprintf("%s Between Median (%0.2f) and Upper Quartile (%0.2f)", s.feat, qLab[3], qLab[4])
-
 				return s.data.Data.([]float64)[row] >= q[3] && s.data.Data.([]float64)[row] < q[4] // median to upper quartile
 			case 3:
-				s.title = fmt.Sprintf("%s Above Upper Quartile (%0.2f)", s.feat, qLab[4])
-
 				return s.data.Data.([]float64)[row] >= q[4] // above upper quartile
 			}
 		}
@@ -129,7 +109,32 @@ func (s *Slice) Iter() bool {
 		}
 		s.val = fmt.Sprintf("Q%v", s.index+1)
 
+		// make title
+		q := s.data.Summary.DistrC.Q
+		qLab := make([]float64, len(q))
+		copy(qLab, q)
+		// if the feature is normalized, return it to original units for display
+		if s.data.FT.Normalized {
+			m := s.data.FT.FP.Location
+			std := s.data.FT.FP.Scale
+
+			for ind := 0; ind < len(qLab); ind++ {
+				qLab[ind] = qLab[ind]*std + m
+			}
+		}
+
+		switch s.index {
+		case 0:
+			s.title = fmt.Sprintf("%s Less Than Lower Quartile (%0.2f)", s.feat, qLab[2])
+		case 1:
+			s.title = fmt.Sprintf("%s Between Lower Quartile (%0.2f) and Median (%0.2f)", s.feat, qLab[2], qLab[3])
+		case 2:
+			s.title = fmt.Sprintf("%s Between Median (%0.2f) and Upper Quartile (%0.2f)", s.feat, qLab[3], qLab[4])
+		case 3:
+			s.title = fmt.Sprintf("%s Above Upper Quartile (%0.2f)", s.feat, qLab[4])
+		}
 		return true
+
 	case FRCat:
 		for {
 			// find the level that corresponds to the mapped value s.index
@@ -142,6 +147,8 @@ func (s *Slice) Iter() bool {
 
 				if v == s.index {
 					s.val = k
+					s.title = fmt.Sprintf("field %s = %v", s.feat, s.val)
+
 					// make sure it's in the current data set
 					c, ok := s.data.Summary.DistrD[s.val]
 					if !ok {
