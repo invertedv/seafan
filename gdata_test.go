@@ -1,6 +1,8 @@
 package seafan
 
 import (
+	"github.com/invertedv/chutils"
+	"io"
 	"math"
 	"math/rand"
 	"testing"
@@ -317,5 +319,98 @@ func TestGData_GetRaw(t *testing.T) {
 
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, x1, x1Test.Data)
+}
 
+func TestGData_Read(t *testing.T) {
+	var e error
+
+	x0 := make([]any, 0)
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(ind+1))
+	}
+
+	gd := NewGData()
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	assert.Nil(t, e)
+
+	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	assert.Nil(t, e)
+
+	c, e := gd.CountLines()
+	assert.Nil(t, e)
+	assert.Equal(t, c, len(x0))
+
+	row, _, e := gd.Read(1, false)
+	assert.Nil(t, e)
+	assert.Equal(t, row[0][0].(float64), x0[0])
+
+	assert.Nil(t, e)
+	assert.Equal(t, row[0][1].(string), x1[0])
+
+	e = gd.Seek(4)
+	assert.Nil(t, e)
+
+	row, _, e = gd.Read(1, false)
+	assert.Nil(t, e)
+	assert.Equal(t, row[0][0].(float64), x0[4])
+
+	assert.Nil(t, e)
+	assert.Equal(t, row[0][1].(string), x1[4])
+
+	ind := 0
+	e = gd.Reset()
+	assert.Nil(t, e)
+
+	for {
+		_, _, e = gd.Read(1, false)
+		if e == io.EOF {
+			break
+		}
+		ind++
+	}
+	assert.Equal(t, ind, len(x0))
+}
+
+func TestGData_TableSpec(t *testing.T) {
+	var e error
+
+	x0 := make([]any, 0)
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(ind+1))
+	}
+
+	gd := NewGData()
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	assert.Nil(t, e)
+
+	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	assert.Nil(t, e)
+	e = gd.MakeOneHot("Field1", "Field3")
+	assert.Nil(t, e)
+
+	x2 := []any{int32(0), int32(1), int32(2), int32(0), int32(1), int32(2), int32(0), int32(1), int32(2), int32(3)}
+	e = gd.AppendD(NewRaw(x2, nil), "Field2", nil)
+	assert.Nil(t, e)
+
+	td := gd.TableSpec()
+	assert.Equal(t, len(td.FieldDefs), 3)
+
+	col, fd, e := td.Get("Field0")
+	assert.Nil(t, e)
+	assert.Equal(t, col, 0)
+	assert.Equal(t, fd.ChSpec.Base, chutils.ChFloat)
+
+	col, fd, e = td.Get("Field1")
+	assert.Nil(t, e)
+	assert.Equal(t, col, 1)
+	assert.Equal(t, fd.ChSpec.Base, chutils.ChString)
+
+	fNames := []string{"Field0", "Field1", "Field2"}
+	for ind, fd := range td.FieldDefs {
+		assert.Equal(t, fd.Name, fNames[ind])
+	}
 }

@@ -2,6 +2,8 @@ package seafan
 
 import (
 	"fmt"
+	"github.com/invertedv/chutils"
+	"io"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -22,10 +24,12 @@ type GDatum struct {
 
 type GData struct {
 	data          []*GDatum // data array
+	dataRaw       []*Raw    // raw version
 	rows          int       // # of observations in each GDatum
 	sortField     string    // field data is sorted on (empty if not sorted)
 	sortData      *GDatum   // *GDatum of sortField
 	sortAscending bool      // sorts ascending, if true
+	currRow       int       // current row for reader
 }
 
 // NewGData returns a new instance of GData
@@ -582,5 +586,140 @@ func (gd *GData) Drop(field string) {
 		}
 	}
 	gd.data = newGd
+}
 
+// Read reads row(s) in the format of chutils.  Note: valids are all chutils.Valid.  Invoking Read for the first
+// time causes it to recreate the raw data of existing fields -- so the memory requirement will go up.
+func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []chutils.Valid, err error) {
+	if nTarget <= 0 {
+		return nil, nil, fmt.Errorf("(*GData) Read invalid nTarget")
+	}
+
+	// if this is the first read, then we need to populate the dataRaw array
+	if gd.dataRaw == nil {
+		gd.dataRaw = make([]*Raw, 0)
+		for ind := 0; ind < len(gd.data); ind++ {
+			datum := gd.data[ind]
+			if datum.FT.Role == FREmbed || datum.FT.Role == FROneHot {
+				continue
+			}
+			raw, e := gd.GetRaw(datum.FT.Name)
+			if e != nil {
+				return nil, nil, e
+			}
+			gd.dataRaw = append(gd.dataRaw, raw)
+		}
+	}
+
+	data = make([]chutils.Row, 0)
+	valid = make([]chutils.Valid, 0)
+
+	for row := gd.currRow; row < gd.currRow+nTarget; row++ {
+		gd.currRow = row
+		rows := make(chutils.Row, 0)
+		valids := make(chutils.Valid, 0)
+
+		if row >= gd.rows {
+			err = io.EOF
+			gd.currRow = 0
+			return
+		}
+
+		ind := 0
+		for col := 0; col < len(gd.data); col++ {
+			datum := gd.data[col]
+			if datum.FT.Role == FREmbed || datum.FT.Role == FROneHot {
+				continue
+			}
+			x := gd.dataRaw[ind].Data[row]
+			rows = append(rows, x)
+			ind++
+		}
+
+		data = append(data, rows)
+		valid = append(valid, valids)
+	}
+
+	gd.currRow++ // set to next row
+	return data, valid, err
+}
+
+func (gd *GData) CountLines() (numLines int, err error) {
+	return gd.rows, nil
+}
+
+func (gd *GData) Reset() error {
+	gd.currRow = 0
+	return nil
+}
+
+func (gd *GData) Seek(lineNo int) error {
+	if lineNo >= gd.rows {
+		return chutils.Wrapper(chutils.ErrSeek, "seek past end of data")
+	}
+
+	if lineNo < 0 {
+		return chutils.Wrapper(chutils.ErrSeek, "seek past beginning of data")
+	}
+
+	gd.currRow = lineNo
+
+	return nil
+}
+
+func (gd *GData) Close() error {
+	gd.currRow = 0
+	return nil
+}
+
+func (gd *GData) TableSpec() *chutils.TableDef {
+	fds := make(map[int]*chutils.FieldDef)
+
+	ind := 0
+	for col := 0; col < len(gd.data); col++ {
+		datum := gd.data[col]
+		fd := &chutils.FieldDef{
+			Name:        datum.FT.Name,
+			ChSpec:      chutils.ChField{},
+			Description: "",
+			Legal:       nil,
+			Missing:     nil,
+			Default:     nil,
+			Width:       0,
+			Drop:        false,
+		}
+
+		switch datum.FT.Role {
+		case FREmbed, FROneHot:
+			continue
+		case FRCts:
+			fd.ChSpec.Base, fd.ChSpec.Length = chutils.ChFloat, 64
+		case FRCat:
+			x := datum.FT.FP.Lvl.FindValue(0)
+			switch x.(type) {
+			case int32:
+				fd.ChSpec.Base, fd.ChSpec.Length = chutils.ChInt, 32
+			case int64:
+				fd.ChSpec.Base, fd.ChSpec.Length = chutils.ChInt, 64
+			case string:
+				fd.ChSpec.Base = chutils.ChString
+			case time.Time:
+				fd.ChSpec.Base = chutils.ChDate
+			default:
+				return nil
+			}
+		}
+
+		fds[ind] = fd
+		ind++
+	}
+
+	key := fds[0].Name
+	td := chutils.NewTableDef(key, chutils.MergeTree, fds)
+
+	if e := td.Check(); e != nil {
+		return nil
+	}
+
+	return td
 }
