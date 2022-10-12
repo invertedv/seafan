@@ -586,7 +586,7 @@ func SoftRMS(model *NNModel) (cost *G.Node) {
 // CrossEntropy cost function
 func CrossEntropy(model *NNModel) (cost *G.Node) {
 	// if a fitted value is 0, we drop it from the calculation.
-	isZero := G.Must(G.Eq(model.Fitted().Nodes()[0], G.NewConstant(0.0), true))
+	isZero := G.Must(G.Lte(model.Fitted().Nodes()[0], G.NewConstant(0.0), true))
 	fit := G.Must(G.Add(model.Fitted().Nodes()[0], isZero))
 
 	cost = G.Must(G.Neg(G.Must(G.Mean(G.Must(G.HadamardProd(G.Must(G.Log(fit)), model.Obs()))))))
