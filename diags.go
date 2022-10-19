@@ -399,8 +399,7 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 // target -- target columns of the model output to coalesce
 // name -- name of fitted value in Pipeline
 // fts -- options FTypes to use for normalizing pipeIn
-func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes) error {
-
+func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes, logodds bool) error {
 	// operate on all data
 	bSize := pipeIn.BatchSize()
 	WithBatchSize(0)(pipeIn) // all rows
@@ -417,6 +416,12 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 	for row := 0; row < len(fit); row++ {
 		for _, col := range target {
 			fit[row] += bigFit[row*outCols+col]
+		}
+		if logodds {
+			if fit[row] <= 0.0 || fit[row] >= 1.0 {
+				return Wrapper(ErrDiags, "attempt to take log odds of value <=0 or >=1")
+			}
+			fit[row] = math.Log(fit[row] / (1.0 - fit[row]))
 		}
 	}
 
@@ -457,7 +462,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	WithBatchSize(pipe.Rows())(pipe)
 
-	if e = AddFitted(pipe, nnFile, target, "fitted", nil); e != nil {
+	if e = AddFitted(pipe, nnFile, target, "fitted", nil, false); e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
