@@ -48,7 +48,7 @@ func (ch *ChData) GetFTypes() FTypes {
 
 // SaveFTypes saves the FTypes for the Pipeline.
 func (ch *ChData) SaveFTypes(fileName string) error {
-	return Wrapper(ch.GetFTypes().Save(fileName), "(*ChData).SaveFTypes")
+	return ch.GetFTypes().Save(fileName)
 }
 
 // returns *FType from user-input FTypes.

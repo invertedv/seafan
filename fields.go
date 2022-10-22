@@ -187,7 +187,7 @@ func (fts FTypes) Save(fileName string) (err error) {
 	}
 
 	if _, err = f.WriteString(string(jfp)); err != nil {
-		return
+		return err
 	}
 
 	return err
@@ -234,11 +234,19 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 		case "string":
 			fp.Default = fmt.Sprintf("%v", d.FP.Default)
 		case "int32":
-			val := int32(d.FP.Default.(float64))
-			fp.Default = val
+			switch d.FP.Default.(type) {
+			case int32:
+				fp.Default = int64(d.FP.Default.(float64))
+			default:
+				fp.Default = nil
+			}
 		case "int64":
-			val := int64(d.FP.Default.(float64))
-			fp.Default = val
+			switch d.FP.Default.(type) {
+			case int64:
+				fp.Default = int64(d.FP.Default.(float64))
+			default:
+				fp.Default = nil
+			}
 		case "date":
 			val, e := time.Parse(time.RFC3339, fmt.Sprintf("%s", d.FP.Default))
 			if e != nil {

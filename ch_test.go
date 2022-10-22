@@ -168,7 +168,7 @@ func ExampleChData_Init() {
 	if e != nil {
 		panic(e)
 	}
-	// Target:
+	// Output:
 	// rows read:  8500
 }
 
@@ -218,7 +218,7 @@ func ExampleChData_Batch() {
 	mean := sumX / float64(n)
 
 	fmt.Printf("mean of x1: %0.2f", math.Abs(mean))
-	// Target:
+	// Output:
 	// rows read:  8500
 	// mean of x1: 0.00
 }
@@ -283,7 +283,7 @@ func ExampleChData_Batch_example2() {
 	mean := sumX / float64(n)
 
 	fmt.Printf("mean of x1: %0.2f", math.Abs(mean))
-	// Target:
+	// Output:
 	// rows read:  8500
 	// mean of x1: 39.50
 }
@@ -353,7 +353,7 @@ func ExampleChData_SaveFTypes() {
 	}
 
 	fmt.Printf("Role of field y1oh: %s", ch.GetFType("y1oh").Role)
-	// Target:
+	// Output:
 	// rows read:  8500
 	// rows read:  8500
 	// Role of field y1oh: FROneHot

@@ -22,7 +22,7 @@ func TestCoalesce(t *testing.T) {
 	expFit := []float64{.5, .3, .4, .2}
 
 	targ := []int{2}
-	xy, e := Coalesce(obs, fit, nCat, targ, false, nil)
+	xy, e := Coalesce2(obs, fit, nCat, targ, false, nil)
 
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, xy.Y, expObs)
@@ -31,7 +31,7 @@ func TestCoalesce(t *testing.T) {
 	targ = []int{1, 2}
 	expObs = []float64{1, 1, 1, 0}
 	expFit = []float64{.8, .8, .8, .5}
-	xy, e = Coalesce(obs, fit, nCat, targ, false, nil)
+	xy, e = Coalesce2(obs, fit, nCat, targ, false, nil)
 
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, xy.Y, expObs)
@@ -55,7 +55,7 @@ func TestKS(t *testing.T) {
 		}
 	}
 
-	xy, e := Coalesce(y, p, 2, []int{1}, false, nil)
+	xy, e := Coalesce2(y, p, 2, []int{1}, false, nil)
 
 	assert.Nil(t, e)
 	ks, _, _, e := KS(xy, nil)
@@ -109,22 +109,50 @@ func ExampleSlice_Iter() {
 	WithBatchSize(8500)(pipe)
 
 	pred, e := PredictNN(sf, pipe, false)
-
 	if e != nil {
+		panic(e)
+	}
+
+	if e = AddFitted(pipe, sf, []int{1}, "fit", nil, false); e != nil {
+		panic(e)
+	}
+
+	obs, e := Coalesce(pred.ObsSlice(), 2, []int{1}, true, false, nil)
+	if e != nil {
+		panic(e)
+	}
+	obsRaw := NewRawCast(obs, nil)
+	if e = pipe.GData().AppendField(obsRaw, "y1", FRCts); e != nil {
+		panic(e)
+	}
+
+	// This will create one plot where each of the points is based on a value of x4
+	if e := SegPlot(pipe, "y1", "fit", "x4", &PlotDef{
+		Title:    "Decile: ",
+		XTitle:   "Score",
+		YTitle:   "Actual",
+		STitle:   "",
+		Legend:   false,
+		Height:   1200,
+		Width:    1200,
+		Show:     true,
+		FileName: "",
+	}); e != nil {
 		panic(e)
 	}
 
 	_ = os.Remove(sf + "P.nn")
 	_ = os.Remove(sf + "S.nn")
-	s, e := NewSlice("x4", 0, pipe, nil)
 
+	s, e := NewSlice("x4", 0, pipe, nil)
 	if e != nil {
 		panic(e)
 	}
 
+	// This will create a separate decile plot based on each value of x4
 	for s.Iter() {
 		slicer := s.MakeSlicer()
-		xy, e := Coalesce(pred.ObsSlice(), pred.FitSlice(), 2, []int{1}, false, slicer)
+		xy, e := Coalesce2(pred.ObsSlice(), pred.FitSlice(), 2, []int{1}, false, slicer)
 		if e != nil {
 			panic(e)
 		}
@@ -142,5 +170,5 @@ func ExampleSlice_Iter() {
 			panic(e)
 		}
 	}
-	// Target:
+	// Output:
 }

@@ -13,6 +13,71 @@ import (
 
 const thresh = 0.5 // threshold for declaring y[i] to be a 1
 
+func Coalesce(vals []float64, nCat int, trg []int, binary, logodds bool, sl Slicer) ([]float64, error) {
+
+	if nCat < 1 {
+		return nil, Wrapper(ErrDiags, "Coalesce: nCat must be at least 1")
+	}
+
+	if trg == nil {
+		return nil, Wrapper(ErrDiags, "Coalesce: trg cannot be nil")
+	}
+
+	if len(vals)%nCat != 0 {
+		return nil, Wrapper(ErrDiags, "Coalesce: len y not multiple of nCat")
+	}
+
+	for _, t := range trg {
+		if t > nCat-1 {
+			return nil, Wrapper(ErrDiags, "Coalesce: trg index out of range")
+		}
+	}
+	if binary && logodds {
+		return nil, Wrapper(ErrDiags, "coalesce cannot have both binary and logodds")
+	}
+
+	n := len(vals) / nCat // # of observations
+	coalesced := make([]float64, 0)
+
+	for row := 0; row < n; row++ {
+		if sl != nil && !sl(row) {
+			continue
+		}
+		// index into y/pred which is stored by row
+		ind := row * nCat
+		den := 1.0
+		// if the input is log odds, we need to reconstruct probabilities
+		if logodds {
+			den = 0.0
+			for col := 0; col < nCat; col++ {
+				den += math.Exp(vals[ind+col])
+			}
+		}
+
+		outVal := 0.0
+		// We may be aggregating over categories of softmax
+		for _, col := range trg {
+			switch binary {
+			case true:
+				if vals[ind+col] > thresh {
+					outVal = 1.0
+				}
+			case false:
+				switch logodds {
+				case true:
+					outVal += math.Exp(vals[ind+col]) / den
+				case false:
+					outVal += vals[ind+col]
+				}
+			}
+
+		}
+		coalesced = append(coalesced, outVal)
+	}
+
+	return coalesced, nil
+}
+
 // Coalesce reduces a softmax output to two categories
 //
 //	y         observed multinomial values
@@ -22,7 +87,7 @@ const thresh = 0.5 // threshold for declaring y[i] to be a 1
 //	logodds   if true, fit is in log odds space
 //
 // An XY struct of the coalesced outcome (Y) & fitted values (X) is returned
-func Coalesce(y, fit []float64, nCat int, trg []int, logodds bool, sl Slicer) (*XY, error) {
+func Coalesce2(y, fit []float64, nCat int, trg []int, logodds bool, sl Slicer) (*XY, error) {
 
 	if len(y) != len(fit) {
 		return nil, Wrapper(ErrDiags, "Coalesce: y and fit must have same len")
@@ -213,15 +278,122 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 	return ks, notTarget, target, err
 }
 
-// Decile generates a decile plot of a softmax model that is reduced to a binary outcome.
+// SegPlot generates a decile plot of the fields y and fit in pipe.  The segments are based on the values of the field seg.
+// If seg is continuous, the segments are the quartiles.
 //
-//	y         observed multinomial values
-//	fit       fitted softmax probabilities
-//	trg       columns of y to be grouped into a single outcome. The complement is reduced to the alternate outcome.
-//	logodds   if true, fit is in log odds space
+//		obs       observed field (y-axis)
+//		fit       fitted field (x-axis)
+//	 seg       segmenting field
+//		plt       PlotDef plot options.  If plt is nil an error is generated.
+func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef) error {
+	const minCnt = 100 // min # of obs for each point
+
+	if plt == nil {
+		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
+	}
+
+	fitFtype := pipe.GetFType(fit)
+	if fitFtype == nil {
+		return Wrapper(ErrDiags, fmt.Sprintf("no such field: %s", fit))
+	}
+
+	obsFit := pipe.GetFType(obs)
+	if obsFit == nil {
+		return Wrapper(ErrDiags, fmt.Sprintf("no such field: %s", obs))
+	}
+
+	if fitFtype.Role != FRCts || obsFit.Role != FRCts {
+		return Wrapper(ErrDiags, "decile inputs must be type FRCts")
+	}
+
+	sliceGrp, e := NewSlice(seg, minCnt, pipe, nil)
+	if e != nil {
+		return e
+	}
+
+	fits := make([]float64, 0)
+	obss := make([]float64, 0)
+	fig := &grob.Fig{}
+	minVal, maxVal := math.MaxFloat64, -math.MaxFloat64
+	ind, mad := 0, float64(0)
+
+	for sliceGrp.Iter() {
+		slicer := sliceGrp.MakeSlicer()
+		pipeSlice, e := pipe.Slice(slicer)
+		if e != nil {
+			continue
+		}
+		nSqrt := math.Sqrt(float64(pipeSlice.Rows()))
+
+		distr := pipeSlice.Get(obs).Summary.DistrC
+		obsMean, obsStd := distr.Mean, distr.Std/nSqrt
+		fitMean := pipeSlice.Get(fit).Summary.DistrC.Mean
+
+		fits = append(fits, fitMean)
+		obss = append(obss, obsMean)
+		mad += float64(pipeSlice.Rows()) * math.Abs(fitMean-obsMean)
+		ci := []float64{obsMean - 2.0*obsStd, obsMean + 2.0*obsStd}
+		maxVal = math.Max(maxVal, ci[1])
+		minVal = math.Min(minVal, ci[0])
+		ind++
+
+		trCI := &grob.Scatter{
+			Type: grob.TraceTypeScatter,
+			X:    []float64{fitMean, fitMean},
+			Y:    ci,
+			Name: fmt.Sprintf("CI%d", ind),
+			Mode: grob.ScatterModeLines,
+			Line: &grob.ScatterLine{Color: "black"},
+		}
+		fig.AddTraces(trCI)
+	}
+
+	tr := &grob.Scatter{
+		Type: grob.TraceTypeScatter,
+		X:    fits,
+		Y:    obss,
+		Name: "decile averages",
+		Mode: grob.ScatterModeMarkers,
+		Line: &grob.ScatterLine{Color: "green"},
+	}
+	fig.AddTraces(tr)
+
+	tr = &grob.Scatter{
+		Type: grob.TraceTypeScatter,
+		X:    []float64{minVal, maxVal},
+		Y:    []float64{minVal, maxVal},
+		Name: "ref",
+		Mode: grob.ScatterModeLines,
+		Line: &grob.ScatterLine{Color: "red"},
+	}
+	fig.AddTraces(tr)
+
+	mad /= float64(pipe.Rows())
+	plt.STitle = fmt.Sprintf("Weighted MAD: %0.2f", mad)
+
+	if plt.XTitle == "" {
+		plt.XTitle = fit
+	}
+
+	if plt.YTitle == "" {
+		plt.YTitle = obs
+	}
+
+	if plt.Title == "" {
+		plt.Title = "Decile Plot"
+	}
+
+	err := Plotter(fig, &grob.Layout{}, plt)
+
+	return err
+}
+
+// Decile generates a decile plot based on xy
+//
+//	XY        values to base the plot on.
 //	plt       PlotDef plot options.  If plt is nil an error is generated.
 //
-// Target: html plot file and/or plot in browser.
+// The deciles are created based on the values of xy.X
 func Decile(xy *XY, plt *PlotDef) error {
 	if plt == nil {
 		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
@@ -285,14 +457,17 @@ func Decile(xy *XY, plt *PlotDef) error {
 	}
 
 	fig := &grob.Fig{Data: grob.Traces{tr}}
-
 	lower, upper := make([]float64, ng), make([]float64, ng)
+	minVal, maxVal := math.MaxFloat64, -math.MaxFloat64
 
 	for g := 0; g < ng; g++ {
 		nFloat := float64(nDec[g])
 		w := math.Sqrt(yDec[g] * (1.0 - yDec[g]) / nFloat)
 		lower[g] = yDec[g] - 2.0*w
 		upper[g] = yDec[g] + 2.0*w
+
+		minVal = math.Min(math.Min(minVal, lower[g]), fDec[g])
+		maxVal = math.Max(math.Max(maxVal, upper[g]), fDec[g])
 
 		trCI := &grob.Scatter{
 			Type: grob.TraceTypeScatter,
@@ -304,10 +479,11 @@ func Decile(xy *XY, plt *PlotDef) error {
 		}
 		fig.AddTraces(trCI)
 	}
+
 	tr = &grob.Scatter{
 		Type: grob.TraceTypeScatter,
-		X:    []float64{0, 1},
-		Y:    []float64{0, 1},
+		X:    []float64{minVal, maxVal},
+		Y:    []float64{minVal, maxVal},
 		Name: "ref",
 		Mode: grob.ScatterModeLines,
 		Line: &grob.ScatterLine{Color: "red"},
@@ -428,10 +604,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 	gData := pipeIn.GData()
 	fitRaw := NewRawCast(fit, nil)
 
-	// drop field if it's already there
-	gData.Drop(name)
-
-	if e = gData.AppendC(fitRaw, name, false, nil); e != nil {
+	if e := gData.AppendField(fitRaw, name, FRCts); e != nil {
 		return e
 	}
 
@@ -441,7 +614,9 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 }
 
 // Marginal produces a set of plots to aid in understanding the effect of a feature.
-// The plot takes the model output and creates four segments based on the quartiles of the model output.
+// The plot takes the model output and creates six segments based on the quantiles of the model output:
+// (<.1, .1-.25, .25-.5, .5-.75, .75-.9, .9-1).
+//
 // For each segment, the feature being analyzed various across its range within the quartile (continuous)
 // its values (discrete).
 // The bottom row shows the distribution of the feature within the quartile range.
@@ -454,7 +629,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	name := feat
 	lay := &grob.Layout{}
-	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: 4, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
+	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: 6, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
 	fig := &grob.Fig{}
 
 	bSize := pipe.BatchSize()
@@ -476,7 +651,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 		return Wrapper(e, "Marginal")
 	}
 
-	plotNo := 8 // used as a basis to know which plot we're working on
+	plotNo := 12 // used as a basis to know which plot we're working on
 
 	for slice.Iter() {
 		sl := slice.MakeSlicer()
@@ -561,20 +736,23 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 		}
 
 		nCat := nn1.Cols()
-		xy, e := Coalesce(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
+		fit, e := Coalesce(nn1.FitSlice(), nCat, target, false, false, nil)
+		//xy, e := Coalesce2(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}
 
-		xAxis, yAxis = fmt.Sprintf("x%d", plotNo-4), fmt.Sprintf("y%d", plotNo-4)
+		xAxis, yAxis = fmt.Sprintf("x%d", plotNo-6), fmt.Sprintf("y%d", plotNo-6)
 		plotNo--
-		tr := &grob.Box{X: xs1, Y: xy.X, Type: grob.TraceTypeBox, Xaxis: xAxis, Yaxis: yAxis}
+		tr := &grob.Box{X: xs1, Y: fit, Type: grob.TraceTypeBox, Xaxis: xAxis, Yaxis: yAxis}
 
 		fig.AddTraces(tr)
+		if plotNo == 6 {
+			break
+		}
 	}
 
 	pd.Title = fmt.Sprintf("Marginal Effect of %s by Quartile of Fitted Value (High to Low)<br>%s", name, pd.Title)
-
 	if e := Plotter(fig, lay, pd); e != nil {
 		return Wrapper(e, "Marginal")
 	}

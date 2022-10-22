@@ -723,3 +723,29 @@ func (gd *GData) TableSpec() *chutils.TableDef {
 
 	return td
 }
+
+// AppendField adds a field to gd
+func (gd *GData) AppendField(newData *Raw, name string, fRole FRole) error {
+
+	// drop field if it's already there
+	gd.Drop(name)
+
+	switch fRole {
+	case FRCts:
+		if e := gd.AppendC(newData, name, false, nil); e != nil {
+			return e
+		}
+	case FRCat, FROneHot, FREmbed:
+		if e := gd.AppendD(newData, name, nil); e != nil {
+			return e
+		}
+	}
+
+	if fRole == FROneHot || fRole == FREmbed {
+		if e := gd.MakeOneHot(name, name+"Oh"); e != nil {
+			return e
+		}
+	}
+
+	return nil
+}

@@ -2,8 +2,6 @@ package seafan
 
 import "fmt"
 
-const ctsCat = 4 // number of categories continuous fields are sliced into
-
 // Slicer is an optional function that returns true if the row is to be used in calculations. This is used to
 // subset the diagnostics to specific values.
 type Slicer func(row int) bool
@@ -78,17 +76,7 @@ func (s *Slice) MakeSlicer() Slicer {
 			return s.data.Data.([]int32)[row] == s.index
 		case FRCts:
 			q := s.data.Summary.DistrC.Q
-
-			switch s.index {
-			case 0:
-				return s.data.Data.([]float64)[row] < q[2] // under lower quartile
-			case 1:
-				return s.data.Data.([]float64)[row] >= q[2] && s.data.Data.([]float64)[row] < q[3] // lower quartile to median
-			case 2:
-				return s.data.Data.([]float64)[row] >= q[3] && s.data.Data.([]float64)[row] < q[4] // median to upper quartile
-			case 3:
-				return s.data.Data.([]float64)[row] >= q[4] // above upper quartile
-			}
+			return s.data.Data.([]float64)[row] < q[s.index+1] && s.data.Data.([]float64)[row] >= q[s.index]
 		}
 
 		return false
@@ -102,7 +90,7 @@ func (s *Slice) Iter() bool {
 	s.index++
 	switch s.data.FT.Role {
 	case FRCts:
-		if s.index == ctsCat {
+		if s.index+1 == int32(len(s.data.Summary.DistrC.Q)) {
 			s.index = -1
 
 			return false
@@ -123,16 +111,8 @@ func (s *Slice) Iter() bool {
 			}
 		}
 
-		switch s.index {
-		case 0:
-			s.title = fmt.Sprintf("%s Less Than Lower Quartile (%0.2f)", s.feat, qLab[2])
-		case 1:
-			s.title = fmt.Sprintf("%s Between Lower Quartile (%0.2f) and Median (%0.2f)", s.feat, qLab[2], qLab[3])
-		case 2:
-			s.title = fmt.Sprintf("%s Between Median (%0.2f) and Upper Quartile (%0.2f)", s.feat, qLab[3], qLab[4])
-		case 3:
-			s.title = fmt.Sprintf("%s Above Upper Quartile (%0.2f)", s.feat, qLab[4])
-		}
+		s.title = fmt.Sprintf("%s between quantiles %v and %v", s.feat, qLab[s.index], qLab[s.index+1])
+
 		return true
 
 	case FRCat:

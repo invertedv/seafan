@@ -155,7 +155,7 @@ func ExampleWithOneHot() {
 	}
 
 	fmt.Println(nn)
-	// Target:
+	// Output:
 	//x4 as one-hot
 	//
 	//Inputs
@@ -245,7 +245,7 @@ func ExampleWithOneHot_example2() {
 		panic(e)
 	}
 	fmt.Println(nn)
-	// Target:
+	// Output:
 	//Example With Dropouts
 	//Inputs
 	//Field x1
@@ -314,7 +314,7 @@ func ExampleFit_Do() {
 	if e != nil {
 		panic(e)
 	}
-	// Target:
+	// Output:
 }
 
 func ExampleFit_Do_example2() {
@@ -361,7 +361,7 @@ func ExampleFit_Do_example2() {
 	if e != nil {
 		panic(e)
 	}
-	// Target:
+	// Output:
 }
 
 func ExamplePredictNN() {
@@ -415,7 +415,7 @@ func ExamplePredictNN() {
 	}
 
 	_ = os.Remove(sf + "S.nn")
-	// Target:
+	// Output:
 	// out-of-sample correlation: 0.84
 }
 
@@ -476,7 +476,7 @@ func ExampleWithCallBack() {
 	if e != nil {
 		panic(e)
 	}
-	// Target:
+	// Output:
 	//New data at end of epoch  100
 	//Number of rows  1000
 }
