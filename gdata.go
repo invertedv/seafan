@@ -181,7 +181,7 @@ func (gd *GData) AppendD(raw *Raw, name string, fp *FParam) error {
 		if !ok {
 			val, ok = fp.Lvl[fp.Default]
 			if !ok {
-				return Wrapper(ErrGData, fmt.Sprintf("AppendD: default value %v not in dictionary", fp.Default))
+				return Wrapper(ErrGData, fmt.Sprintf("AppendD: default value %v not in dictionary, field %s", fp.Default, name))
 			}
 		}
 

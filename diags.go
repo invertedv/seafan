@@ -285,7 +285,7 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 //		fit       fitted field (x-axis)
 //	 seg       segmenting field
 //		plt       PlotDef plot options.  If plt is nil an error is generated.
-func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef) error {
+func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *float64) error {
 	const minCnt = 100 // min # of obs for each point
 
 	if plt == nil {
@@ -314,7 +314,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef) error {
 	fits := make([]float64, 0)
 	obss := make([]float64, 0)
 	fig := &grob.Fig{}
-	minVal, maxVal := math.MaxFloat64, -math.MaxFloat64
+	minV, maxV := math.MaxFloat64, -math.MaxFloat64
 	ind, mad := 0, float64(0)
 
 	for sliceGrp.Iter() {
@@ -333,8 +333,8 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef) error {
 		obss = append(obss, obsMean)
 		mad += float64(pipeSlice.Rows()) * math.Abs(fitMean-obsMean)
 		ci := []float64{obsMean - 2.0*obsStd, obsMean + 2.0*obsStd}
-		maxVal = math.Max(maxVal, ci[1])
-		minVal = math.Min(minVal, ci[0])
+		maxV = math.Max(maxV, ci[1])
+		minV = math.Min(minV, ci[0])
 		ind++
 
 		trCI := &grob.Scatter{
@@ -358,10 +358,17 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef) error {
 	}
 	fig.AddTraces(tr)
 
+	// if user has supplied graph limits, use them
+	if minVal != nil {
+		minV = *minVal
+	}
+	if maxVal != nil {
+		maxV = *maxVal
+	}
 	tr = &grob.Scatter{
 		Type: grob.TraceTypeScatter,
-		X:    []float64{minVal, maxVal},
-		Y:    []float64{minVal, maxVal},
+		X:    []float64{minV, maxV},
+		Y:    []float64{minV, maxV},
 		Name: "ref",
 		Mode: grob.ScatterModeLines,
 		Line: &grob.ScatterLine{Color: "red"},
@@ -593,11 +600,20 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 		for _, col := range target {
 			fit[row] += bigFit[row*outCols+col]
 		}
+
 		if logodds {
-			if fit[row] <= 0.0 || fit[row] >= 1.0 {
-				return Wrapper(ErrDiags, "attempt to take log odds of value <=0 or >=1")
+			switch {
+			case fit[row] < 0.0:
+				return Wrapper(ErrDiags, "attempt to take log odds of value <0")
+			case fit[row] == 0.0:
+				fit[row] = -10.0
+			case fit[row] > 0.0 && fit[row] < 1.0:
+				fit[row] = math.Log(fit[row] / (1.0 - fit[row]))
+			case fit[row] == 1.0:
+				fit[row] = 10.0
+			case fit[row] > 1.0:
+				return Wrapper(ErrDiags, "attempt to take log odds of value >1")
 			}
-			fit[row] = math.Log(fit[row] / (1.0 - fit[row]))
 		}
 	}
 

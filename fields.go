@@ -235,14 +235,14 @@ func LoadFTypes(fileName string) (fts FTypes, err error) {
 			fp.Default = fmt.Sprintf("%v", d.FP.Default)
 		case "int32":
 			switch d.FP.Default.(type) {
-			case int32:
-				fp.Default = int64(d.FP.Default.(float64))
+			case float64:
+				fp.Default = int32(d.FP.Default.(float64))
 			default:
 				fp.Default = nil
 			}
 		case "int64":
 			switch d.FP.Default.(type) {
-			case int64:
+			case float64:
 				fp.Default = int64(d.FP.Default.(float64))
 			default:
 				fp.Default = nil
