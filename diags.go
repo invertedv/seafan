@@ -13,6 +13,20 @@ import (
 
 const thresh = 0.5 // threshold for declaring y[i] to be a 1
 
+// UnNormalize un-normalizes a slice, if need be
+func UnNormalize(vals []float64, ft *FType) (unNorm []float64) {
+	outVal := vals
+	if ft != nil && ft.Normalized {
+		for ind, v := range vals {
+			outVal[ind] = v*ft.FP.Scale + ft.FP.Location
+		}
+	}
+
+	return outVal
+}
+
+// Coalesce combines columns of a either a one-hot feature or a softmax output.  In the case of a feature,
+// it returns 1 if any of the target columns is 1.  In the case of a softmax output, it sums the entries.
 func Coalesce(vals []float64, nCat int, trg []int, binary, logodds bool, sl Slicer) ([]float64, error) {
 
 	if nCat < 1 {
@@ -70,95 +84,17 @@ func Coalesce(vals []float64, nCat int, trg []int, binary, logodds bool, sl Slic
 					outVal += vals[ind+col]
 				}
 			}
-
 		}
+
 		coalesced = append(coalesced, outVal)
 	}
 
 	return coalesced, nil
 }
 
-// Coalesce reduces a softmax output to two categories
-//
-//	y         observed multinomial values
-//	fit       softmax fit to y
-//	nCat      # of categories
-//	trg       columns of y to be grouped into a single outcome. The complement is reduced to the alternate outcome.
-//	logodds   if true, fit is in log odds space
-//
-// An XY struct of the coalesced outcome (Y) & fitted values (X) is returned
-func Coalesce2(y, fit []float64, nCat int, trg []int, logodds bool, sl Slicer) (*XY, error) {
-
-	if len(y) != len(fit) {
-		return nil, Wrapper(ErrDiags, "Coalesce: y and fit must have same len")
-	}
-
-	if nCat < 1 {
-		return nil, Wrapper(ErrDiags, "Coalesce: nCat must be at least 1")
-	}
-
-	if trg == nil {
-		return nil, Wrapper(ErrDiags, "Coalesce: trg cannot be nil")
-	}
-
-	if len(y)%nCat != 0 {
-		return nil, Wrapper(ErrDiags, "Coalesce: len y not multiple of nCat")
-	}
-
-	for _, t := range trg {
-		if t > nCat-1 {
-			return nil, Wrapper(ErrDiags, "Coalesce: trg index out of range")
-		}
-	}
-
-	n := len(y) / nCat // # of observations
-	xOut := make([]float64, 0)
-	yOut := make([]float64, 0)
-
-	for row := 0; row < n; row++ {
-		if sl != nil && !sl(row) {
-			continue
-		}
-		// index into y/pred which is stored by row
-		ind := row * nCat
-		den := 1.0
-		// if the input is log odds, we need to reconstruct probabilities
-		if logodds {
-			den = 0.0
-			for col := 0; col < nCat; col++ {
-				den += math.Exp(fit[ind+col])
-			}
-		}
-
-		pred, obs := 0.0, 0.0 // predicted & observed
-		// We may be aggregating over categories of softmax
-		for _, col := range trg {
-			// y is one if any of the trg levels is 1
-			if y[ind+col] > thresh {
-				obs = 1.0
-			}
-
-			switch logodds {
-			case true:
-				pred += math.Exp(fit[ind+col]) / den
-			case false:
-				pred += fit[ind+col]
-			}
-		}
-
-		xOut = append(xOut, pred)
-		yOut = append(yOut, obs)
-	}
-
-	return &XY{X: xOut, Y: yOut}, nil
-}
-
 // KS finds the KS of a softmax model that is reduced to a binary outcome.
 //
-//	y         observed multinomial values
-//	fit       fitted softmax probabilities
-//	trg       columns of y to be grouped into a single outcome. The complement is reduced to the alternate outcome.
-//	logodds   if true, fit is in log odds space
+//	xy        XY struct where x is fitted value and y is the binary observed value
 //	plt       PlotDef plot options.  If plt is nil, no plot is produced.
 //
 // The ks statistic is returned as are Desc descriptions of the model for the two groups.
@@ -315,7 +251,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	obss := make([]float64, 0)
 	fig := &grob.Fig{}
 	minV, maxV := math.MaxFloat64, -math.MaxFloat64
-	ind, mad := 0, float64(0)
+	ind, mad, rowTot := 0, float64(0), float64(0)
 
 	for sliceGrp.Iter() {
 		slicer := sliceGrp.MakeSlicer()
@@ -331,7 +267,8 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 
 		fits = append(fits, fitMean)
 		obss = append(obss, obsMean)
-		mad += float64(pipeSlice.Rows()) * math.Abs(fitMean-obsMean)
+		mad += math.Abs(fitMean - obsMean)
+		rowTot++
 		ci := []float64{obsMean - 2.0*obsStd, obsMean + 2.0*obsStd}
 		maxV = math.Max(maxV, ci[1])
 		minV = math.Min(minV, ci[0])
@@ -375,8 +312,8 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	}
 	fig.AddTraces(tr)
 
-	mad /= float64(pipe.Rows())
-	plt.STitle = fmt.Sprintf("Weighted MAD: %0.2f", mad)
+	mad /= rowTot
+	plt.STitle = fmt.Sprintf("Weighted MAD: %0.4f", mad)
 
 	if plt.XTitle == "" {
 		plt.XTitle = fit
@@ -582,7 +519,7 @@ func Assess(xy *XY, cutoff float64) (n int, precision, recall, accuracy float64,
 // target -- target columns of the model output to coalesce
 // name -- name of fitted value in Pipeline
 // fts -- options FTypes to use for normalizing pipeIn
-func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes, logodds bool) error {
+func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FTypes, logodds bool, obsFit *FType) error {
 	// operate on all data
 	bSize := pipeIn.BatchSize()
 	WithBatchSize(0)(pipeIn) // all rows
@@ -618,7 +555,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 	}
 
 	gData := pipeIn.GData()
-	fitRaw := NewRawCast(fit, nil)
+	fitRaw := NewRawCast(UnNormalize(fit, obsFit), nil)
 
 	if e := gData.AppendField(fitRaw, name, FRCts); e != nil {
 		return e
@@ -636,7 +573,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 // For each segment, the feature being analyzed various across its range within the quartile (continuous)
 // its values (discrete).
 // The bottom row shows the distribution of the feature within the quartile range.
-func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotDef) error {
+func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotDef, obsFtype *FType) error {
 	const (
 		take    = 1000 // # of obs to use for graph
 		maxCats = 10   // max # of levels of a categorical field to show in plot
@@ -653,7 +590,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 	WithBatchSize(pipe.Rows())(pipe)
 
-	if e = AddFitted(pipe, nnFile, target, "fitted", nil, false); e != nil {
+	if e = AddFitted(pipe, nnFile, target, "fitted", nil, false, obsFtype); e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
@@ -752,8 +689,8 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 		}
 
 		nCat := nn1.Cols()
-		fit, e := Coalesce(nn1.FitSlice(), nCat, target, false, false, nil)
-		//xy, e := Coalesce2(nn1.ObsSlice(), nn1.FitSlice(), nCat, target, false, nil)
+
+		fit, e := Coalesce(UnNormalize(nn1.FitSlice(), obsFtype), nCat, target, false, false, nil)
 		if e != nil {
 			return Wrapper(e, "Marginal")
 		}

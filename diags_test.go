@@ -1,6 +1,7 @@
 package seafan
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -22,20 +23,28 @@ func TestCoalesce(t *testing.T) {
 	expFit := []float64{.5, .3, .4, .2}
 
 	targ := []int{2}
-	xy, e := Coalesce2(obs, fit, nCat, targ, false, nil)
-
+	fitTest, e := Coalesce(fit, nCat, targ, false, false, nil)
 	assert.Nil(t, e)
-	assert.ElementsMatch(t, xy.Y, expObs)
-	assert.ElementsMatch(t, xy.X, expFit)
+
+	obsTest, e := Coalesce(obs, nCat, targ, true, false, nil)
+	assert.Nil(t, e)
+
+	assert.ElementsMatch(t, obsTest, expObs)
+	assert.ElementsMatch(t, fitTest, expFit)
 
 	targ = []int{1, 2}
 	expObs = []float64{1, 1, 1, 0}
 	expFit = []float64{.8, .8, .8, .5}
-	xy, e = Coalesce2(obs, fit, nCat, targ, false, nil)
+
+	fitTest, e = Coalesce(fit, nCat, targ, false, false, nil)
+	assert.Nil(t, e)
+
+	obsTest, e = Coalesce(obs, nCat, targ, true, false, nil)
+	assert.Nil(t, e)
 
 	assert.Nil(t, e)
-	assert.ElementsMatch(t, xy.Y, expObs)
-	assert.ElementsMatch(t, xy.X, expFit)
+	assert.ElementsMatch(t, obsTest, expObs)
+	assert.ElementsMatch(t, fitTest, expFit)
 }
 
 func TestKS(t *testing.T) {
@@ -55,7 +64,13 @@ func TestKS(t *testing.T) {
 		}
 	}
 
-	xy, e := Coalesce2(y, p, 2, []int{1}, false, nil)
+	fit, e := Coalesce(p, 2, []int{1}, false, false, nil)
+	assert.Nil(t, e)
+
+	obs, e := Coalesce(y, 2, []int{1}, true, false, nil)
+	assert.Nil(t, e)
+
+	xy, e := NewXY(fit, obs)
 
 	assert.Nil(t, e)
 	ks, _, _, e := KS(xy, nil)
@@ -113,31 +128,7 @@ func ExampleSlice_Iter() {
 		panic(e)
 	}
 
-	if e = AddFitted(pipe, sf, []int{1}, "fit", nil, false); e != nil {
-		panic(e)
-	}
-
-	obs, e := Coalesce(pred.ObsSlice(), 2, []int{1}, true, false, nil)
-	if e != nil {
-		panic(e)
-	}
-	obsRaw := NewRawCast(obs, nil)
-	if e = pipe.GData().AppendField(obsRaw, "y1", FRCts); e != nil {
-		panic(e)
-	}
-
-	// This will create one plot where each of the points is based on a value of x4
-	if e := SegPlot(pipe, "y1", "fit", "x4", &PlotDef{
-		Title:    "Decile: ",
-		XTitle:   "Score",
-		YTitle:   "Actual",
-		STitle:   "",
-		Legend:   false,
-		Height:   1200,
-		Width:    1200,
-		Show:     true,
-		FileName: "",
-	}); e != nil {
+	if e = AddFitted(pipe, sf, []int{1}, "fit", nil, false, nil); e != nil {
 		panic(e)
 	}
 
@@ -149,26 +140,39 @@ func ExampleSlice_Iter() {
 		panic(e)
 	}
 
-	// This will create a separate decile plot based on each value of x4
+	fit, e := Coalesce(pred.FitSlice(), 2, []int{1}, false, false, nil)
+	if e != nil {
+		panic(e)
+	}
+	desc, e := NewDesc(nil, "Descriptive Statistics")
+
 	for s.Iter() {
 		slicer := s.MakeSlicer()
-		xy, e := Coalesce2(pred.ObsSlice(), pred.FitSlice(), 2, []int{1}, false, slicer)
 		if e != nil {
 			panic(e)
 		}
-		if e := Decile(xy, &PlotDef{
-			Title:    "Decile: " + s.Title(),
-			XTitle:   "Score",
-			YTitle:   "Actual",
-			STitle:   "",
-			Legend:   false,
-			Height:   1200,
-			Width:    1200,
-			Show:     true,
-			FileName: "",
-		}); e != nil {
-			panic(e)
-		}
+		desc.Populate(fit, true, slicer)
+		fmt.Printf("Slice x4=%v has %d observations\n", s.Value(), desc.N)
 	}
 	// Output:
+	// Slice x4=0 has 391 observations
+	// Slice x4=1 has 408 observations
+	// Slice x4=2 has 436 observations
+	// Slice x4=3 has 428 observations
+	// Slice x4=4 has 417 observations
+	// Slice x4=5 has 472 observations
+	// Slice x4=6 has 424 observations
+	// Slice x4=7 has 455 observations
+	// Slice x4=8 has 431 observations
+	// Slice x4=9 has 442 observations
+	// Slice x4=10 has 411 observations
+	// Slice x4=11 has 413 observations
+	// Slice x4=12 has 433 observations
+	// Slice x4=13 has 416 observations
+	// Slice x4=14 has 434 observations
+	// Slice x4=15 has 367 observations
+	// Slice x4=16 has 437 observations
+	// Slice x4=17 has 433 observations
+	// Slice x4=18 has 429 observations
+	// Slice x4=19 has 423 observations
 }

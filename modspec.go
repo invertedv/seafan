@@ -379,26 +379,36 @@ func (m ModSpec) Inputs(p Pipeline) (FTypes, error) {
 	return modSpec, nil
 }
 
-// Target returns the *FType of the target
-func (m ModSpec) Target(p Pipeline) (*FType, error) {
+func (m ModSpec) TargetName() string {
 	l, e := m.LType(len(m) - 1)
 	if e != nil {
-		return nil, e
+		return ""
 	}
 
 	if *l != Target {
-		return nil, nil
+		return ""
 	}
 
 	_, arg, e := Strip(m[len(m)-1])
 
 	if e != nil {
-		return nil, e
+		return ""
 	}
 
-	feat := p.GetFType(arg)
+	return arg
+
+}
+
+// Target returns the *FType of the target
+func (m ModSpec) Target(p Pipeline) (*FType, error) {
+	targetName := m.TargetName()
+	if targetName == "" {
+		return nil, fmt.Errorf("no target has been specified")
+	}
+
+	feat := p.GetFType(targetName)
 	if feat == nil {
-		return nil, Wrapper(ErrModSpec, fmt.Sprintf("feature %s not found", arg))
+		return nil, Wrapper(ErrModSpec, fmt.Sprintf("feature %s not found", targetName))
 	}
 
 	return feat, nil

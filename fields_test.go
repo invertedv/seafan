@@ -9,7 +9,6 @@ import (
 )
 
 func TestFTypes_Save(t *testing.T) {
-	//d := []any{"z", "a", "r", "a", "b"}
 	d := []any{time.Date(2000, 11, 14, 10, 0, 0, 1, time.UTC),
 		time.Date(2001, 12, 21, 0, 0, 1, 0, time.UTC)}
 	lvl := ByPtr(NewRaw(d, nil))
