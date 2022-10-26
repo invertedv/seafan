@@ -74,9 +74,17 @@ func (s *Slice) MakeSlicer() Slicer {
 		switch s.data.FT.Role {
 		case FRCat:
 			return s.data.Data.([]int32)[row] == s.index
+
 		case FRCts:
 			q := s.data.Summary.DistrC.Q
-			return s.data.Data.([]float64)[row] < q[s.index+1] && s.data.Data.([]float64)[row] >= q[s.index]
+			test := s.data.Data.([]float64)[row] >= q[s.index]
+			switch s.index+1 == int32(len(q)-1) {
+			case false:
+				test = test && s.data.Data.([]float64)[row] < q[s.index+1]
+			case true:
+				test = test && s.data.Data.([]float64)[row] <= q[s.index+1]
+			}
+			return test
 		}
 
 		return false
@@ -95,7 +103,6 @@ func (s *Slice) Iter() bool {
 
 			return false
 		}
-		s.val = fmt.Sprintf("Q%v", s.index+1)
 
 		// make title
 		q := s.data.Summary.DistrC.Q
@@ -112,6 +119,7 @@ func (s *Slice) Iter() bool {
 		}
 
 		s.title = fmt.Sprintf("%s between quantiles %v and %v", s.feat, qLab[s.index], qLab[s.index+1])
+		s.val = qLab[s.index+1]
 
 		return true
 

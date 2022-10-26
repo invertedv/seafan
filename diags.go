@@ -215,14 +215,14 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 }
 
 // SegPlot generates a decile plot of the fields y and fit in pipe.  The segments are based on the values of the field seg.
-// If seg is continuous, the segments are the quartiles.
+// If seg is continuous, the segments are based on quantiles: 0-.1, .1-.25, .25-.5, .5-.75, .9-1
 //
-//		obs       observed field (y-axis)
-//		fit       fitted field (x-axis)
-//	 seg       segmenting field
+//		obs       observed field (y-axis) name
+//		fit       fitted field (x-axis) name
+//	    seg       segmenting field name
 //		plt       PlotDef plot options.  If plt is nil an error is generated.
 func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *float64) error {
-	const minCnt = 100 // min # of obs for each point
+	const minCnt = 1 // min # of obs for each point
 
 	if plt == nil {
 		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
@@ -247,11 +247,10 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 		return e
 	}
 
-	fits := make([]float64, 0)
-	obss := make([]float64, 0)
 	fig := &grob.Fig{}
 	minV, maxV := math.MaxFloat64, -math.MaxFloat64
 	ind, mad, rowTot := 0, float64(0), float64(0)
+	bias := pipe.Get(fit).Summary.DistrC.Mean - pipe.Get(obs).Summary.DistrC.Mean
 
 	for sliceGrp.Iter() {
 		slicer := sliceGrp.MakeSlicer()
@@ -263,10 +262,8 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 
 		distr := pipeSlice.Get(obs).Summary.DistrC
 		obsMean, obsStd := distr.Mean, distr.Std/nSqrt
-		fitMean := pipeSlice.Get(fit).Summary.DistrC.Mean
+		fitMean := pipeSlice.Get(fit).Summary.DistrC.Mean - bias
 
-		fits = append(fits, fitMean)
-		obss = append(obss, obsMean)
 		mad += math.Abs(fitMean - obsMean)
 		rowTot++
 		ci := []float64{obsMean - 2.0*obsStd, obsMean + 2.0*obsStd}
@@ -275,25 +272,27 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 		ind++
 
 		trCI := &grob.Scatter{
-			Type: grob.TraceTypeScatter,
-			X:    []float64{fitMean, fitMean},
-			Y:    ci,
-			Name: fmt.Sprintf("CI%d", ind),
-			Mode: grob.ScatterModeLines,
-			Line: &grob.ScatterLine{Color: "black"},
+			Type:       grob.TraceTypeScatter,
+			X:          []float64{fitMean, fitMean},
+			Y:          ci,
+			Name:       fmt.Sprintf("%d: %v", pipeSlice.Rows(), sliceGrp.Value()),
+			Hoverlabel: &grob.ScatterHoverlabel{Namelength: -1},
+			Mode:       grob.ScatterModeLines,
+			Line:       &grob.ScatterLine{Color: "black"},
 		}
 		fig.AddTraces(trCI)
-	}
 
-	tr := &grob.Scatter{
-		Type: grob.TraceTypeScatter,
-		X:    fits,
-		Y:    obss,
-		Name: "decile averages",
-		Mode: grob.ScatterModeMarkers,
-		Line: &grob.ScatterLine{Color: "green"},
+		tr := &grob.Scatter{
+			Type:       grob.TraceTypeScatter,
+			X:          []float64{fitMean},
+			Y:          []float64{obsMean},
+			Name:       fmt.Sprintf("%v", sliceGrp.Value()),
+			Hoverlabel: &grob.ScatterHoverlabel{Namelength: -1},
+			Mode:       grob.ScatterModeMarkers,
+			Line:       &grob.ScatterLine{Color: "green"},
+		}
+		fig.AddTraces(tr)
 	}
-	fig.AddTraces(tr)
 
 	// if user has supplied graph limits, use them
 	if minVal != nil {
@@ -302,7 +301,8 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	if maxVal != nil {
 		maxV = *maxVal
 	}
-	tr = &grob.Scatter{
+
+	tr := &grob.Scatter{
 		Type: grob.TraceTypeScatter,
 		X:    []float64{minV, maxV},
 		Y:    []float64{minV, maxV},
@@ -313,7 +313,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	fig.AddTraces(tr)
 
 	mad /= rowTot
-	plt.STitle = fmt.Sprintf("Weighted MAD: %0.4f", mad)
+	plt.STitle = fmt.Sprintf("MAD (unbiased fit): %0.4f Bias: %0.4f", mad, bias)
 
 	if plt.XTitle == "" {
 		plt.XTitle = fit
@@ -326,6 +326,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	if plt.Title == "" {
 		plt.Title = "Decile Plot"
 	}
+	plt.Title = fmt.Sprintf("%s<br>%s", plt.Title, "Bias Corrected")
 
 	err := Plotter(fig, &grob.Layout{}, plt)
 
@@ -711,4 +712,28 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 	}
 
 	return nil
+}
+
+// R2 returns the model r-square.  Returns -1 if an error.
+func R2(y, yhat []float64) float64 {
+	if len(y) != len(yhat) {
+		return -1
+	}
+
+	my := stat.Mean(y, nil)
+	tss := 0.0
+	sse := 0.0
+	for ind := 0; ind < len(y); ind++ {
+		res := y[ind] - my
+		tss += res * res
+		res = y[ind] - yhat[ind]
+		sse += res * res
+	}
+
+	if tss == 0.0 {
+		return -1
+	}
+
+	return 100.0 * (1.0 - sse/tss)
+
 }
