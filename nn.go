@@ -608,13 +608,13 @@ func RMS(model *NNModel) (cost *G.Node) {
 // Fit struct for fitting a NNModel
 type Fit struct {
 	nn        *NNModel
-	p         Pipeline
+	modelPipe Pipeline
 	epochs    int
 	lrStart   float64
 	lrEnd     float64
 	outFile   string
 	tmpFile   string
-	pVal      Pipeline
+	valPipe   Pipeline
 	inCosts   *XY
 	outCosts  *XY
 	wait      int
@@ -632,12 +632,12 @@ func NewFit(nn *NNModel, epochs int, p Pipeline, opts ...FitOpts) *Fit {
 	outFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
 	tmpFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
 	fit := &Fit{
-		nn:      nn,
-		epochs:  epochs,
-		p:       p,
-		outFile: outFile,
-		tmpFile: tmpFile,
-		shuffle: 0,
+		nn:        nn,
+		epochs:    epochs,
+		modelPipe: p,
+		outFile:   outFile,
+		tmpFile:   tmpFile,
+		shuffle:   0,
 	}
 
 	for _, o := range opts {
@@ -680,7 +680,7 @@ func WithLearnRate(lrStart, lrEnd float64) FitOpts {
 // does not improve for wait epochs.
 func WithValidation(p Pipeline, wait int) FitOpts {
 	f := func(ft *Fit) {
-		ft.pVal = p
+		ft.valPipe = p
 		ft.wait = wait
 	}
 
@@ -721,7 +721,7 @@ func (ft *Fit) OutCosts() *XY {
 	return ft.outCosts
 }
 
-// Do is the fitting loop.
+// Do is the fitting loop.  Upon completion ft.nn will have the best model.
 func (ft *Fit) Do() (err error) {
 	best := math.MaxFloat64
 	ft.bestEpoch = 0
@@ -746,7 +746,7 @@ func (ft *Fit) Do() (err error) {
 	cte := true
 	for ep := 1; ep <= ft.epochs && cte; ep++ {
 		if ft.shuffle > 0 && ep%ft.shuffle == 0 {
-			ft.p.Shuffle()
+			ft.modelPipe.Shuffle()
 		}
 		// check for user specified learning rate
 		if ft.lrStart > 0.0 {
@@ -754,7 +754,7 @@ func (ft *Fit) Do() (err error) {
 			G.WithLearnRate(lr)(solv)
 		}
 		// run through batches in one epoch
-		for ft.p.Batch(ft.nn.Inputs()) {
+		for ft.modelPipe.Batch(ft.nn.Inputs()) {
 			if err = vm.RunAll(); err != nil {
 				return
 			}
@@ -767,28 +767,29 @@ func (ft *Fit) Do() (err error) {
 		}
 
 		if Verbose {
-			fmt.Printf("finished epoch %d, current best epoch %d\n", ft.p.Epoch(-1), ft.bestEpoch)
+			fmt.Printf("finished epoch %d, current best epoch %d\n", ft.modelPipe.Epoch(-1), ft.bestEpoch)
 		}
+
 		// see if there is a problem (as evidenced by NaNs in the parameters)
 		if noNaN(ft.nn.Params()) {
 			fmt.Println("restarting")
 
 			var e error
-			ft.nn, e = NewNNModel(ft.nn.ModSpec(), ft.p, true, ft.nn.Opts()...)
+			ft.nn, e = NewNNModel(ft.nn.ModSpec(), ft.modelPipe, true, ft.nn.Opts()...)
 			if e != nil {
 				return e
 			}
-			ft.p.Epoch(0)
+			ft.modelPipe.Epoch(0)
 			return ft.Do()
 		}
 
 		// increment epoch counter in pipeline
-		ft.p.Epoch(ft.p.Epoch(-1) + 1)
+		ft.modelPipe.Epoch(ft.modelPipe.Epoch(-1) + 1)
 
 		itv = append(itv, float64(ep))
 		cv = append(cv, ft.nn.CostFlt())
 
-		switch ft.pVal == nil {
+		switch ft.valPipe == nil {
 		case true:
 			// judge best epoch by in-sample cost
 			if cv[len(cv)-1] < best {
@@ -807,7 +808,7 @@ func (ft *Fit) Do() (err error) {
 
 			var valMod *NNModel
 			// with a validation set, don't use dropouts
-			valMod, err = PredictNN(ft.tmpFile, ft.pVal, false, WithCostFn(ft.nn.CostFn()))
+			valMod, err = PredictNN(ft.tmpFile, ft.valPipe, false, WithCostFn(ft.nn.CostFn()))
 			if err != nil {
 				return
 			}
@@ -822,6 +823,7 @@ func (ft *Fit) Do() (err error) {
 					return
 				}
 			}
+
 			// check for early stopping
 			if ft.wait > 0 && ep-ft.bestEpoch > ft.wait {
 				cte = false
@@ -839,9 +841,13 @@ func (ft *Fit) Do() (err error) {
 	ft.inCosts, err = NewXY(itv, cv)
 	ft.outCosts, err = NewXY(itv, cVal)
 
+	// load best epoch
+	ft.nn, _ = LoadNN(ft.outFile, ft.modelPipe, false)
+
 	// clean up
 	_ = os.Remove(ft.tmpFile + "P.nn")
 	_ = os.Remove(ft.tmpFile + "S.nn")
+
 	return nil
 }
 
