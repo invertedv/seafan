@@ -339,19 +339,22 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 //	plt       PlotDef plot options.  If plt is nil an error is generated.
 //
 // The deciles are created based on the values of xy.X
-func Decile(xy *XY, plt *PlotDef) error {
+func Decile(xyIn *XY, plt *PlotDef) error {
 	if plt == nil {
 		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
 	}
 
-	a, b := 0.0, 0.0
-
-	for j := 0; j < xy.Len(); j++ {
-		a += xy.X[j]
-		b += xy.Y[j]
+	// preserve input data by making a copy
+	xCopy := make([]float64, xyIn.Len())
+	yCopy := make([]float64, xyIn.Len())
+	copy(xCopy, xyIn.X)
+	copy(yCopy, xyIn.Y)
+	xy, e := NewXY(xCopy, yCopy)
+	if e != nil {
+		return e
 	}
 
-	if e := xy.Sort(); e != nil {
+	if e = xy.Sort(); e != nil {
 		return e
 	}
 
@@ -533,7 +536,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 	bigFit := nn1.FitSlice()
 
 	fit := make([]float64, pipeIn.Rows())
-	outCols := nn1.Cols()
+	outCols := nn1.outCols // nn1.Cols()
 	for row := 0; row < len(fit); row++ {
 		for _, col := range target {
 			fit[row] += bigFit[row*outCols+col]
@@ -689,7 +692,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 			return Wrapper(e, "Marginal")
 		}
 
-		nCat := nn1.Cols()
+		nCat := nn1.OutputCols() // nn1.Cols()
 
 		fit, e := Coalesce(UnNormalize(nn1.FitSlice(), obsFtype), nCat, target, false, false, nil)
 		if e != nil {

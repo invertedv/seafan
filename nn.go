@@ -57,9 +57,9 @@ func (m *NNModel) Name() string {
 }
 
 // Cols returns # of columns in NNModel output
-func (m *NNModel) Cols() int {
-	return m.outCols
-}
+//func (m *NNModel) Cols() int {
+//	return m.outCols
+//}
 
 func (m *NNModel) InputFT() FTypes {
 	return m.inputFT
@@ -564,7 +564,7 @@ func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
 }
 
 func SoftRMS(model *NNModel) (cost *G.Node) {
-	nCats := model.Cols() // model.Obs().Shape()[1]
+	nCats := model.OutputCols()
 	for ind := 1; ind < nCats; ind++ {
 		back := make([]float64, nCats)
 		back[ind] = 1.0
