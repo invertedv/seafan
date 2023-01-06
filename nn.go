@@ -261,10 +261,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, nnOpts ...NNOpts) (*
 	}
 
 	// target.  There may not be a target if the model has been built and is now in prediction mode.
-	obsF, e := modSpec.Target(pipe)
-	if e != nil {
-		return nil, e
-	}
+	obsF, _ := modSpec.Target(pipe)
 
 	var yoh *G.Node
 	yoh = nil
