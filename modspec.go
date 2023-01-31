@@ -396,7 +396,6 @@ func (m ModSpec) TargetName() string {
 	}
 
 	return arg
-
 }
 
 // Target returns the *FType of the target

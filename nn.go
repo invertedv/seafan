@@ -28,8 +28,8 @@ type NNModel struct {
 	paramsB   G.Nodes      // bias parameters
 	paremsEmb G.Nodes      // embedding parameters
 	output    G.Result     // graph output
-	inputsC   G.Nodes      // continuous (including one-hot) inputs
-	inputsE   G.Nodes      // embedding inputs
+	inputsC   G.Nodes      // continuous (including one-hot) Inputs
+	inputsE   G.Nodes      // embedding Inputs
 	obs       *G.Node      // observed values for model fit
 	cost      *G.Node      // cost node for model build
 	construct ModSpec      // model spec
@@ -55,11 +55,6 @@ func (m *NNModel) ModSpec() ModSpec {
 func (m *NNModel) Name() string {
 	return m.name
 }
-
-// Cols returns # of columns in NNModel output
-//func (m *NNModel) Cols() int {
-//	return m.outCols
-//}
 
 func (m *NNModel) InputFT() FTypes {
 	return m.inputFT
@@ -164,7 +159,7 @@ func (m *NNModel) OutputCols() int {
 	return m.output.Nodes()[0].Shape()[1]
 }
 
-// Inputs returns input (continuous+embedded+observed) inputs
+// Inputs returns input (continuous+embedded+observed) Inputs
 func (m *NNModel) Inputs() G.Nodes {
 	n := append(m.inputsC, m.inputsE...)
 
@@ -251,10 +246,10 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, nnOpts ...NNOpts) (*
 		}
 	}
 
-	// inputs
+	// Inputs
 	xall := G.Must(G.Concat(1, xs...))
 
-	// add inputs to embeddings, if present
+	// add Inputs to embeddings, if present
 	if len(xEmInp) > 0 {
 		zemb := G.Must(G.Concat(1, xEmProd...)) // embeddings for input to FCLayer layer
 		xall = G.Must(G.Concat(1, xall, zemb))

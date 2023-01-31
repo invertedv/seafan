@@ -239,7 +239,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	}
 
 	if fitFtype.Role != FRCts || obsFit.Role != FRCts {
-		return Wrapper(ErrDiags, "decile inputs must be type FRCts")
+		return Wrapper(ErrDiags, "decile Inputs must be type FRCts")
 	}
 
 	sliceGrp, e := NewSlice(seg, minCnt, pipe, nil)

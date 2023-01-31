@@ -148,5 +148,4 @@ func TestFTypes_DropFields(t *testing.T) {
 		ft := ftNew.Get(ftName)
 		assert.NotNil(t, ft)
 	}
-
 }

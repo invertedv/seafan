@@ -2,7 +2,6 @@ package seafan
 
 import (
 	"fmt"
-	"github.com/invertedv/chutils"
 	"io"
 	"math/rand"
 	"reflect"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/invertedv/chutils"
 
 	"gonum.org/v1/gonum/stat"
 )
@@ -726,7 +727,6 @@ func (gd *GData) TableSpec() *chutils.TableDef {
 
 // AppendField adds a field to gd
 func (gd *GData) AppendField(newData *Raw, name string, fRole FRole) error {
-
 	// drop field if it's already there
 	gd.Drop(name)
 

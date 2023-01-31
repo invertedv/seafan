@@ -1,11 +1,12 @@
 package seafan
 
 import (
-	"github.com/invertedv/chutils"
 	"io"
 	"math"
 	"math/rand"
 	"testing"
+
+	"github.com/invertedv/chutils"
 
 	"github.com/stretchr/testify/assert"
 )

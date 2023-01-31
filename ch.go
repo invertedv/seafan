@@ -156,7 +156,7 @@ func (ch *ChData) Init() (err error) {
 	// work through fields, add to GData
 	for ind, nm := range names {
 		// if this isn't in our array, add it
-		ft := ch.getFType(nm) // note: this version gets user-inputs
+		ft := ch.getFType(nm) // note: this version gets user-Inputs
 		if ft == nil {
 			ft = &FType{}
 
@@ -203,7 +203,7 @@ func (ch *ChData) Rows() int {
 	return ch.nRow
 }
 
-// Batch loads a batch into inputs.  It returns false if the epoch is done.
+// Batch loads a batch into Inputs.  It returns false if the epoch is done.
 // If cycle is true, it will start at the beginning on the next call.
 // If cycle is false, it will call Init() at the next call to Batch()
 func (ch *ChData) Batch(inputs G.Nodes) bool {
