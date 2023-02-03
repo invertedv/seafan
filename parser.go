@@ -18,13 +18,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1"
 
 	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S"
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -148,6 +148,12 @@ func Expr2Tree(curNode *OpNode) error {
 	// nothing to do (leaf)
 	if op == "" {
 		return nil
+	}
+
+	// if an op is a negative, recast it as added the negative of the first term
+	if op == "-" {
+		op = "+"
+		args[1] = "-" + args[1]
 	}
 
 	curNode.FunName = op
@@ -444,6 +450,8 @@ func EvalSFunction(node *OpNode) error {
 		node.Value = []float64{stat.StdDev(node.Inputs[0].Value, nil)}
 	case "median":
 		node.Value = []float64{stat.Quantile(medianQ, stat.Empirical, node.Inputs[0].Value, nil)}
+	case "count":
+		node.Value = []float64{float64(len(node.Inputs[0].Value))}
 	default:
 		return fmt.Errorf("unknown function: %s", node.FunName)
 	}
@@ -491,6 +499,22 @@ func evalFunction(node *OpNode) error {
 	// move backwards for the lag function
 	for ind := len(node.Value) - 1; ind >= 0; ind-- {
 		switch node.FunName {
+		case "cuma":
+			if ind < len(node.Value)-1 {
+				node.Value[ind] = flt.Sum(node.Inputs[0].Value[ind+1:])
+			} else {
+				node.Value[ind] = node.Inputs[1].Value[0]
+			}
+		case "counta":
+			node.Value[ind] = float64(len(node.Value) - ind - 1)
+		case "cumb":
+			if ind > 0 {
+				node.Value[ind] = flt.Sum(node.Inputs[0].Value[:ind])
+			} else {
+				node.Value[ind] = node.Inputs[1].Value[0]
+			}
+		case "countb":
+			node.Value[ind] = float64(ind)
 		case "log":
 			node.Value[ind] = math.Log(node.Inputs[0].Value[ind])
 		case "exp":
@@ -499,7 +523,7 @@ func evalFunction(node *OpNode) error {
 			node.Value[ind] = math.Pow(node.Inputs[0].Value[ind1], node.Inputs[1].Value[ind2])
 		case "lag":
 			if ind > 0 {
-				node.Value[ind] = node.Value[ind-1]
+				node.Value[ind] = node.Inputs[0].Value[ind-1]
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
@@ -523,6 +547,7 @@ func evalConstant(node *OpNode) bool {
 	if val, e := strconv.ParseFloat(node.Expression, 64); e == nil {
 		node.Value = make([]float64, 1)
 		node.Value[0] = val
+		goNegative(node.Value, node.Neg)
 
 		return true
 	}
