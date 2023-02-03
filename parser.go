@@ -5,6 +5,9 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	flt "gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
 )
 
 const (
@@ -15,10 +18,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1"
+
+	// funLevels indicates whether the function is calculated at the row level or is a summary.
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -222,20 +228,28 @@ func getArgs(inner string) (pieces []string) {
 	return pieces
 }
 
-// checkArgs checks that the function has the expected number of arguments
-func checkArgs(funName string, act int) error {
+// functionDetails returns # of arguments and level (row, summary) of the function.
+// It returns 0, "" if the function isn't found
+func functionDetails(funName string) (argNo int, funLevel string) {
 	args := strings.Split(funArgs, delim)
+	levels := strings.Split(funLevels, delim)
+
 	for ind, f := range strings.Split(functions, delim) {
-		if f == funName {
-			expInt, _ := strconv.ParseInt(args[ind], 10, 64)
-			if expInt == int64(act) {
-				return nil
-			}
-			return fmt.Errorf("function %s expects %d arguments got %d", funName, expInt, act)
+		if f != funName {
+			continue
 		}
+		expInt64, _ := strconv.ParseInt(args[ind], 10, 64)
+		expInt := int(expInt64)
+
+		level := "row"
+		if levels[ind] == "S" {
+			level = "summary"
+		}
+
+		return expInt, level
 	}
 
-	return nil
+	return 0, ""
 }
 
 // getFunction determines if expr is a function call.
@@ -270,8 +284,11 @@ func getFunction(expr string) (funName string, args []string, err error) {
 
 	// get arguments
 	args = getArgs(inner)
+	if numArg, _ := functionDetails(f); numArg != len(args) && numArg > 0 {
+		return f, args, fmt.Errorf("wrong number of arguments in %s", f)
+	}
 
-	return f, args, checkArgs(f, len(args))
+	return f, args, nil
 }
 
 // allInParen checks if entire expr is within parens.  If it is, the unneeded parens are stripped off.
@@ -410,6 +427,32 @@ func getDeltas(inputs []*OpNode) (x []float64, deltas []int) {
 	return make([]float64, n), deltas
 }
 
+// EvalSFunction evaluates a summary function.
+func EvalSFunction(node *OpNode) error {
+	const medianQ = 0.5
+
+	switch node.FunName {
+	case "sum":
+		node.Value = []float64{flt.Sum(node.Inputs[0].Value)}
+	case "max":
+		node.Value = []float64{flt.Max(node.Inputs[0].Value)}
+	case "min":
+		node.Value = []float64{flt.Min(node.Inputs[0].Value)}
+	case "mean":
+		node.Value = []float64{stat.Mean(node.Inputs[0].Value, nil)}
+	case "s":
+		node.Value = []float64{stat.StdDev(node.Inputs[0].Value, nil)}
+	case "median":
+		node.Value = []float64{stat.Quantile(medianQ, stat.Empirical, node.Inputs[0].Value, nil)}
+	default:
+		return fmt.Errorf("unknown function: %s", node.FunName)
+	}
+
+	goNegative(node.Value, node.Neg)
+
+	return nil
+}
+
 // evalFunction evaluates a function call
 func evalFunction(node *OpNode) error {
 	if !checkSlice(node.FunName, functions) {
@@ -425,13 +468,10 @@ func evalFunction(node *OpNode) error {
 		return nil
 	}
 
-	if node.FunName == "" {
-		goNegative(node.Value, node.Neg)
-		return nil
-	}
-
 	var deltas []int
+
 	node.Value, deltas = getDeltas(node.Inputs)
+
 	ind1 := len(node.Inputs[0].Value) - 1
 	two := len(deltas) > 1
 	var ind2 int
@@ -441,6 +481,13 @@ func evalFunction(node *OpNode) error {
 		}
 	}
 
+	if _, funLevel := functionDetails(node.FunName); funLevel == "summary" {
+		if e := EvalSFunction(node); e != nil {
+			return e
+		}
+	}
+
+	// These will be Row functions
 	// move backwards for the lag function
 	for ind := len(node.Value) - 1; ind >= 0; ind-- {
 		switch node.FunName {
@@ -457,7 +504,10 @@ func evalFunction(node *OpNode) error {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
 		}
+
+		// decrement indices
 		ind1 -= deltas[0]
+
 		if two {
 			ind2 -= deltas[1]
 		}
