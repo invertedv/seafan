@@ -9,17 +9,19 @@ Seafan features:
 - A data pipeline based on [chutils](https://github.com/invertedv/chutils) to access files and ClickHouse tables.
   - Point-and-shoot specification of the data
   - Simple specification of one-hot features
-
+  - Functions of fields in the pipeline can be calculated from, and optionally added back,
+     to the pipeline using the built-in expression parser (see Expr2Tree).
+<br><br>
 - A wrapper around gorgonia that meshes to the pipeline.
   - Simple specification of models, including embeddings
   - A fit method with optional early stopping
   - Callbacks during model fit
   - Saving and loading models
-
+<br><br>
 - Model diagnostics for categorical targets.
   - KS plots
   - Decile plots
-
+<br><br>
 - Utilities.
   - Plotting wrapper for [plotly](https://github.com/MetalBlueberry/go-plotly) for xy plots.
   - Numeric struct for (x,y) data and plotting and descriptive statistics.

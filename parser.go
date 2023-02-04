@@ -56,12 +56,39 @@ const (
 //
 // Functions:
 // If the expression is a function, each argument is assigned to an Input (in order).  Functions have at least one
-// input (argument).
+// input (argument). Two types of functions are supported: those that operate at the row level and those that
+// operate at the summary level.  A row-level function will create a slice that has as many elements as the Pipeline.
+// A summary-level function, such as "mean", will have a single element.
+//
+// Available row-level functions are:
+//   - exp(<expr>)
+//   - log(<expr>)
+//   - lag(<expr>,<missing>), where <missing> is used for the first element.
+//   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
+//   - counta(<expr>), countb(<expr>) is the number of rows after (before) the current row.
+//   - cuma(<expr>,<missing>), cumrb(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
+//     and <missing> is used for the last (first) element.
+//
+// The values in <...> can be any expression.
+//
+// Available summary-level functions are:
+//   - mean(<expr>)
+//   - median(<expr>)
+//   - count(<expr>)
+//   - sum(<expr>)
+//   - max(<expr>)
+//   - min(<expr>)
+//
+// Logical operators are supported:
+//   - &&  and
+//   - ||  or
+//
+// Logical operators resolve to 0 or 1.
 type OpNode struct {
 	Expression string    // expression this node implements
-	Value      []float64 // node value. Nil until Evaluate is run
+	Value      []float64 // node value. Value is nil until Evaluate is run
 	Neg        bool      // negate result when populating Value
-	FunName    string    // name of function/operation to apply to the Inputs
+	FunName    string    // name of function/operation to apply to the Inputs. The value is "" for leaves.
 	Inputs     []*OpNode // Inputs to node calculation
 }
 
