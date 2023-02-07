@@ -18,13 +18,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2"
 
 	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R"
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -68,6 +68,7 @@ const (
 //   - counta(<expr>), countb(<expr>) is the number of rows after (before) the current row.
 //   - cuma(<expr>,<missing>), cumrb(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
 //     and <missing> is used for the last (first) element.
+//   - index(<expr>,<index>) returns <expr> in the order of <index>
 //
 // The values in <...> can be any expression.
 //
@@ -78,6 +79,7 @@ const (
 //   - sum(<expr>)
 //   - max(<expr>)
 //   - min(<expr>)
+//   - rows(<expr>) # of rows in the pipeline (<expr> can be anything)
 //
 // Logical operators are supported:
 //   - &&  and
@@ -90,6 +92,7 @@ type OpNode struct {
 	Neg        bool      // negate result when populating Value
 	FunName    string    // name of function/operation to apply to the Inputs. The value is "" for leaves.
 	Inputs     []*OpNode // Inputs to node calculation
+	stet       bool      // if stet then Value is not updated (used by Loop)
 }
 
 // negLocation determines where to place a leading minus sign.
@@ -546,8 +549,16 @@ func evalFunction(node *OpNode) error {
 			node.Value[ind] = math.Log(node.Inputs[0].Value[ind])
 		case "exp":
 			node.Value[ind] = math.Exp(node.Inputs[0].Value[ind])
+		case "row":
+			node.Value[ind] = float64(ind)
 		case "pow":
 			node.Value[ind] = math.Pow(node.Inputs[0].Value[ind1], node.Inputs[1].Value[ind2])
+		case "index":
+			indx := int(node.Inputs[1].Value[ind])
+			if indx < 0 || indx >= len(node.Value) {
+				return fmt.Errorf("index out of range")
+			}
+			node.Value[ind] = node.Inputs[0].Value[indx]
 		case "lag":
 			if ind > 0 {
 				node.Value[ind] = node.Inputs[0].Value[ind-1]
@@ -613,105 +624,86 @@ func evalOps(node *OpNode) error {
 	ind1, ind2 := 0, 0
 
 	for ind := 0; ind < len(node.Value); ind++ {
+		x0 := node.Inputs[0].Value[ind1]
+		x1 := node.Inputs[1].Value[ind2]
 		switch node.FunName {
 		case "^":
-			node.Value[ind] = math.Pow(node.Inputs[0].Value[ind1], node.Inputs[1].Value[ind2])
+			node.Value[ind] = math.Pow(x0, x1)
 		case "&&":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] > 0.0 && node.Inputs[1].Value[ind2] > 0.0 {
+
+			if x0 > 0.0 && x1 > 0.0 {
 				val = 1
 			}
+
 			node.Value[ind] = val
 		case "||":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] > 0.0 || node.Inputs[1].Value[ind2] > 0.0 {
+
+			if x0 > 0.0 || x1 > 0.0 {
 				val = 1
 			}
+
 			node.Value[ind] = val
 		case ">":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] > node.Inputs[1].Value[ind2] {
+
+			if x0 > x1 {
 				val = 1
 			}
+
 			node.Value[ind] = val
 		case ">=":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] >= node.Inputs[1].Value[ind2] {
+			if x0 >= x1 {
 				val = 1
 			}
 			node.Value[ind] = val
 		case "<":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] < node.Inputs[1].Value[ind2] {
+
+			if x0 < x1 {
 				val = 1
 			}
+
 			node.Value[ind] = val
 		case "<=":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] <= node.Inputs[1].Value[ind2] {
+			if x0 <= x1 {
 				val = 1
 			}
 			node.Value[ind] = val
 		case "==":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] == node.Inputs[1].Value[ind2] {
+
+			if x0 == x1 {
 				val = 1
 			}
+
 			node.Value[ind] = val
 		case "!=":
 			val := 0.0
-			if node.Inputs[0].Value[ind1] != node.Inputs[1].Value[ind2] {
+
+			if x0 != x1 {
 				val = 1
 			}
+
 			node.Value[ind] = val
 		case "+":
-			node.Value[ind] = node.Inputs[0].Value[ind1] + node.Inputs[1].Value[ind2]
-		case "-":
-			node.Value[ind] = node.Inputs[0].Value[ind1] - node.Inputs[1].Value[ind2]
+			node.Value[ind] = x0 + x1
 		case "*":
-			node.Value[ind] = node.Inputs[0].Value[ind1] * node.Inputs[1].Value[ind2]
+			node.Value[ind] = x0 * x1
 		case "/":
-			node.Value[ind] = node.Inputs[0].Value[ind1] / node.Inputs[1].Value[ind2]
+			node.Value[ind] = x0 / x1
 		}
+
 		ind1 += deltas[0]
 		ind2 += deltas[1]
 	}
+
 	goNegative(node.Value, node.Neg)
 
 	return nil
-}
-
-// AddToPipe adds the Value slice in rootNode to pipe. The field will have name fieldName.
-// To do this:
-//  1. Create the *OpNode tree to evaluate the expression using Expr2Tree
-//  2. Populate the values from a Pipeline using Evaluate.
-//  3. Add the values to the Pipeline using AddToPipe
-//
-// Notes:
-//   - AddToPipe can be within a CallBack to populate each new call to the database with the calculated fields.
-//   - You can access the values after Evaluate without adding the field to the Pipeline from the Value element
-//     of the root node.
-func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
-	if rootNode.Value == nil {
-		return fmt.Errorf("root node is nil")
-	}
-
-	if len(rootNode.Value) > 1 && len(rootNode.Value) != pipe.Rows() {
-		return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), len(rootNode.Value))
-	}
-
-	xOut := rootNode.Value
-
-	if len(xOut) == 1 && pipe.Rows() > 1 {
-		xOut = make([]float64, pipe.Rows())
-		for ind := 0; ind < len(xOut); ind++ {
-			xOut[ind] = rootNode.Value[0]
-		}
-	}
-
-	newRawField := NewRawCast(xOut, nil)
-
-	return pipe.GData().AppendC(newRawField, fieldName, false, nil)
 }
 
 // Evaluate evaluates an expression parsed by Expr2Tree.
@@ -741,6 +733,10 @@ func Evaluate(curNode *OpNode, pipe Pipeline) error {
 		return evalFunction(curNode)
 	}
 
+	if curNode.stet {
+		return nil
+	}
+
 	// is it a constant?
 	if evalConstant(curNode) {
 		return nil
@@ -765,6 +761,92 @@ func goNegative(x []float64, neg bool) {
 func matchedParen(expr string) error {
 	if strings.Count(expr, "(") != strings.Count(expr, ")") {
 		return fmt.Errorf("mismatched parentheses")
+	}
+
+	return nil
+}
+
+// AddToPipe adds the Value slice in rootNode to pipe. The field will have name fieldName.
+// To do this:
+//  1. Create the *OpNode tree to evaluate the expression using Expr2Tree
+//  2. Populate the values from a Pipeline using Evaluate.
+//  3. Add the values to the Pipeline using AddToPipe
+//
+// Notes:
+//   - AddToPipe can be within a CallBack to populate each new call to the database with the calculated fields.
+//   - You can access the values after Evaluate without adding the field to the Pipeline from the Value element
+//     of the root node.
+func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
+	if rootNode.Value == nil {
+		return fmt.Errorf("root node is nil")
+	}
+
+	if len(rootNode.Value) > 1 && len(rootNode.Value) != pipe.Rows() {
+		return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), len(rootNode.Value))
+	}
+
+	xOut := rootNode.Value
+
+	if gd := pipe.Get(fieldName); gd != nil {
+		if len(xOut) == 1 {
+			xOut = make([]float64, pipe.Rows())
+			for ind := 0; ind < len(xOut); ind++ {
+				xOut[ind] = rootNode.Value[0]
+			}
+		}
+
+		copy(gd.Data.([]float64), xOut)
+		return nil
+	}
+
+	if len(xOut) == 1 && pipe.Rows() > 1 {
+		xOut = make([]float64, pipe.Rows())
+		for ind := 0; ind < len(xOut); ind++ {
+			xOut[ind] = rootNode.Value[0]
+		}
+	}
+
+	newRawField := NewRawCast(xOut, nil)
+
+	return pipe.GData().AppendC(newRawField, fieldName, false, nil)
+}
+
+// setValue sets the value of the loop variable
+func setValue(loopVar string, val int, op *OpNode) {
+	if op.Expression == loopVar {
+		op.Value = []float64{float64(val)}
+		op.stet = true // instructs Evaluate to keep this value
+	}
+
+	for ind := 0; ind < len(op.Inputs); ind++ {
+		setValue(loopVar, val, op.Inputs[ind])
+	}
+}
+
+// Loop enables looping in parse.  The ops in inner are run for each iteration.
+//   - inner - is a slice of *OpNode expressions to run in the loop and then assign to "assign" in the pipeline
+//   - loopVar - the name of the loop variable.  This may be used in the "inner" expressions. It is not added to the pipeline.
+//   - loopVar takes on values from start to end.
+func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe Pipeline) error {
+	if inner == nil || assign == nil {
+		return fmt.Errorf("assign and/or inner are nil")
+	}
+
+	if len(inner) != len(assign) {
+		return fmt.Errorf("assign and inner must have the same length")
+	}
+
+	for loopInd := start; loopInd < end; loopInd++ {
+		for nodeInd := 0; nodeInd < len(inner); nodeInd++ {
+			setValue(loopVar, loopInd, inner[nodeInd])
+
+			if e := Evaluate(inner[nodeInd], pipe); e != nil {
+				return e
+			}
+			if e := AddToPipe(inner[nodeInd], assign[nodeInd], pipe); e != nil {
+				return e
+			}
+		}
 	}
 
 	return nil

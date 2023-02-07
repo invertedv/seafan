@@ -18,6 +18,10 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe(dataC, dataD)
 
 	frmla := []string{
+		"index(D,1-(c-1))",
+		"row(c)",
+		"c-D-D",
+		"-D*3 + D",
 		"lag(c,42)",
 		"countb(c)",
 		"cumb(c,42)",
@@ -48,6 +52,10 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{10, 3},
+		{0, 1},
+		{-5, -18},
+		{-6, -20},
 		{42, 1},
 		{0, 1},
 		{42, 1},
@@ -81,6 +89,40 @@ func TestEvaluate(t *testing.T) {
 		act := tester(frmla[ind], pipe)
 		assert.EqualValues(t, expect[ind], act)
 	}
+}
+
+func TestLoop(t *testing.T) {
+	Verbose = false
+
+	expect := [][]float64{
+		{6, 20},
+		{-3, -17},
+		{4, 5},
+	}
+	dataC := "1, 2"
+	dataD := "3, 10"
+	pipe := buildPipe(dataC, dataD)
+	eqns := []string{"D*x", "1-r+x", "c+x"}
+	assign := []string{"r", "y", "c"}
+	ops := make([]*OpNode, 0)
+
+	for ind := 0; ind < len(eqns); ind++ {
+		op := &OpNode{Expression: eqns[ind]}
+		if e := Expr2Tree(op); e != nil {
+			panic(e)
+		}
+		ops = append(ops, op)
+	}
+
+	if e := Loop("x", 1, 3, ops, assign, pipe); e != nil {
+		panic(e)
+	}
+
+	for ind := 0; ind < len(assign); ind++ {
+		act := pipe.Get(assign[ind]).Data.([]float64)
+		assert.EqualValues(t, expect[ind], act)
+	}
+
 }
 
 func buildPipe(data1, data2 string) Pipeline {
@@ -173,4 +215,52 @@ func ExampleAddToPipe() {
 	// Output:
 	// [4 -2]
 	// [3 2]
+}
+
+// In this example, we calculate four expressions and return them to the pipeline.
+// The field c is added to itself each iteration.
+// The field r stores the loop field.  On return, it will have the last value of the loop.
+//
+// The fields are evaulated in order, starting with the 0 element of inner.
+func ExampleLoop() {
+	Verbose = false
+
+	// builds a Pipline with two fields:
+	//    c = 1,2,3,4
+	//    D = 5,-5,3,6
+	pipe := buildPipe("1,2,3,4", "5,-5,3,6")
+	// we'll add two fields to the pipeline: the sum=c+d and max=max(c,d)
+
+	// start by parsing the expressions.
+	field1, result1 := &OpNode{Expression: "c+c"}, "c"
+	field2, result2 := &OpNode{Expression: "indx"}, "r" // indx will be the name of the looping field.
+	field3, result3 := &OpNode{Expression: "D*c"}, "s"
+	field4, result4 := &OpNode{Expression: "s-1"}, "t"
+
+	inner := []*OpNode{field1, field2, field3, field4}
+	assign := []string{result1, result2, result3, result4}
+
+	for ind := 0; ind < len(assign); ind++ {
+		if e := Expr2Tree(inner[ind]); e != nil {
+			panic(e)
+		}
+	}
+
+	if e := Loop("indx", 1, 3, inner, assign, pipe); e != nil {
+		panic(e)
+	}
+
+	for ind := 0; ind < len(assign); ind++ {
+		fmt.Println(assign[ind])
+		fmt.Println(pipe.Get(assign[ind]).Data.([]float64))
+	}
+	// output:
+	// c
+	// [4 8 12 16]
+	// r
+	// [2 2 2 2]
+	// s
+	// [20 -40 36 96]
+	// t
+	// [19 -41 35 95]
 }
