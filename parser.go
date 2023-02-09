@@ -787,16 +787,9 @@ func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
 
 	xOut := rootNode.Value
 
+	// if it's there, drop it
 	if gd := pipe.Get(fieldName); gd != nil {
-		if len(xOut) == 1 {
-			xOut = make([]float64, pipe.Rows())
-			for ind := 0; ind < len(xOut); ind++ {
-				xOut[ind] = rootNode.Value[0]
-			}
-		}
-
-		copy(gd.Data.([]float64), xOut)
-		return nil
+		pipe.GData().Drop(fieldName)
 	}
 
 	if len(xOut) == 1 && pipe.Rows() > 1 {
