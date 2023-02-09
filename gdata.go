@@ -586,7 +586,9 @@ func (gd *GData) Drop(field string) {
 			newGd = append(newGd, gd.data[ind])
 		}
 	}
+
 	gd.data = newGd
+	gd.dataRaw = nil // need to reset this so Read() will work next time
 }
 
 // Read reads row(s) in the format of chutils.  Note: valids are all chutils.Valid.  Invoking Read for the first
