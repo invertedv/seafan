@@ -2,7 +2,13 @@ package seafan
 
 // pipeline.go has the interface and "With" funcs for Pipelines.
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/invertedv/chutils"
+	cf "github.com/invertedv/chutils/file"
+	s "github.com/invertedv/chutils/sql"
 	G "gorgonia.org/gorgonia"
 )
 
@@ -259,4 +265,123 @@ func WithReader(rdr any) Opts {
 	}
 
 	return f
+}
+
+// PipeSQL creates a pipe from the query sql
+func PipeSQL(sql string, conn *chutils.Connect) (pipe Pipeline, err error) {
+	rdr := s.NewReader(sql, conn)
+	defer func() { _ = rdr.Close() }()
+
+	if e := rdr.Init("", chutils.MergeTree); e != nil {
+		return nil, e
+	}
+
+	pipe = NewChData("MSR Pipeline")
+	WithReader(rdr)(pipe)
+
+	WithBatchSize(0)(pipe)
+	if e := pipe.Init(); e != nil {
+		return nil, e
+	}
+
+	return pipe, nil
+}
+
+// PipeCSV creates a pipe from a CSV file
+func PipeCSV(csvFile string) (pipe Pipeline, err error) {
+	handle, ex := os.Open(csvFile)
+	if ex != nil {
+		return nil, ex
+	}
+	defer func() { _ = handle.Close() }()
+
+	rdr := cf.NewReader(csvFile, ',', '\n', '"', 0, 1, 0, handle, 0)
+
+	if e := rdr.Init("", chutils.MergeTree); e != nil {
+		return nil, e
+	}
+
+	for _, fd := range rdr.TableSpec().FieldDefs {
+		fd.ChSpec = chutils.ChField{
+			Base:   chutils.ChFloat,
+			Length: 64,
+			Funcs:  nil,
+			Format: "",
+		}
+	}
+
+	if e := rdr.Reset(); e != nil {
+		return nil, e
+	}
+
+	pipe = NewChData("MSR Pipeline")
+	WithReader(rdr)(pipe)
+
+	WithBatchSize(0)(pipe)
+	if e := pipe.Init(); e != nil {
+		return nil, e
+	}
+
+	return pipe, nil
+}
+
+// ExportSQL creates "table" and saves the pipe data to it.
+func ExportSQL(pipe Pipeline, table string, conn *chutils.Connect) error {
+	if table == "" {
+		return fmt.Errorf("exportSQL: table cannot be empty")
+	}
+
+	// make writer
+	wtr := s.NewWriter(table, conn)
+	defer func() { _ = wtr.Close() }()
+
+	gd := pipe.GData()
+	tb := gd.TableSpec()
+
+	if e := tb.Create(conn, table); e != nil {
+		return e
+	}
+
+	if e := pipe.GData().Reset(); e != nil {
+		return e
+	}
+
+	if e := chutils.Export(pipe.GData(), wtr, 0, false); e != nil {
+		return e
+	}
+
+	return nil
+}
+
+// ExportCSV saves the pipe as a CSV
+func ExportCSV(pipe Pipeline, outFile string) error {
+	if outFile == "" {
+		return fmt.Errorf("exportCSV: outFile cannot be empty")
+	}
+
+	handle, err := os.Create(outFile)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = handle.Close() }()
+
+	// write header
+	if _, e := handle.WriteString(strings.Join(pipe.FieldList(), ",") + "\n"); e != nil {
+		return e
+	}
+
+	// make writer
+	wtr := cf.NewWriter(handle, "output", nil, ',', '\n', "tmp.xyz")
+	defer func() { _ = wtr.Close() }()
+
+	if e := pipe.GData().Reset(); e != nil {
+		return e
+	}
+
+	// if after < 0, then won't also move to ClickHouse
+	if e := chutils.Export(pipe.GData(), wtr, -1, false); e != nil {
+		return e
+	}
+
+	return nil
 }
