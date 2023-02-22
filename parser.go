@@ -18,13 +18,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index$proda$prodb"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2"
 
 	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R"
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -535,11 +535,23 @@ func evalFunction(node *OpNode) error {
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
+		case "proda":
+			if ind < len(node.Value)-1 {
+				node.Value[ind] = flt.Prod(node.Inputs[0].Value[ind+1:])
+			} else {
+				node.Value[ind] = node.Inputs[1].Value[0]
+			}
 		case "counta":
 			node.Value[ind] = float64(len(node.Value) - ind - 1)
 		case "cumb":
 			if ind > 0 {
 				node.Value[ind] = flt.Sum(node.Inputs[0].Value[:ind])
+			} else {
+				node.Value[ind] = node.Inputs[1].Value[0]
+			}
+		case "prodb":
+			if ind > 0 {
+				node.Value[ind] = flt.Prod(node.Inputs[0].Value[:ind])
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}

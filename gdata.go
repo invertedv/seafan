@@ -598,6 +598,13 @@ func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []c
 		return nil, nil, fmt.Errorf("(*GData) Read invalid nTarget")
 	}
 
+	// protect against case where data has been added
+	if gd.dataRaw != nil {
+		if len(gd.dataRaw) != len(gd.data) {
+			gd.dataRaw = nil
+		}
+	}
+
 	// if this is the first read, then we need to populate the dataRaw array
 	if gd.dataRaw == nil {
 		gd.dataRaw = make([]*Raw, 0)
