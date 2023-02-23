@@ -2,6 +2,9 @@ package seafan
 
 import (
 	"fmt"
+	"gonum.org/v1/gonum/diff/fd"
+	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/optimize"
 	"math"
 	"strconv"
 	"strings"
@@ -18,13 +21,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index$proda$prodb"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index$proda$prodb$irr$npv"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2$2$2"
 
 	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R"
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R$S$S"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -66,11 +69,13 @@ const (
 //   - lag(<expr>,<missing>), where <missing> is used for the first element.
 //   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
 //   - counta(<expr>), countb(<expr>) is the number of rows after (before) the current row.
-//   - cuma(<expr>,<missing>), cumrb(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
+//   - cuma(<expr>,<missing>), cumb(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
+//   - proda(<expr>,<missing>), prodb(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
 //     and <missing> is used for the last (first) element.
 //   - index(<expr>,<index>) returns <expr> in the order of <index>
 //
-// The values in <...> can be any expression.
+// The values in <...> can be any expression.  The functions proda, prodb, cuma,cumb, counta, countb do NOT include
+// the current row.
 //
 // Available summary-level functions are:
 //   - mean(<expr>)
@@ -80,6 +85,10 @@ const (
 //   - max(<expr>)
 //   - min(<expr>)
 //   - rows(<expr>) # of rows in the pipeline (<expr> can be anything)
+//   - npv(<discount rate>, <cash flows>).  Find the NPV of the cash flows at discount rate. If disount rate
+//     is a slice, then the ith month's cashflows are discounted for i months at the ith discount rate.
+//   - irr(<cost>,<cash flows>).  Find the IRR of an initial outlay of <cost> (a positive value!), yielding cash flows
+//     (The first cash flow gets discounted one period)
 //
 // Logical operators are supported:
 //   - &&  and
@@ -463,9 +472,76 @@ func getDeltas(inputs []*OpNode) (x []float64, deltas []int) {
 	return make([]float64, n), deltas
 }
 
+// npv finds NPV when the discount rate is a constant
+func npv(discount, cashflows []float64) (pv float64) {
+	r := 1.0 / (1.0 + discount[0])
+	totalD := 1.0
+	for ind := 0; ind < len(cashflows); ind++ {
+		if len(discount) == 1 {
+			totalD *= r
+		} else {
+			totalD = math.Pow(1.0/(1.0+discount[ind]), float64(ind+1))
+		}
+		pv += cashflows[ind] * totalD
+	}
+
+	return pv
+}
+
+func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
+	const (
+		tolValue = 1e-4
+		maxIter  = 40
+	)
+	var optimal *optimize.Result
+	var e error
+
+	irrValue := []float64{guess0}
+
+	obj := func(irrValue []float64) float64 {
+		resid := npv(irrValue, cashflows) - cost
+		return resid * resid
+	}
+
+	grad := func(grad, x []float64) {
+		fd.Gradient(grad, obj, x, nil)
+	}
+	hess := func(h *mat.SymDense, x []float64) {
+		fd.Hessian(h, obj, x, nil)
+	}
+	problem := optimize.Problem{Func: obj, Grad: grad, Hess: hess}
+
+	// optimize
+	settings := &optimize.Settings{
+		InitValues:        nil,
+		GradientThreshold: 0,
+		Converger:         nil,
+		MajorIterations:   maxIter,
+		Runtime:           0,
+		FuncEvaluations:   0,
+		GradEvaluations:   0,
+		HessEvaluations:   0,
+		Recorder:          nil,
+		Concurrent:        12,
+	}
+
+	if optimal, e = optimize.Minimize(problem, irrValue, settings, &optimize.Newton{}); e != nil {
+		pv := npv(optimal.X, cashflows)
+		if math.Abs(pv-cost) > tolValue*cost {
+			return 0, fmt.Errorf("irr failed")
+		}
+	}
+	if optimal == nil {
+		return 0, fmt.Errorf("irr failed")
+	}
+
+	return optimal.X[0], nil
+}
+
 // EvalSFunction evaluates a summary function.
 func EvalSFunction(node *OpNode) error {
 	const medianQ = 0.5
+	const irrGuess = 0.05
 
 	switch node.FunName {
 	case "sum":
@@ -482,6 +558,14 @@ func EvalSFunction(node *OpNode) error {
 		node.Value = []float64{stat.Quantile(medianQ, stat.Empirical, node.Inputs[0].Value, nil)}
 	case "count":
 		node.Value = []float64{float64(len(node.Inputs[0].Value))}
+	case "npv":
+		node.Value = []float64{npv(node.Inputs[0].Value, node.Inputs[1].Value)}
+	case "irr":
+		irrValue, e := irr(node.Inputs[0].Value[0], irrGuess, node.Inputs[1].Value)
+		if e != nil {
+			return e
+		}
+		node.Value = []float64{irrValue}
 	default:
 		return fmt.Errorf("unknown function: %s", node.FunName)
 	}

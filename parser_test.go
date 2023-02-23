@@ -3,6 +3,7 @@ package seafan
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,11 +12,33 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+// test irr and npv functions
+func TestEvalSFunction(t *testing.T) {
+	Verbose = false
+	dataCF := "1, 2, 3, 4"      // c
+	dataDr := "0.1, .2, .3, .4" // D
+	dataPV := "6,0,0,0"         // e
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV})
+	expIr := 0.19194
+	ir := tester("irr(e,c)", pipe)
+	assert.InDelta(t, ir[0], expIr, .0001, nil)
+
+	// constant discount rate
+	pv := tester("npv(.1,c)", pipe)
+	ExpVal := 7.54798
+	assert.InDelta(t, pv[0], ExpVal, .0001)
+
+	// variable discount rate
+	pv = tester("npv(D,c)", pipe)
+	ExpVal = 4.70471
+	assert.InDelta(t, pv[0], ExpVal, .0001)
+}
+
 func TestEvaluate(t *testing.T) {
 	Verbose = false
 	dataC := "1, 2"
 	dataD := "3, 10"
-	pipe := buildPipe(dataC, dataD)
+	pipe := buildPipe([]string{dataC, dataD})
 
 	frmla := []string{
 		"index(D,1-(c-1))",
@@ -101,7 +124,7 @@ func TestLoop(t *testing.T) {
 	}
 	dataC := "1, 2"
 	dataD := "3, 10"
-	pipe := buildPipe(dataC, dataD)
+	pipe := buildPipe([]string{dataC, dataD})
 	eqns := []string{"D*x", "1-r+x", "c+x"}
 	assign := []string{"r", "y", "c"}
 	ops := make([]*OpNode, 0)
@@ -117,7 +140,6 @@ func TestLoop(t *testing.T) {
 	if e := Loop("x", 1, 3, ops, assign, pipe); e != nil {
 		panic(e)
 	}
-
 	for ind := 0; ind < len(assign); ind++ {
 		act := pipe.Get(assign[ind]).Data.([]float64)
 		assert.EqualValues(t, expect[ind], act)
@@ -125,9 +147,17 @@ func TestLoop(t *testing.T) {
 
 }
 
-func buildPipe(data1, data2 string) Pipeline {
-	qry := "WITH d AS (SELECT array(%s) AS a, array(%s) AS b) SELECT toInt32(a) AS c, toInt32(b) AS D FROM d ARRAY JOIN a,b"
-	qry = fmt.Sprintf(qry, data1, data2)
+func buildPipe(data []string) Pipeline {
+	var sel, arrjoin []string
+	outCols := "cDefg"
+	inCols := "stuvw"
+
+	for ind := 0; ind < len(data); ind++ {
+		data[ind] = fmt.Sprintf("array(%s) AS %s", data[ind], inCols[ind:ind+1])
+		sel = append(sel, fmt.Sprintf("toFloat64(%s) AS %s", inCols[ind:ind+1], outCols[ind:ind+1]))
+		arrjoin = append(arrjoin, fmt.Sprintf(inCols[ind:ind+1]))
+	}
+	qry := fmt.Sprintf("WITH d AS (SELECT %s) SELECT %s FROM d ARRAY JOIN %s", strings.Join(data, ","), strings.Join(sel, ","), strings.Join(arrjoin, ","))
 
 	user := os.Getenv("user")
 	pw := os.Getenv("pw")
@@ -172,7 +202,7 @@ func ExampleAddToPipe() {
 	// builds a Pipline with two fields:
 	//    c = 1,2
 	//    D = 3,-4
-	pipe := buildPipe("1,2", "3,-4")
+	pipe := buildPipe([]string{"1,2", "3,-4"})
 	// we'll add two fields to the pipeline: the sum=c+d and max=max(c,d)
 
 	// start by parsing the expressions.
@@ -228,7 +258,7 @@ func ExampleLoop() {
 	// builds a Pipline with two fields:
 	//    c = 1,2,3,4
 	//    D = 5,-5,3,6
-	pipe := buildPipe("1,2,3,4", "5,-5,3,6")
+	pipe := buildPipe([]string{"1,2,3,4", "5,-5,3,6"})
 	// we'll add two fields to the pipeline: the sum=c+d and max=max(c,d)
 
 	// start by parsing the expressions.
