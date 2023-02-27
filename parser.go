@@ -2,12 +2,11 @@ package seafan
 
 import (
 	"fmt"
-	"gonum.org/v1/gonum/diff/fd"
-	"gonum.org/v1/gonum/mat"
-	"gonum.org/v1/gonum/optimize"
 	"math"
 	"strconv"
 	"strings"
+
+	"gonum.org/v1/gonum/optimize"
 
 	flt "gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
@@ -21,13 +20,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index$proda$prodb$irr$npv"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index$proda$prodb$irr$npv$sse$mad$corr$r2"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2$2$2"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2$2$2$2$2$2"
 
 	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R$S$S"
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R$S$S$S$S$S"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -85,10 +84,13 @@ const (
 //   - max(<expr>)
 //   - min(<expr>)
 //   - rows(<expr>) # of rows in the pipeline (<expr> can be anything)
+//   - sse(<y>,<yhat>) returns the sum of squared error of y-yhat
+//   - mad(<y>,<yhat>) returns the sum of the absolute value of y-yhat
+//   - r2(<y>,<yhat>) returns the r-square of estimating y with yhat
 //   - npv(<discount rate>, <cash flows>).  Find the NPV of the cash flows at discount rate. If disount rate
 //     is a slice, then the ith month's cashflows are discounted for i months at the ith discount rate.
 //   - irr(<cost>,<cash flows>).  Find the IRR of an initial outlay of <cost> (a positive value!), yielding cash flows
-//     (The first cash flow gets discounted one period)
+//     (The first cash flow gets discounted one period). irr returns 0 if there's no solution.
 //
 // Logical operators are supported:
 //   - &&  and
@@ -488,13 +490,14 @@ func npv(discount, cashflows []float64) (pv float64) {
 	return pv
 }
 
+// irr finds the internal rate of return of the cashflows against the initial outlay of cost.
+// guess0 is the initial guess to the optimizer.
 func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
 	const (
 		tolValue = 1e-4
 		maxIter  = 40
 	)
 	var optimal *optimize.Result
-	var e error
 
 	irrValue := []float64{guess0}
 
@@ -502,14 +505,7 @@ func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
 		resid := npv(irrValue, cashflows) - cost
 		return resid * resid
 	}
-
-	grad := func(grad, x []float64) {
-		fd.Gradient(grad, obj, x, nil)
-	}
-	hess := func(h *mat.SymDense, x []float64) {
-		fd.Hessian(h, obj, x, nil)
-	}
-	problem := optimize.Problem{Func: obj, Grad: grad, Hess: hess}
+	problem := optimize.Problem{Func: obj}
 
 	// optimize
 	settings := &optimize.Settings{
@@ -525,23 +521,42 @@ func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
 		Concurrent:        12,
 	}
 
-	if optimal, e = optimize.Minimize(problem, irrValue, settings, &optimize.Newton{}); e != nil {
-		pv := npv(optimal.X, cashflows)
-		if math.Abs(pv-cost) > tolValue*cost {
-			return 0, fmt.Errorf("irr failed")
-		}
-	}
+	optimal, _ = optimize.Minimize(problem, irrValue, settings, &optimize.NelderMead{})
 	if optimal == nil {
+		return 0, fmt.Errorf("irr failed")
+	}
+
+	pv := npv(optimal.X, cashflows)
+	if math.Abs(pv-cost) > math.Abs(tolValue*cost) {
 		return 0, fmt.Errorf("irr failed")
 	}
 
 	return optimal.X[0], nil
 }
 
+// sseMAD returns the SSE of y to yhat (op="sse") and the MAD (actually, the sum) o.w.
+func sseMAD(y, yhat []float64, op string) float64 {
+	resid := make([]float64, len(y))
+	flt.SubTo(resid, y, yhat)
+
+	val := 0.0
+	if op == "sse" {
+		for ind := 0; ind < len(resid); ind++ {
+			val += resid[ind] * resid[ind]
+		}
+	} else {
+		for ind := 0; ind < len(resid); ind++ {
+			val += math.Abs(resid[ind])
+		}
+	}
+
+	return val
+}
+
 // EvalSFunction evaluates a summary function.
 func EvalSFunction(node *OpNode) error {
 	const medianQ = 0.5
-	const irrGuess = 0.05
+	const irrGuess = 0.005
 
 	switch node.FunName {
 	case "sum":
@@ -561,11 +576,18 @@ func EvalSFunction(node *OpNode) error {
 	case "npv":
 		node.Value = []float64{npv(node.Inputs[0].Value, node.Inputs[1].Value)}
 	case "irr":
-		irrValue, e := irr(node.Inputs[0].Value[0], irrGuess, node.Inputs[1].Value)
-		if e != nil {
-			return e
-		}
+		irrValue, _ := irr(node.Inputs[0].Value[0], irrGuess, node.Inputs[1].Value)
 		node.Value = []float64{irrValue}
+	case "sse":
+		node.Value = []float64{sseMAD(node.Inputs[0].Value, node.Inputs[1].Value, "sse")}
+	case "r2":
+		num := sseMAD(node.Inputs[0].Value, node.Inputs[1].Value, "sse")
+		den := stat.Variance(node.Inputs[0].Value, nil) * float64(len(node.Inputs[0].Value)-1)
+		node.Value = []float64{1.0 - num/den}
+	case "mad":
+		node.Value = []float64{sseMAD(node.Inputs[0].Value, node.Inputs[1].Value, "mad")}
+	case "corr":
+		node.Value = []float64{stat.Correlation(node.Inputs[0].Value, node.Inputs[1].Value, nil)}
 	default:
 		return fmt.Errorf("unknown function: %s", node.FunName)
 	}

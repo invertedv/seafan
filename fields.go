@@ -129,14 +129,10 @@ type fType struct {
 
 // Save saves FTypes to a json file--fileName
 func (fts FTypes) Save(fileName string) (err error) {
-	err = nil
-
 	f, err := os.Create(fileName)
-
 	if err != nil {
 		return
 	}
-
 	defer func() { _ = f.Close() }()
 
 	out := make([]fType, 0)
@@ -196,13 +192,11 @@ func (fts FTypes) Save(fileName string) (err error) {
 // LoadFTypes loads a file created by the FTypes Save method
 func LoadFTypes(fileName string) (fts FTypes, err error) {
 	fts = nil
-	err = nil
-	f, err := os.Open(fileName)
 
+	f, err := os.Open(fileName)
 	if err != nil {
 		return
 	}
-
 	defer func() { _ = f.Close() }()
 
 	js, err := io.ReadAll(f)
