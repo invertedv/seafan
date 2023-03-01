@@ -3,6 +3,7 @@ package seafan
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -56,6 +57,9 @@ const (
 // determined by scanning from the left using the order of precedence (+,-,*,/), respecting parentheses. The two
 // subexpressions create two new nodes in Inputs.
 //
+// Comparison operations with fields of type FRCat are permitted if the underlying data is type string. Strings are
+// enclosed in a single quote (').
+//
 // Functions:
 // If the expression is a function, each argument is assigned to an Input (in order).  Functions have at least one
 // input (argument). Two types of functions are supported: those that operate at the row level and those that
@@ -93,13 +97,14 @@ const (
 //     (The first cash flow gets discounted one period). irr returns 0 if there's no solution.
 //
 // Logical operators are supported:
-//   - &&  and
-//   - ||  or
+//   - && for "and"
+//   - || for "or"
 //
 // Logical operators resolve to 0 or 1.
 type OpNode struct {
 	Expression string    // expression this node implements
 	Value      []float64 // node value. Value is nil until Evaluate is run
+	Raw        *Raw      // node Value if field is not FRCts
 	Neg        bool      // negate result when populating Value
 	FunName    string    // name of function/operation to apply to the Inputs. The value is "" for leaves.
 	Inputs     []*OpNode // Inputs to node calculation
@@ -455,12 +460,18 @@ func getDeltas(inputs []*OpNode) (x []float64, deltas []int) {
 
 	n := 1
 	for ind := 0; ind < len(inputs); ind++ {
-		if inputs[ind].Value == nil {
+		if inputs[ind].Value == nil && inputs[ind].Raw == nil {
 			return nil, nil
 		}
 
 		d := 0
-		nx := len(inputs[ind].Value)
+		nx := 0
+		if inputs[ind].Value != nil {
+			nx = len(inputs[ind].Value)
+		} else {
+			xx := inputs[ind].Raw.Data
+			nx = len(xx)
+		}
 		if nx > 1 {
 			d = 1
 			if nx > n {
@@ -602,6 +613,9 @@ func evalFunction(node *OpNode) error {
 	if !checkSlice(node.FunName, functions) {
 		return fmt.Errorf("%s function not implemented", node.FunName)
 	}
+	if countRaw, e := consistent(node); countRaw > 0 || e != nil {
+		return fmt.Errorf("functions don't take strings as arguments")
+	}
 
 	if node.FunName == "if" {
 		if e := ifCond(node); e != nil {
@@ -632,7 +646,7 @@ func evalFunction(node *OpNode) error {
 	}
 
 	// These will be Row functions
-	// move backwards for the lag function
+	// move backwards in the slice (required for the lag function)
 	for ind := len(node.Value) - 1; ind >= 0; ind-- {
 		switch node.FunName {
 		case "cuma":
@@ -708,6 +722,12 @@ func evalConstant(node *OpNode) bool {
 		return true
 	}
 
+	if strings.Contains(node.Expression, "'") {
+		node.Raw = NewRaw([]any{node.Expression}, nil)
+
+		return true
+	}
+
 	return false
 }
 
@@ -720,21 +740,140 @@ func fromPipeline(node *OpNode, pipe Pipeline) error {
 		return fmt.Errorf("%s not in pipeline", node.Expression)
 	}
 
-	node.Value = xLeftGD.Data.([]float64)
+	ft := pipe.GetFType(field)
 
-	if node.Neg {
-		node.Value = make([]float64, pipe.Rows())
-		copy(node.Value, xLeftGD.Data.([]float64))
-		goNegative(node.Value, node.Neg)
+	if ft.Role == FRCts {
+		node.Value = xLeftGD.Data.([]float64)
+
+		if node.Neg {
+			node.Value = make([]float64, pipe.Rows())
+			copy(node.Value, xLeftGD.Data.([]float64))
+			goNegative(node.Value, node.Neg)
+		}
+
+		return nil
+	}
+
+	if ft.Role != FRCat {
+		return fmt.Errorf("cannot operate on onehot or embedded fields")
+	}
+
+	var e error
+	node.Raw, e = pipe.GData().GetRaw(field)
+	if e != nil {
+		return e
+	}
+
+	if node.Raw.Kind != reflect.String {
+		return fmt.Errorf("field %s must be string for FRCat comparisons", field)
 	}
 
 	return nil
+}
+
+// evalOpsCat evaluates operations for FRCat (string) fields
+func evalOpsCat(node *OpNode) error {
+	var deltas []int
+	node.Value, deltas = getDeltas(node.Inputs)
+	ind1, ind2 := 0, 0
+
+	if node.Inputs[0].Raw.Kind != reflect.String || node.Inputs[1].Raw.Kind != reflect.String {
+		return fmt.Errorf("cat must be string to compare")
+	}
+
+	for ind := 0; ind < len(node.Value); ind++ {
+		x0 := strings.ReplaceAll(node.Inputs[0].Raw.Data[ind1].(string), "'", "")
+		x1 := strings.ReplaceAll(node.Inputs[1].Raw.Data[ind2].(string), "'", "")
+		// check same type...
+
+		switch node.FunName {
+		case ">":
+			val := 0.0
+
+			if x0 > x1 {
+				val = 1
+			}
+
+			node.Value[ind] = val
+		case ">=":
+			val := 0.0
+			if x0 >= x1 {
+				val = 1
+			}
+
+			node.Value[ind] = val
+		case "<":
+			val := 0.0
+
+			if x0 < x1 {
+				val = 1
+			}
+
+			node.Value[ind] = val
+		case "<=":
+			val := 0.0
+			if x0 <= x1 {
+				val = 1
+			}
+			node.Value[ind] = val
+		case "==":
+			val := 0.0
+
+			if x0 == x1 {
+				val = 1
+			}
+
+			node.Value[ind] = val
+		case "!=":
+			val := 0.0
+
+			if x0 != x1 {
+				val = 1
+			}
+
+			node.Value[ind] = val
+		default:
+			return fmt.Errorf("op '%s' unsupported for strings", node.FunName)
+		}
+
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+	}
+
+	return nil
+}
+
+// consistent checks that the Inputs are either all FRCts or all FRCat.
+func consistent(node *OpNode) (countRaw int, err error) {
+	countCts := 0
+	for _, inps := range node.Inputs {
+		if inps.Value != nil {
+			countCts++
+		}
+		if inps.Raw != nil {
+			countRaw++
+		}
+	}
+	if countRaw > 0 && countCts > 0 {
+		return 0, fmt.Errorf("cannot mix strings and floats in %s", node.Expression)
+	}
+
+	return countRaw, nil
 }
 
 // evalOps evaluates an operation
 func evalOps(node *OpNode) error {
 	if node.Inputs == nil || len(node.Inputs) != 2 {
 		return fmt.Errorf("operations require two operands")
+	}
+
+	if _, e := consistent(node); e != nil {
+		return e
+	}
+
+	// if Raw is not nil, we're dealing with strings
+	if node.Inputs[0].Raw != nil {
+		return evalOpsCat(node)
 	}
 
 	var deltas []int
@@ -744,6 +883,7 @@ func evalOps(node *OpNode) error {
 	for ind := 0; ind < len(node.Value); ind++ {
 		x0 := node.Inputs[0].Value[ind1]
 		x1 := node.Inputs[1].Value[ind2]
+
 		switch node.FunName {
 		case "^":
 			node.Value[ind] = math.Pow(x0, x1)

@@ -25,7 +25,7 @@ func UnNormalize(vals []float64, ft *FType) (unNorm []float64) {
 	return outVal
 }
 
-// Coalesce combines columns of a either a one-hot feature or a softmax output.  In the case of a feature,
+// Coalesce combines columns of either a one-hot feature or a softmax output.  In the case of a feature,
 // it returns 1 if any of the target columns is 1.  In the case of a softmax output, it sums the entries.
 func Coalesce(vals []float64, nCat int, trg []int, binary, logodds bool, sl Slicer) ([]float64, error) {
 
@@ -354,7 +354,7 @@ func Decile(xyIn *XY, plt *PlotDef) error {
 		return e
 	}
 
-	if e = xy.Sort(); e != nil {
+	if e := xy.Sort(); e != nil {
 		return e
 	}
 

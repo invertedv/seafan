@@ -292,7 +292,6 @@ func (gd *GData) Get(name string) *GDatum {
 
 // Slice creates a new GData sliced according to sl
 func (gd *GData) Slice(sl Slicer) (*GData, error) {
-
 	if sl == nil {
 		return gd, nil
 	}
@@ -492,8 +491,8 @@ func (gd *GData) Shuffle() {
 }
 
 // GetData returns the slice of *GDatums
-func (g *GData) GetData() []*GDatum {
-	return g.data
+func (gd *GData) GetData() []*GDatum {
+	return gd.data
 }
 
 // GetRaw returns the raw data for the field.
@@ -762,4 +761,21 @@ func (gd *GData) AppendField(newData *Raw, name string, fRole FRole) error {
 	}
 
 	return nil
+}
+
+// Back2Raw converts the entire GData back to its raw state
+func (gd *GData) Back2Raw() (rawData []*Raw, nCol int, fields []string, err error) {
+	fields = gd.FieldList()
+	nCol = len(fields)
+	rawData = make([]*Raw, nCol)
+
+	for cols := 0; cols < nCol; cols++ {
+		var e error
+		rawData[cols], e = gd.GetRaw(fields[cols])
+		if e != nil {
+			return nil, 0, nil, e
+		}
+	}
+
+	return rawData, nCol, fields, nil
 }

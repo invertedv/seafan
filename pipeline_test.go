@@ -78,6 +78,11 @@ func ExampleJoin() {
 		panic(e)
 	}
 
+	// sort pipe2 by join field
+	if e := pipe2.GData().Sort("row", true); e != nil {
+		panic(e)
+	}
+
 	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", FTypes{ft})
 	if e != nil {
 		panic(e)
@@ -98,4 +103,47 @@ func ExampleJoin() {
 	// output:
 	// # Rows:  4
 	// common row values:  [1 2 3 4]
+}
+
+// This example shows how to join two pipelines on a common field, in this case a date.
+func ExampleJoin_dateJoin() {
+	Verbose = false
+
+	// In this example, we don't need to specify an FType since dates will be FRCat.
+	data := os.Getenv("data")
+	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	if e != nil {
+		panic(e)
+	}
+
+	pipe1, e := CSVToPipe(data+"/pipeTest3.csv", nil)
+	if e != nil {
+		panic(e)
+	}
+	joinPipe, e := Join(pipe1, pipe2, "date")
+	if e != nil {
+		fmt.Println("oops -- not sorted")
+	}
+
+	// sort pipe2 by join field
+	if err := pipe2.GData().Sort("date", true); err != nil {
+		panic(err)
+	}
+
+	joinPipe, e = Join(pipe1, pipe2, "date")
+	if e != nil {
+		panic(e)
+	}
+
+	raw, e := joinPipe.GData().GetRaw("date")
+	if e != nil {
+		panic(e)
+	}
+
+	fmt.Println("# Rows: ", joinPipe.Rows())
+	fmt.Println("common date values: ", raw.Data)
+	// output:
+	// oops -- not sorted
+	// # Rows:  2
+	// common date values:  [2023-04-01 00:00:00 +0000 UTC 2023-05-01 00:00:00 +0000 UTC]
 }

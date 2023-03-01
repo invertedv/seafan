@@ -471,8 +471,6 @@ func LoadModSpec(fileName string) (ms ModSpec, err error) {
 
 // Strip is a utility that takes a string of the form "Func(args)" and returns "Func" and "args"
 func Strip(s string) (left, inner string, err error) {
-	left, inner, err = "", "", nil
-
 	s = strings.ReplaceAll(strings.ReplaceAll(s, " ", ""), "\n", "")
 	il := strings.Index(s, "(")
 

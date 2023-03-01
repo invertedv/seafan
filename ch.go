@@ -1,6 +1,6 @@
 package seafan
 
-// ch.go implments a Pipeline using github.com/invertedv/chutils
+// ch.go implements a Pipeline using github.com/invertedv/chutils
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 
 // ChData provides a Pipeline interface into text files (delimited, fixed length) and ClickHouse.
 type ChData struct {
-	cycle      bool          // if true, resuses data, false fetches new data after each epoch
+	cycle      bool          // if true, reuses data, false fetches new data after each epoch
 	pull       bool          // if true, pull the data from ClickHouse on next call to Batch
 	bs         int           // batch size
 	cbRow      int           // current batch starting row
@@ -98,8 +98,6 @@ func (ch *ChData) GData() *GData {
 
 // Init initializes the Pipeline.
 func (ch *ChData) Init() (err error) {
-	err = nil
-
 	if ch.rdr == nil {
 		return Wrapper(ErrChData, "no reader")
 	}

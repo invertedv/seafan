@@ -3,14 +3,13 @@ package seafan
 // pipeline.go has the interface and "With" funcs for Pipelines.
 import (
 	"fmt"
-	"os"
-	"sort"
-	"strings"
-
 	"github.com/invertedv/chutils"
 	cf "github.com/invertedv/chutils/file"
 	s "github.com/invertedv/chutils/sql"
 	G "gorgonia.org/gorgonia"
+	"os"
+	"sort"
+	"strings"
 )
 
 // The Pipeline interface specifies the methods required to be a data Pipeline. The Pipeline is the middleware between
@@ -399,70 +398,50 @@ func PipeToCSV(pipe Pipeline, outFile string) error {
 // Join creates a new pipeline by joining pipe1 and pipe2 on joinField.
 //   - JoinField must be categorical.
 //   - The only field pipe1 and pipe2 can have in common is joinField
-//   - pipe2 is sorted by Join.  Hence, pipe2 should be the smaller of the pipelines.
+//   - pipe2 must be sorted by the join field. Duplicates in the join field in pipe2 won't work
 func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) {
-	// fields in joined pipe
-	field1, field2 := pipe1.FieldList(), pipe2.FieldList()
-
-	// duplicate field names not allowed
-	if e := disjoint(field1, field2, joinField); err != nil {
-		return nil, e
-	}
-
-	// check join field is in both and is type FRCat
-	if _, e := getOn(pipe1, joinField); e != nil {
-		return nil, e
-	}
-
-	var on2 *GDatum
-	if on2, err = getOn(pipe2, joinField); err != nil {
-		return nil, err
-	}
-
-	// sort pipe2 by "joinField" field
-	//	if e := pipe2.GData().Sort(joinField, true); e != nil {
-	//		return nil, e
-	//	}
-
-	lvl2 := on2.FT.FP.Lvl
-	on2Data := on2.Data.([]int32)
-
-	n1, n2 := len(field1), len(field2)
 	gd1, gd2 := pipe1.GData(), pipe2.GData()
 
 	// The safest (though not fastest) way to do this is to recover the raw data from the pipelines
-	raw1 := make([]*Raw, n1)
-	indOn1 := -1 // index of joinField
-	for cols := 0; cols < n1; cols++ {
-		var e error
-		raw1[cols], e = gd1.GetRaw(field1[cols])
-		if e != nil {
-			return nil, e
-		}
-		if field1[cols] == joinField {
-			indOn1 = cols
-		}
+	raw1, n1, field1, e1 := gd1.Back2Raw()
+	if e1 != nil {
+		return nil, e1
 	}
 
-	raw2 := make([]*Raw, n2)
-	for cols := 0; cols < n2; cols++ {
-		var e error
-		raw2[cols], e = gd2.GetRaw(field2[cols])
-		if e != nil {
-			return nil, e
-		}
+	raw2, n2, field2, e2 := gd2.Back2Raw()
+	if e2 != nil {
+		return nil, e2
+	}
+
+	// duplicate field names not allowed
+	if e := disjoint(field1, field2, joinField); e != nil {
+		return nil, e
+	}
+
+	var on1Loc, on2Loc int
+	if on1Loc = searchSlice(joinField, field1); on1Loc < 0 {
+		return nil, fmt.Errorf("%s not in pipe", joinField)
+	}
+
+	if on2Loc = searchSlice(joinField, field2); on2Loc < 0 {
+		return nil, fmt.Errorf("%s not in pipe", joinField)
+	}
+
+	if !sort.IsSorted(raw2[on2Loc]) {
+		return nil, fmt.Errorf("right-hand side of join is not sorted on join key")
+	}
+
+	if raw1[on1Loc].Kind != raw2[on2Loc].Kind {
+		return nil, fmt.Errorf("join field has different types: %v and %v", raw1[on1Loc].Kind, raw2[on2Loc].Kind)
 	}
 
 	joinRaw1 := make([][]any, n1)
 	joinRaw2 := make([][]any, n2)
 
 	for ind := 0; ind < pipe1.Rows(); ind++ {
-		needle, ok := lvl2[raw1[indOn1].Data[ind]]
-		if !ok {
-			continue
-		}
+		needle := raw1[on1Loc].Data[ind]
 
-		loc2 := locInd(needle, on2Data)
+		loc2 := locInd(needle, raw2[on2Loc])
 		if loc2 < 0 {
 			continue
 		}
@@ -478,9 +457,13 @@ func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) 
 	}
 
 	gdata := &GData{}
+
+	// skip joinField here
 	if e := addRaw(gdata, joinRaw1, field1, pipe1.GetFTypes(), ""); e != nil {
 		return nil, e
 	}
+
+	// include joinField here
 	if e := addRaw(gdata, joinRaw2, field2, pipe2.GetFTypes(), joinField); e != nil {
 		return nil, e
 	}
@@ -523,28 +506,34 @@ func addRaw(gdOutput *GData, inData [][]any, fieldNames []string, fts FTypes, jo
 }
 
 // locInd finds the index of needle in haystack.  Return -1 if not there.
-func locInd(needle int32, haystack []int32) int {
-	ind := sort.Search(len(haystack), func(i int) bool { return haystack[i] >= needle })
-	if haystack[ind] == needle {
+func locInd(needle any, haystack *Raw) int {
+	testGE := func(i int) bool { lt, _ := AnyLess(haystack.Data[i], needle); return !lt }
+	ind := sort.Search(haystack.Len(), testGE)
+
+	if ind == haystack.Len() {
+		return -1
+	}
+
+	// match?
+	lt, _ := AnyLess(haystack.Data[ind], needle) // true if haystack < needle
+	gt, _ := AnyLess(needle, haystack.Data[ind]) // true if needle < haystack
+
+	if !gt && !lt {
 		return ind
 	}
 
 	return -1
 }
 
-// getOn checks the joinField is present in the Pipeline
-func getOn(pipe Pipeline, joinField string) (*GDatum, error) {
-	gd := pipe.Get(joinField)
-
-	if gd == nil {
-		return nil, fmt.Errorf("join field %s not in pipe", joinField)
+// searchSlice checks the joinField is present in the Pipeline
+func searchSlice(needle string, haystack []string) (loc int) {
+	for ind, hay := range haystack {
+		if needle == hay {
+			return ind
+		}
 	}
 
-	if gd.FT.Role != FRCat {
-		return nil, fmt.Errorf("join field in pipe not type FRCat")
-	}
-
-	return gd, nil
+	return -1
 }
 
 // disjoint checks that fields1 and fields2 have no common elements aside from joinField

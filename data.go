@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"time"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"gonum.org/v1/gonum/stat"
@@ -476,6 +477,8 @@ func AnyLess(x, y any) (bool, error) {
 		return xt < y.(int32), nil
 	case string:
 		return xt < y.(string), nil
+	case time.Time:
+		return y.(time.Time).Sub(xt) > 0, nil
 	default:
 		return false, Wrapper(ErrData, "AnyLess: no comparison")
 	}

@@ -26,7 +26,7 @@ type NNModel struct {
 	g         *G.ExprGraph // model graph
 	paramsW   G.Nodes      // weight parameters
 	paramsB   G.Nodes      // bias parameters
-	paremsEmb G.Nodes      // embedding parameters
+	paramsEmb G.Nodes      // embedding parameters
 	output    G.Result     // graph output
 	inputsC   G.Nodes      // continuous (including one-hot) Inputs
 	inputsE   G.Nodes      // embedding Inputs
@@ -107,7 +107,7 @@ func (m *NNModel) String() string {
 	str = fmt.Sprintf("%s%d FC parameters\n", str, nPar)
 	nEmb := 0
 
-	for _, n := range m.paremsEmb {
+	for _, n := range m.paramsEmb {
 		nEmb += n.Shape()[0] * n.Shape()[1]
 	}
 
@@ -178,7 +178,7 @@ func (m *NNModel) Features() G.Nodes {
 // Params retursn the model parameter nodes (weights, biases, embeddings)
 func (m *NNModel) Params() G.Nodes {
 	p := append(m.paramsW, m.paramsB...)
-	p = append(p, m.paremsEmb...)
+	p = append(p, m.paramsEmb...)
 
 	return p
 }
@@ -332,7 +332,7 @@ func NewNNModel(modSpec ModSpec, pipe Pipeline, build bool, nnOpts ...NNOpts) (*
 		g:         g,
 		paramsW:   parW,
 		paramsB:   parB,
-		paremsEmb: embParm,
+		paramsEmb: embParm,
 		inputsC:   xs,
 		inputsE:   xEmInp,
 		obs:       yoh,
@@ -363,7 +363,7 @@ func (m *NNModel) Fwd() {
 		zp := make(G.Nodes, 0)
 
 		for ind, x := range m.inputsE {
-			z := G.Must(G.Mul(x, m.paremsEmb[ind]))
+			z := G.Must(G.Mul(x, m.paramsEmb[ind]))
 			zp = append(zp, z)
 		}
 
@@ -441,7 +441,6 @@ func noNaN(parms G.Nodes) (hasNans bool) {
 // Save saves a model to disk.  Two files are created: <fileRoot>S.nn for the ModSpec and
 // <fileRoot>P.nn form the parameters.
 func (m *NNModel) Save(fileRoot string) (err error) {
-	err = nil
 	fileP := fileRoot + "P.nn"
 	f, err := os.Create(fileP)
 
@@ -488,8 +487,6 @@ func (m *NNModel) Save(fileRoot string) (err error) {
 // p is the Pipeline with the field specs.
 // if build is true, DropOut layers are included.
 func LoadNN(fileRoot string, p Pipeline, build bool) (nn *NNModel, err error) {
-	err = nil
-	nn = nil
 	fileS := fileRoot + "S.nn"
 	modSpec, err := LoadModSpec(fileS)
 
@@ -888,7 +885,7 @@ func PredictNNwFts(fileRoot string, pipe Pipeline, build bool, fts FTypes, opts 
 	for _, fld := range newGd.FieldList() {
 		ft := newGd.Get(fld).FT
 		if ft.Role == FRCat || ft.Role == FREmbed {
-			if e = newGd.MakeOneHot(ft.Name, ft.Name+"Oh"); e != nil {
+			if e := newGd.MakeOneHot(ft.Name, ft.Name+"Oh"); e != nil {
 				return nil, e
 			}
 		}

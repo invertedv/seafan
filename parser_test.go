@@ -12,13 +12,41 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+// tests conditional statements with strings
+func TestExpr2Tree(t *testing.T) {
+	Verbose = false
+	dataCF := "'0', 'b', '0', 'd'" // c
+	dataDr := "0.1, .2, .3, .6"    // D
+	dataPV := "'0','0','0','abc'"  // e
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"s", "f", "s"})
+	exprs := []string{"c=='b'", "c=='0'", "c==e", "e=='abc'", "c!=D", "c*2", "D==.1", "e+'a'", "c > 'b'", "c>='b'", "log(c)"}
+	results := [][]float64{{0, 1, 0, 0}, {1, 0, 1, 0}, {1, 0, 1, 0}, {0, 0, 0, 1}, {0, 0, 0, 0},
+		{0, 0, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 1}, {0, 1, 0, 1}, {0, 0, 0, 0}}
+	errs := []bool{false, false, false, false, true, true, false, true, false, false, true}
+	for ind, expr := range exprs {
+		root := &OpNode{Expression: expr}
+		if err := Expr2Tree(root); err != nil {
+			panic(err)
+		}
+
+		e := Evaluate(root, pipe)
+		if errs[ind] {
+			assert.NotNil(t, e)
+			continue
+		}
+
+		assert.Nil(t, e)
+		assert.ElementsMatch(t, root.Value, results[ind])
+	}
+}
+
 // Test CopyNode
 func TestCopyNode(t *testing.T) {
 	Verbose = false
 	dataCF := "1, 2, 3, 4"      // c
 	dataDr := "0.1, .2, .3, .4" // D
 	dataPV := "6,0,0,0"         // e
-	pipe := buildPipe([]string{dataCF, dataDr, dataPV})
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"f", "f", "f"})
 
 	root := &OpNode{Expression: "log(e+c+1)*2+5"}
 	if err := Expr2Tree(root); err != nil {
@@ -42,7 +70,7 @@ func TestEvalSFunction(t *testing.T) {
 	dataCF := "1, 2, 3, 4"      // c
 	dataDr := "0.1, .2, .3, .4" // D
 	dataPV := "6,0,0,0"         // e
-	pipe := buildPipe([]string{dataCF, dataDr, dataPV})
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"f", "f", "f"})
 	expIr := 0.19194
 	ir := tester("irr(e,c)", pipe)
 	assert.InDelta(t, ir[0], expIr, .0001, nil)
@@ -62,7 +90,7 @@ func TestEvaluate(t *testing.T) {
 	Verbose = false
 	dataC := "1, 2"
 	dataD := "3, 10"
-	pipe := buildPipe([]string{dataC, dataD})
+	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
 		"index(D,1-(c-1))",
@@ -148,7 +176,7 @@ func TestLoop(t *testing.T) {
 	}
 	dataC := "1, 2"
 	dataD := "3, 10"
-	pipe := buildPipe([]string{dataC, dataD})
+	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 	eqns := []string{"D*x", "1-r+x", "c+x"}
 	assign := []string{"r", "y", "c"}
 	ops := make([]*OpNode, 0)
@@ -168,17 +196,21 @@ func TestLoop(t *testing.T) {
 		act := pipe.Get(assign[ind]).Data.([]float64)
 		assert.EqualValues(t, expect[ind], act)
 	}
-
 }
 
-func buildPipe(data []string) Pipeline {
+func buildPipe(data, types []string) Pipeline {
 	var sel, arrjoin []string
 	outCols := "cDefg"
 	inCols := "stuvw"
 
 	for ind := 0; ind < len(data); ind++ {
 		data[ind] = fmt.Sprintf("array(%s) AS %s", data[ind], inCols[ind:ind+1])
-		sel = append(sel, fmt.Sprintf("toFloat64(%s) AS %s", inCols[ind:ind+1], outCols[ind:ind+1]))
+		if types[ind] == "f" {
+			sel = append(sel, fmt.Sprintf("toFloat64(%s) AS %s", inCols[ind:ind+1], outCols[ind:ind+1]))
+		}
+		if types[ind] == "s" {
+			sel = append(sel, fmt.Sprintf("%s AS %s", inCols[ind:ind+1], outCols[ind:ind+1]))
+		}
 		arrjoin = append(arrjoin, fmt.Sprintf(inCols[ind:ind+1]))
 	}
 	qry := fmt.Sprintf("WITH d AS (SELECT %s) SELECT %s FROM d ARRAY JOIN %s", strings.Join(data, ","), strings.Join(sel, ","), strings.Join(arrjoin, ","))
@@ -226,7 +258,7 @@ func ExampleAddToPipe() {
 	// builds a Pipline with two fields:
 	//    c = 1,2
 	//    D = 3,-4
-	pipe := buildPipe([]string{"1,2", "3,-4"})
+	pipe := buildPipe([]string{"1,2", "3,-4"}, []string{"f", "f"})
 	// we'll add two fields to the pipeline: the sum=c+d and max=max(c,d)
 
 	// start by parsing the expressions.
@@ -282,7 +314,7 @@ func ExampleLoop() {
 	// builds a Pipline with two fields:
 	//    c = 1,2,3,4
 	//    D = 5,-5,3,6
-	pipe := buildPipe([]string{"1,2,3,4", "5,-5,3,6"})
+	pipe := buildPipe([]string{"1,2,3,4", "5,-5,3,6"}, []string{"f", "f"})
 	// we'll add two fields to the pipeline: the sum=c+d and max=max(c,d)
 
 	// start by parsing the expressions.
