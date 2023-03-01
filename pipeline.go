@@ -420,9 +420,9 @@ func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) 
 	}
 
 	// sort pipe2 by "joinField" field
-	if e := pipe2.GData().Sort(joinField, true); e != nil {
-		return nil, e
-	}
+	//	if e := pipe2.GData().Sort(joinField, true); e != nil {
+	//		return nil, e
+	//	}
 
 	lvl2 := on2.FT.FP.Lvl
 	on2Data := on2.Data.([]int32)

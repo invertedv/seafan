@@ -962,3 +962,25 @@ func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe
 
 	return nil
 }
+
+// CopyNode copies an *OpNode tree (with no shared addresses)
+func CopyNode(src *OpNode) (dest *OpNode) {
+	dest = &OpNode{}
+	dest.Expression = src.Expression
+	dest.Neg = src.Neg
+	dest.stet = src.stet
+	dest.FunName = src.FunName
+	copy(dest.Value, src.Value)
+
+	if src.Inputs == nil {
+		return dest
+	}
+
+	dest.Inputs = make([]*OpNode, len(src.Inputs))
+
+	for ind := 0; ind < len(src.Inputs); ind++ {
+		dest.Inputs[ind] = CopyNode(src.Inputs[ind])
+	}
+
+	return dest
+}

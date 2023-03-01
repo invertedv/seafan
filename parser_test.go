@@ -12,6 +12,30 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+// Test CopyNode
+func TestCopyNode(t *testing.T) {
+	Verbose = false
+	dataCF := "1, 2, 3, 4"      // c
+	dataDr := "0.1, .2, .3, .4" // D
+	dataPV := "6,0,0,0"         // e
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV})
+
+	root := &OpNode{Expression: "log(e+c+1)*2+5"}
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	newNode := CopyNode(root)
+
+	e := Evaluate(root, pipe)
+	assert.Nil(t, e)
+	assert.Nil(t, newNode.Value) // no value to newNode yet
+
+	e = Evaluate(newNode, pipe)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, root.Value, newNode.Value) // now they should match
+}
+
 // test irr and npv functions
 func TestEvalSFunction(t *testing.T) {
 	Verbose = false

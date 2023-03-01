@@ -491,6 +491,11 @@ func (gd *GData) Shuffle() {
 	rand.Shuffle(gd.Len(), gd.Swap)
 }
 
+// GetData returns the slice of *GDatums
+func (g *GData) GetData() []*GDatum {
+	return g.data
+}
+
 // GetRaw returns the raw data for the field.
 func (gd *GData) GetRaw(field string) (*Raw, error) {
 	fd := gd.Get(field)
