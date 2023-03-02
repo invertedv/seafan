@@ -3,13 +3,14 @@ package seafan
 // pipeline.go has the interface and "With" funcs for Pipelines.
 import (
 	"fmt"
+	"os"
+	"sort"
+	"strings"
+
 	"github.com/invertedv/chutils"
 	cf "github.com/invertedv/chutils/file"
 	s "github.com/invertedv/chutils/sql"
 	G "gorgonia.org/gorgonia"
-	"os"
-	"sort"
-	"strings"
 )
 
 // The Pipeline interface specifies the methods required to be a data Pipeline. The Pipeline is the middleware between
@@ -534,6 +535,17 @@ func searchSlice(needle string, haystack []string) (loc int) {
 	}
 
 	return -1
+}
+
+// checkSlice returns true of needle is in haystack
+func checkSlice(needle, haystack string) bool {
+	for _, straw := range strings.Split(haystack, delim) {
+		if needle == straw {
+			return true
+		}
+	}
+
+	return false
 }
 
 // disjoint checks that fields1 and fields2 have no common elements aside from joinField

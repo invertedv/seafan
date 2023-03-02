@@ -12,6 +12,76 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+// Simple date arithmetic is possible.  The function dateAdd(d,m) adds m months to d.
+// The data is:
+// row, newField1, newField2, newField3, date
+// 0,row0,.1,.2, 3/1/2023
+// 2,row2,2.1,3.2, 4/1/2023
+// 3,row3,3.1,4.2, 5/1/2023
+// 4,row4,4.1,5.2, 6/1/2023
+// 1,row1,1.1,2.2, 7/1/2023
+// 100,row100,4100.0,5200.0, 8/1/2020
+func ExampleEvaluate_dateAdd() {
+	Verbose = false
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "dateAdd(date,row)"}
+
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err := Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	if err := AddToPipe(root, "nextMonth", pipe); err != nil {
+		panic(err)
+	}
+	fmt.Println("date + row months")
+	raw, e := pipe.GData().GetRaw("nextMonth")
+	if e != nil {
+		panic(e)
+	}
+
+	fmt.Println(raw.Data)
+	// output:
+	// date + row months
+	// [2023-03-01 00:00:00 +0000 UTC 2023-06-01 00:00:00 +0000 UTC 2023-08-01 00:00:00 +0000 UTC 2023-10-01 00:00:00 +0000 UTC 2023-08-01 00:00:00 +0000 UTC 2028-12-01 00:00:00 +0000 UTC]
+}
+
+func ExampleEvaluate_if() {
+	Verbose = false
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "if(date=='3/1/2023',1,0)"}
+
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err := Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	if err := AddToPipe(root, "march2023", pipe); err != nil {
+		panic(err)
+	}
+	fmt.Println(pipe.Get("march2023").Data.([]float64))
+	// output:
+	// [1 0 0 0 0 0]
+}
+
 // tests conditional statements with strings
 func TestExpr2Tree(t *testing.T) {
 	Verbose = false
@@ -93,15 +163,16 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
+		"countBefore(c)",
 		"index(D,1-(c-1))",
 		"row(c)",
 		"c-D-D",
 		"-D*3 + D",
 		"lag(c,42)",
-		"countb(c)",
-		"cumb(c,42)",
-		"counta(c)",
-		"cuma(c, 42)",
+		"countBefore(c)",
+		"cumBefore(c,42)",
+		"countAfter(c)",
+		"cumAfter(c, 42)",
 		"c-D-D",
 		"s(c)",
 		"max(c)",
@@ -127,6 +198,7 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{0, 1},
 		{10, 3},
 		{0, 1},
 		{-5, -18},

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"gonum.org/v1/gonum/optimize"
 
@@ -21,13 +22,13 @@ const (
 	ifs = ">$>=$<$<=$==$!="
 
 	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cuma$counta$cumb$countb$row$index$proda$prodb$irr$npv$sse$mad$corr$r2"
+	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cumAfter$countAfter$cumBefore$countBefore$row$index$prodAfter$prodBefore$irr$npv$sse$mad$corr$r2$dateAdd"
 
 	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2$2$2$2$2$2"
+	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2$2$2$2$2$2$2$2"
 
 	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R$S$S$S$S$S"
+	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R$S$S$S$S$S$S$R"
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -57,8 +58,8 @@ const (
 // determined by scanning from the left using the order of precedence (+,-,*,/), respecting parentheses. The two
 // subexpressions create two new nodes in Inputs.
 //
-// Comparison operations with fields of type FRCat are permitted if the underlying data is type string. Strings are
-// enclosed in a single quote (').
+// Comparison operations with fields of type FRCat are permitted if the underlying data is type string or date.
+// // Strings and dates are enclosed in a single quote ('). Date formats supported are: CCYYMMDD and MM/DD/CCYY.
 //
 // Functions:
 // If the expression is a function, each argument is assigned to an Input (in order).  Functions have at least one
@@ -71,14 +72,15 @@ const (
 //   - log(<expr>)
 //   - lag(<expr>,<missing>), where <missing> is used for the first element.
 //   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
-//   - counta(<expr>), countb(<expr>) is the number of rows after (before) the current row.
-//   - cuma(<expr>,<missing>), cumb(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
-//   - proda(<expr>,<missing>), prodb(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
+//   - row(<expr>) row number in pipeline (starts with 0)
+//   - countAfter(<expr>), countBefore(<expr>) is the number of rows after (before) the current row.
+//   - cumAfter(<expr>,<missing>), cumBefore(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
+//   - prodAfter(<expr>,<missing>), prodBefore(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
 //     and <missing> is used for the last (first) element.
 //   - index(<expr>,<index>) returns <expr> in the order of <index>
 //
-// The values in <...> can be any expression.  The functions proda, prodb, cuma,cumb, counta, countb do NOT include
-// the current row.
+// The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
+// countAfter, countBefore do NOT include the current row.
 //
 // Available summary-level functions are:
 //   - mean(<expr>)
@@ -87,7 +89,6 @@ const (
 //   - sum(<expr>)
 //   - max(<expr>)
 //   - min(<expr>)
-//   - rows(<expr>) # of rows in the pipeline (<expr> can be anything)
 //   - sse(<y>,<yhat>) returns the sum of squared error of y-yhat
 //   - mad(<y>,<yhat>) returns the sum of the absolute value of y-yhat
 //   - r2(<y>,<yhat>) returns the r-square of estimating y with yhat
@@ -95,6 +96,9 @@ const (
 //     is a slice, then the ith month's cashflows are discounted for i months at the ith discount rate.
 //   - irr(<cost>,<cash flows>).  Find the IRR of an initial outlay of <cost> (a positive value!), yielding cash flows
 //     (The first cash flow gets discounted one period). irr returns 0 if there's no solution.
+//
+// Comparisons
+//   - ==, !=, >,>=, <, <=
 //
 // Logical operators are supported:
 //   - && for "and"
@@ -233,6 +237,7 @@ func searchOp(expr, needles string) (op string, args []string) {
 	}
 
 	ignore := 0
+	ignoreQ := false // single quote
 	for indx := 0; indx < len(expr)-1; indx++ {
 		// needles can be 1 or 2 characters wide
 		ch := expr[indx : indx+1]
@@ -242,8 +247,10 @@ func searchOp(expr, needles string) (op string, args []string) {
 			ignore++
 		case ")":
 			ignore--
+		case "'":
+			ignoreQ = !ignoreQ
 		default:
-			if ignore == 0 && indx > 0 {
+			if ignore == 0 && !ignoreQ && indx > 0 {
 				// check 2-character needles first
 				if checkSlice(ch2, needles) {
 					return ch2, []string{expr[0:indx], expr[indx+2:]}
@@ -322,9 +329,9 @@ func getFunction(expr string) (funName string, args []string, err error) {
 	}
 
 	// a function will have only alphas before the left paren
-	f := strings.ToLower(expr[0:indx])
+	f := expr[0:indx]
 	for ind := 0; ind < indx; ind++ {
-		if !strings.Contains("abcdefghijklmnopqrstuvwxyz", f[ind:ind+1]) {
+		if !strings.Contains("abcdefghijklmnopqrstuvwxyz", strings.ToLower(f[ind:ind+1])) {
 			return "", nil, nil
 		}
 	}
@@ -438,18 +445,9 @@ func ifCond(node *OpNode) error {
 		indF += deltas[2]
 	}
 
+	goNegative(node.Value, node.Neg)
+
 	return nil
-}
-
-// checkSlice returns true of needle is in haystack
-func checkSlice(needle, haystack string) bool {
-	for _, straw := range strings.Split(haystack, delim) {
-		if needle == straw {
-			return true
-		}
-	}
-
-	return false
 }
 
 // getDeltas returns an array for the results and a slice of increments for moving through the Inputs
@@ -608,22 +606,53 @@ func EvalSFunction(node *OpNode) error {
 	return nil
 }
 
+func dateAddMonths(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node.Inputs)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to dateadd isn't a date")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	dates := make([]any, n)
+	ind1, ind2 := 0, 0
+
+	for ind := 0; ind < n; ind++ {
+		dt, ok := node.Inputs[0].Raw.Data[ind1].(time.Time)
+		if !ok {
+			return fmt.Errorf("arg 1 to dateadd isn't a date")
+		}
+
+		adder := int(node.Inputs[1].Value[ind2])
+		dates[ind] = dt.AddDate(0, adder, 0)
+
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+	}
+
+	node.Raw = NewRaw(dates, nil)
+
+	return nil
+}
+
 // evalFunction evaluates a function call
 func evalFunction(node *OpNode) error {
 	if !checkSlice(node.FunName, functions) {
 		return fmt.Errorf("%s function not implemented", node.FunName)
 	}
-	if countRaw, e := consistent(node); countRaw > 0 || e != nil {
-		return fmt.Errorf("functions don't take strings as arguments")
+
+	// special cases
+	switch node.FunName {
+	case "if":
+		return ifCond(node)
+	case "dateAdd":
+		return dateAddMonths(node)
 	}
 
-	if node.FunName == "if" {
-		if e := ifCond(node); e != nil {
-			return e
-		}
-		goNegative(node.Value, node.Neg)
-
-		return nil
+	if countRaw, e := consistent(node); countRaw > 0 || e != nil {
+		return fmt.Errorf("functions don't take strings as arguments")
 	}
 
 	var deltas []int
@@ -649,33 +678,33 @@ func evalFunction(node *OpNode) error {
 	// move backwards in the slice (required for the lag function)
 	for ind := len(node.Value) - 1; ind >= 0; ind-- {
 		switch node.FunName {
-		case "cuma":
+		case "cumAfter":
 			if ind < len(node.Value)-1 {
 				node.Value[ind] = flt.Sum(node.Inputs[0].Value[ind+1:])
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
-		case "proda":
+		case "prodAfter":
 			if ind < len(node.Value)-1 {
 				node.Value[ind] = flt.Prod(node.Inputs[0].Value[ind+1:])
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
-		case "counta":
+		case "countAfter":
 			node.Value[ind] = float64(len(node.Value) - ind - 1)
-		case "cumb":
+		case "cumBefore":
 			if ind > 0 {
 				node.Value[ind] = flt.Sum(node.Inputs[0].Value[:ind])
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
-		case "prodb":
+		case "prodBefore":
 			if ind > 0 {
 				node.Value[ind] = flt.Prod(node.Inputs[0].Value[:ind])
 			} else {
 				node.Value[ind] = node.Inputs[1].Value[0]
 			}
-		case "countb":
+		case "countBefore":
 			node.Value[ind] = float64(ind)
 		case "log":
 			node.Value[ind] = math.Log(node.Inputs[0].Value[ind])
@@ -764,8 +793,9 @@ func fromPipeline(node *OpNode, pipe Pipeline) error {
 		return e
 	}
 
-	if node.Raw.Kind != reflect.String {
-		return fmt.Errorf("field %s must be string for FRCat comparisons", field)
+	// make sure this is a string or date
+	if node.Raw.Kind != reflect.String && node.Raw.Kind != reflect.Struct {
+		return fmt.Errorf("field %s must be string or for FRCat comparisons", field)
 	}
 
 	return nil
@@ -777,63 +807,14 @@ func evalOpsCat(node *OpNode) error {
 	node.Value, deltas = getDeltas(node.Inputs)
 	ind1, ind2 := 0, 0
 
-	if node.Inputs[0].Raw.Kind != reflect.String || node.Inputs[1].Raw.Kind != reflect.String {
-		return fmt.Errorf("cat must be string to compare")
-	}
-
 	for ind := 0; ind < len(node.Value); ind++ {
-		x0 := strings.ReplaceAll(node.Inputs[0].Raw.Data[ind1].(string), "'", "")
-		x1 := strings.ReplaceAll(node.Inputs[1].Raw.Data[ind2].(string), "'", "")
 		// check same type...
-
-		switch node.FunName {
-		case ">":
-			val := 0.0
-
-			if x0 > x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		case ">=":
-			val := 0.0
-			if x0 >= x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		case "<":
-			val := 0.0
-
-			if x0 < x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		case "<=":
-			val := 0.0
-			if x0 <= x1 {
-				val = 1
-			}
-			node.Value[ind] = val
-		case "==":
-			val := 0.0
-
-			if x0 == x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		case "!=":
-			val := 0.0
-
-			if x0 != x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		default:
-			return fmt.Errorf("op '%s' unsupported for strings", node.FunName)
+		test, e := Comparer(node.Inputs[0].Raw.Data[ind1], node.Inputs[1].Raw.Data[ind2], node.FunName)
+		if e != nil {
+			return e
+		}
+		if test {
+			node.Value[ind] = 1
 		}
 
 		ind1 += deltas[0]
@@ -903,50 +884,12 @@ func evalOps(node *OpNode) error {
 			}
 
 			node.Value[ind] = val
-		case ">":
-			val := 0.0
-
-			if x0 > x1 {
-				val = 1
+		case ">", ">=", "==", "!=", "<", "<=":
+			node.Value[ind] = 0
+			test, _ := Comparer(any(x0), any(x1), node.FunName)
+			if test {
+				node.Value[ind] = 1
 			}
-
-			node.Value[ind] = val
-		case ">=":
-			val := 0.0
-			if x0 >= x1 {
-				val = 1
-			}
-			node.Value[ind] = val
-		case "<":
-			val := 0.0
-
-			if x0 < x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		case "<=":
-			val := 0.0
-			if x0 <= x1 {
-				val = 1
-			}
-			node.Value[ind] = val
-		case "==":
-			val := 0.0
-
-			if x0 == x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
-		case "!=":
-			val := 0.0
-
-			if x0 != x1 {
-				val = 1
-			}
-
-			node.Value[ind] = val
 		case "+":
 			node.Value[ind] = x0 + x1
 		case "*":
@@ -1035,8 +978,27 @@ func matchedParen(expr string) error {
 //   - You can access the values after Evaluate without adding the field to the Pipeline from the Value element
 //     of the root node.
 func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
-	if rootNode.Value == nil {
+	if rootNode.Value == nil && rootNode.Raw == nil {
 		return fmt.Errorf("root node is nil")
+	}
+
+	if rootNode.Raw != nil {
+		if rootNode.Raw.Len() > 1 && rootNode.Raw.Len() != pipe.Rows() {
+			return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), len(rootNode.Value))
+		}
+
+		raw := rootNode.Raw
+		if raw.Len() == 1 {
+			tmp := raw.Data[0]
+			rawx := make([]any, pipe.Rows())
+			for ind := 0; ind < pipe.Rows(); ind++ {
+				rawx[ind] = tmp
+			}
+
+			raw = NewRaw(rawx, nil)
+		}
+
+		return pipe.GData().AppendD(raw, fieldName, nil)
 	}
 
 	if len(rootNode.Value) > 1 && len(rootNode.Value) != pipe.Rows() {
@@ -1123,4 +1085,83 @@ func CopyNode(src *OpNode) (dest *OpNode) {
 	}
 
 	return dest
+}
+
+// Comparer compares xa and xb
+func Comparer(xa, xb any, comp string) (truth bool, err error) {
+	// a constant date comes in as a string
+	if t1 := any2Time(xa); t1 != nil {
+		xa = t1
+	}
+
+	if t2 := any2Time(xb); t2 != nil {
+		xb = t2
+	}
+
+	test1, e1 := GTAny(xa, xb)
+	if e1 != nil {
+		return false, e1
+	}
+
+	test2, e2 := GTAny(xb, xa)
+	if e2 != nil {
+		return false, e2
+	}
+
+	switch comp {
+	case ">":
+		return test1, nil
+	case ">=":
+		return !test2, nil
+	case "==":
+		return !test1 && !test2, nil
+	case "!=":
+		return test1 || test2, nil
+	case "<":
+		return test2, nil
+	case "<=":
+		return !test1, nil
+	}
+
+	return false, fmt.Errorf("unsupported comparison: %s", comp)
+}
+
+// any2Time sees if a string can be a date
+func any2Time(inVal any) any {
+	// recognized date formats
+	formats := []string{"20060102", "1/2/2006", "01/02/2006"}
+	if str, ok := inVal.(string); ok {
+		for _, fmtx := range formats {
+			t1, e := time.Parse(fmtx, strings.ReplaceAll(str, "'", ""))
+			if e == nil {
+				return any(t1)
+			}
+		}
+	}
+
+	return nil
+}
+
+// GTAny compares xa > xb
+func GTAny(xa, xb any) (truth bool, err error) {
+	if reflect.TypeOf(xa) != reflect.TypeOf(xb) {
+		return false, fmt.Errorf("must be of same type")
+	}
+
+	switch x := xa.(type) {
+	case string:
+		x = strings.ReplaceAll(x, "'", "")
+		y := strings.ReplaceAll(xb.(string), "'", "")
+		return x > y, nil
+	case int32:
+		return x > xb.(int32), nil
+	case float64:
+		return x > xb.(float64), nil
+	case time.Time:
+		tmp := x.Sub(xb.(time.Time))
+		_ = tmp
+		return x.Sub(xb.(time.Time)) > 0, nil
+	}
+
+	return false, fmt.Errorf("unsupported comparison")
 }
