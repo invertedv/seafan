@@ -3,14 +3,18 @@ package seafan
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/invertedv/chutils"
 	s "github.com/invertedv/chutils/sql"
 )
+
+// TODO: test date comparisons
 
 // Simple date arithmetic is possible.  The function dateAdd(d,m) adds m months to d.
 // The data is:
@@ -82,6 +86,45 @@ func ExampleEvaluate_if() {
 	// [1 0 0 0 0 0]
 }
 
+func TestEvaluate_date(t *testing.T) {
+	Verbose = false
+	dataCF := "'3/25/2022', '20230228' " // c
+	dataDr := "0.1, .2 "                 // D
+	dataPV := "'0','0'"                  // e
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"s", "f", "s"})
+	x := Functions
+	_ = x
+	exprs := "toDate(c)"
+	results := []any{any(time.Date(2022, 3, 25, 0, 0, 0, 0, time.UTC)),
+		any(time.Date(2023, 2, 28, 0, 0, 0, 0, time.UTC))}
+	root := &OpNode{Expression: exprs}
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	e := Evaluate(root, pipe)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, root.Raw.Data, results)
+}
+
+func TestEvaluate_string(t *testing.T) {
+	Verbose = false
+	dataCF := "'3/25/2022', '20230228' " // c
+	dataDr := "0.12311234, .2 "          // D
+	dataPV := "'0','0'"                  // e
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"s", "f", "s"})
+	exprs := "toString(D, 3)"
+	results := []any{"0.123", "0.200"}
+	root := &OpNode{Expression: exprs}
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	e := Evaluate(root, pipe)
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, root.Raw.Data, results)
+}
+
 // tests conditional statements with strings
 func TestExpr2Tree(t *testing.T) {
 	Verbose = false
@@ -95,6 +138,7 @@ func TestExpr2Tree(t *testing.T) {
 	errs := []bool{false, false, false, false, true, true, false, true, false, false, true}
 	for ind, expr := range exprs {
 		root := &OpNode{Expression: expr}
+
 		if err := Expr2Tree(root); err != nil {
 			panic(err)
 		}
@@ -106,7 +150,7 @@ func TestExpr2Tree(t *testing.T) {
 		}
 
 		assert.Nil(t, e)
-		assert.ElementsMatch(t, root.Value, results[ind])
+		assert.ElementsMatch(t, root.Raw.Data, results[ind])
 	}
 }
 
@@ -127,11 +171,11 @@ func TestCopyNode(t *testing.T) {
 
 	e := Evaluate(root, pipe)
 	assert.Nil(t, e)
-	assert.Nil(t, newNode.Value) // no value to newNode yet
+	assert.Nil(t, newNode.Raw) // no value to newNode yet
 
 	e = Evaluate(newNode, pipe)
 	assert.Nil(t, e)
-	assert.ElementsMatch(t, root.Value, newNode.Value) // now they should match
+	assert.ElementsMatch(t, root.Raw.Data, newNode.Raw.Data) // now they should match
 }
 
 // test irr and npv functions
@@ -163,9 +207,12 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
-		"countBefore(c)",
-		"index(D,1-(c-1))",
+		"if(c==1,log(c),-c)",
+		"max(c)",
+		"c-D-D",
 		"row(c)",
+		"index(D,1-(c-1))",
+		"countBefore(c)",
 		"c-D-D",
 		"-D*3 + D",
 		"lag(c,42)",
@@ -173,10 +220,9 @@ func TestEvaluate(t *testing.T) {
 		"cumBefore(c,42)",
 		"countAfter(c)",
 		"cumAfter(c, 42)",
-		"c-D-D",
-		"s(c)",
+		"std(c)",
 		"max(c)",
-		"median(c)",
+		//		"median(c)",
 		"mean(-c)",
 		"sum(c+D)",
 		"sum(c)",
@@ -198,6 +244,9 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{0, -2},
+		{2},
+		{-5, -18},
 		{0, 1},
 		{10, 3},
 		{0, 1},
@@ -208,10 +257,9 @@ func TestEvaluate(t *testing.T) {
 		{42, 1},
 		{1, 0},
 		{2, 42},
-		{-5, -18},
 		{0.7071067811865476},
 		{2},
-		{1},
+		//		{1},
 		{-1.5},
 		{16},
 		{3},
@@ -233,8 +281,15 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	for ind := 0; ind < len(frmla); ind++ {
+		x := frmla[ind]
+		_ = x
 		act := tester(frmla[ind], pipe)
-		assert.EqualValues(t, expect[ind], act)
+		acts := make([]float64, len(act))
+		for indx, a := range act {
+			r := Any2Kind(a, reflect.Float64)
+			acts[indx] = r.(float64)
+		}
+		assert.EqualValues(t, expect[ind], acts)
 	}
 }
 
@@ -310,17 +365,17 @@ func buildPipe(data, types []string) Pipeline {
 	return pipe
 }
 
-func tester(eqn string, pipe Pipeline) []float64 {
+func tester(eqn string, pipe Pipeline) []any {
 	root := &OpNode{Expression: eqn}
 	if err := Expr2Tree(root); err != nil {
 		panic(err)
 	}
 
 	if e := Evaluate(root, pipe); e != nil {
-		return nil
+		panic(e)
 	}
 
-	return root.Value
+	return root.Raw.Data
 }
 
 // We'll add two fields to the pipeline: the sum=c+D and max=max(c,D)

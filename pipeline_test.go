@@ -147,3 +147,69 @@ func ExampleJoin_dateJoin() {
 	// # Rows:  2
 	// common date values:  [2023-04-01 00:00:00 +0000 UTC 2023-05-01 00:00:00 +0000 UTC]
 }
+
+// This example shows another way to accomplish a join if the join field is already in the pipe and is
+// not FRCat.  The parser function cat() converts a FRCts field to FRCat.
+func ExampleJoin_cat() {
+	Verbose = false
+
+	data := os.Getenv("data")
+	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	if e != nil {
+		panic(e)
+	}
+
+	// set up parser to execute a function converted field "row" to categorical
+	root := &OpNode{Expression: "cat(row)"}
+
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err := Evaluate(root, pipe2); err != nil {
+		panic(err)
+	}
+
+	if err := AddToPipe(root, "rowCat", pipe2); err != nil {
+		panic(err)
+	}
+
+	// now sort pipe by our new field
+	if e := pipe2.GData().Sort("rowCat", true); e != nil {
+		panic(e)
+	}
+
+	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", nil)
+	if e != nil {
+		panic(e)
+	}
+
+	// create the field in the next pipe, too.
+	if err := Evaluate(root, pipe1); err != nil {
+		panic(err)
+	}
+
+	if err := AddToPipe(root, "rowCat", pipe1); err != nil {
+		panic(err)
+	}
+
+	// note, the field "row" is not being joined on but is in both pipes -- need to drop it from one of them
+	pipe1.GData().Drop("row")
+
+	joinPipe, e := Join(pipe1, pipe2, "rowCat")
+	if e != nil {
+		panic(e)
+	}
+
+	fmt.Println("# Rows: ", joinPipe.Rows())
+
+	raw, e := joinPipe.GData().GetRaw("row")
+	if e != nil {
+		panic(e)
+	}
+
+	fmt.Println("common row values: ", raw.Data)
+	// output:
+	// # Rows:  4
+	// common row values:  [1 2 3 4]
+}

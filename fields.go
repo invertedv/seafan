@@ -60,6 +60,7 @@ const (
 	FRCat
 	FROneHot
 	FREmbed
+	FREither
 )
 
 //go:generate stringer -type=FRole

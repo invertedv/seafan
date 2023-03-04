@@ -12,11 +12,12 @@ func _() {
 	_ = x[FRCat-1]
 	_ = x[FROneHot-2]
 	_ = x[FREmbed-3]
+	_ = x[FREither-4]
 }
 
-const _FRole_name = "FRCtsFRCatFROneHotFREmbed"
+const _FRole_name = "FRCtsFRCatFROneHotFREmbedFREither"
 
-var _FRole_index = [...]uint8{0, 5, 10, 18, 25}
+var _FRole_index = [...]uint8{0, 5, 10, 18, 25, 33}
 
 func (i FRole) String() string {
 	if i < 0 || i >= FRole(len(_FRole_index)-1) {

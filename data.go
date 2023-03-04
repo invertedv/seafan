@@ -4,8 +4,10 @@ package seafan
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
@@ -301,6 +303,179 @@ func NewRawCast(x any, sl Slicer) *Raw {
 // AllocRaw creates an empty slice of type kind and len n
 func AllocRaw(n int, kind reflect.Kind) *Raw {
 	return &Raw{Data: make([]any, n), Kind: kind}
+}
+
+// GTAny compares xa > xb
+func GTAny(xa, xb any) (truth bool, err error) {
+
+	if xb == nil || xa == nil {
+		return true, nil
+	}
+
+	if reflect.TypeOf(xa) != reflect.TypeOf(xb) {
+		return false, fmt.Errorf("must be of same type")
+	}
+
+	switch x := xa.(type) {
+	case string:
+		x = strings.ReplaceAll(x, "'", "")
+		y := strings.ReplaceAll(xb.(string), "'", "")
+		return x > y, nil
+	case int32:
+		return x > xb.(int32), nil
+	case int64:
+		return x > xb.(int64), nil
+	case float32:
+		return x > xb.(float32), nil
+	case float64:
+		return x > xb.(float64), nil
+	case time.Time:
+		tmp := x.Sub(xb.(time.Time))
+		_ = tmp
+		return x.Sub(xb.(time.Time)) > 0, nil
+	}
+
+	return false, fmt.Errorf("unsupported comparison")
+}
+
+// Sum sums elements
+func (r *Raw) Sum() (*Raw, error) {
+	if r.Len() == 0 {
+		return nil, fmt.Errorf("no data: (*Raw) Sum")
+	}
+
+	s := 0.0
+	for _, val := range r.Data {
+		switch v := val.(type) {
+		case int32:
+			s += float64(v)
+		case int64:
+			s += float64(v)
+		case float32:
+			s += float64(v)
+		case float64:
+			s += v
+		default:
+			return nil, fmt.Errorf("must be numeric for (*Raw)Sum")
+		}
+	}
+
+	return NewRaw([]any{s}, nil), nil
+}
+
+// Prod returns the product of the elements
+func (r *Raw) Prod() (*Raw, error) {
+	if r.Len() == 0 {
+		return nil, fmt.Errorf("no data: (*Raw) Sum")
+	}
+
+	s := 1.0
+	for _, val := range r.Data {
+		switch v := val.(type) {
+		case int32:
+			s *= float64(v)
+		case int64:
+			s *= float64(v)
+		case float32:
+			s *= float64(v)
+		case float64:
+			s *= v
+		default:
+			return nil, fmt.Errorf("must be numeric for (*Raw)Prod")
+		}
+	}
+
+	return NewRaw([]any{s}, nil), nil
+}
+
+// Mean finds the average
+func (r *Raw) Mean() (*Raw, error) {
+	meanR, e := r.Sum()
+	if e != nil {
+		return nil, e
+	}
+
+	var mean float64
+	nFlt := float64(r.Len())
+
+	switch val := meanR.Data[0].(type) {
+	case int32:
+		mean = float64(val) / nFlt
+	case int64:
+		mean = float64(val) / nFlt
+	case float32:
+		mean = float64(val) / nFlt
+	case float64:
+		mean = val / nFlt
+	}
+
+	return NewRaw([]any{mean}, nil), nil
+}
+
+// Std finds the sample standard deviation
+func (r *Raw) Std() (*Raw, error) {
+	meanR, e := r.Mean()
+	if e != nil {
+		return nil, e
+	}
+
+	if r.Len() == 1 {
+		return NewRaw([]any{0.0}, nil), nil
+	}
+
+	std := 0.0
+	nFlt := float64(r.Len())
+	mean := meanR.Data[0].(float64)
+	var delta float64
+	for _, valx := range r.Data {
+		switch val := valx.(type) {
+		case int32:
+			delta = float64(val) - mean
+		case int64:
+			delta = float64(val) - mean
+		case float32:
+			delta = float64(val) - mean
+		case float64:
+			delta = float64(val) - mean
+		}
+		std += delta * delta
+	}
+	std = math.Sqrt(std / (nFlt - 1))
+	return NewRaw([]any{std}, nil), nil
+}
+
+// Max returns max
+func (r *Raw) Max() (*Raw, error) {
+	var s any
+	for _, val := range r.Data {
+		gt, e := GTAny(val, s)
+		if e != nil {
+			return nil, e
+		}
+
+		if gt {
+			s = val
+		}
+	}
+
+	return NewRaw([]any{s}, nil), nil
+}
+
+// Max returns max
+func (r *Raw) Min() (*Raw, error) {
+	var s any
+	for _, val := range r.Data {
+		gt, e := GTAny(val, s)
+		if e != nil {
+			return nil, e
+		}
+
+		if !gt {
+			s = val
+		}
+	}
+
+	return NewRaw([]any{s}, nil), nil
 }
 
 func (r *Raw) Less(i, j int) bool {

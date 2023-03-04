@@ -1,6 +1,7 @@
 package seafan
 
 import (
+	_ "embed"
 	"fmt"
 	"math"
 	"reflect"
@@ -9,26 +10,22 @@ import (
 	"time"
 
 	"gonum.org/v1/gonum/optimize"
+)
 
-	flt "gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/stat"
+var (
+	//go:embed strings/functions.txt
+	FunctionsStr string
+
+	Functions []FuncSpec
 )
 
 const (
+
 	// delimiter for strings below
 	delim = "$"
 
 	// ifs is a list of relations for If statements
-	ifs = ">$>=$<$<=$==$!="
-
-	// functions is a list of implemented functions
-	functions = "log$exp$lag$pow$if$sum$mean$max$min$s$median$count$cumAfter$countAfter$cumBefore$countBefore$row$index$prodAfter$prodBefore$irr$npv$sse$mad$corr$r2$dateAdd"
-
-	// funArgs is a list of the number of arguments that functions take
-	funArgs = "1$1$2$2$3$1$1$1$1$1$1$1$2$1$2$1$1$2$2$2$2$2$2$2$2$2$2"
-
-	// funLevels indicates whether the function is calculated at the row level or is a summary.
-	funLevels = "R$R$R$R$R$S$S$S$S$S$S$S$R$R$R$R$R$R$R$R$S$S$S$S$S$S$R"
+	//	ifs = ">$>=$<$<=$==$!="
 
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
@@ -48,6 +45,28 @@ const (
 	// operations is a list of supported operations
 	operations = logicals + "$" + comparisons + "$" + arithmetics
 )
+
+// loadFunctions loads the slice of FuncSpec that is all the defined functions
+func loadFunctions() {
+	funcs := strings.Split(strings.ReplaceAll(FunctionsStr, "\n", ""), "$")
+	for _, f := range funcs {
+		fdetail := strings.Split(f, ",")
+		fSpec := FuncSpec{Name: fdetail[0],
+			Return: str2Kind(fdetail[1]),
+			Level:  rune(fdetail[2][0]),
+		}
+		//			Return: 0,
+		//			Args:   nil,
+		//			Level:  0,
+
+		for ind := 3; ind < len(fdetail); ind++ {
+			if fdetail[ind] != "" {
+				fSpec.Args = append(fSpec.Args, str2Kind(fdetail[ind]))
+			}
+		}
+		Functions = append(Functions, fSpec)
+	}
+}
 
 // OpNode is a single node of an expression.
 // The input expression is successively broken into simpler expressions.  Each leaf is devoid of expressions--they
@@ -78,6 +97,10 @@ const (
 //   - prodAfter(<expr>,<missing>), prodBefore(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
 //     and <missing> is used for the last (first) element.
 //   - index(<expr>,<index>) returns <expr> in the order of <index>
+//   - cat(<expr>) converts a continuous field, <expr>, to a categorical one.
+//   - toDate(<expr>) converts a string field to a date
+//   - toString(<expr>,<dec>) converts a float to a string with <dec> places after the decimal
+//   - dateAdd(<date>,<months>) addes <months> to the date, <date>
 //
 // The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
 // countAfter, countBefore do NOT include the current row.
@@ -106,13 +129,21 @@ const (
 //
 // Logical operators resolve to 0 or 1.
 type OpNode struct {
-	Expression string    // expression this node implements
-	Value      []float64 // node value. Value is nil until Evaluate is run
-	Raw        *Raw      // node Value if field is not FRCts
-	Neg        bool      // negate result when populating Value
-	FunName    string    // name of function/operation to apply to the Inputs. The value is "" for leaves.
-	Inputs     []*OpNode // Inputs to node calculation
-	stet       bool      // if stet then Value is not updated (used by Loop)
+	Expression string // expression this node implements
+	//	Value      []float64 // node value. Value is nil until Evaluate is run
+	Raw    *Raw // node Value if field is not FRCts
+	Func   *FuncSpec
+	Role   FRole
+	Neg    bool      // negate result when populating Value
+	Inputs []*OpNode // Inputs to node calculation
+	stet   bool      // if stet then Value is not updated (used by Loop)
+}
+
+type FuncSpec struct {
+	Name   string
+	Return reflect.Kind
+	Args   []reflect.Kind
+	Level  rune
 }
 
 // negLocation determines where to place a leading minus sign.
@@ -165,6 +196,11 @@ func negLocation(expr string) int {
 //     to a positive value.
 //   - parentheses
 func Expr2Tree(curNode *OpNode) error {
+	// Load the slice of functions if they are not
+	if Functions == nil {
+		loadFunctions()
+	}
+
 	curNode.Expression = strings.ReplaceAll(curNode.Expression, " ", "")
 
 	if e := matchedParen(curNode.Expression); e != nil {
@@ -206,7 +242,7 @@ func Expr2Tree(curNode *OpNode) error {
 		args[1] = "-" + args[1]
 	}
 
-	curNode.FunName = op
+	curNode.Func, curNode.Role = getFuncSpec(op)
 	if args == nil {
 		return nil
 	}
@@ -227,6 +263,28 @@ func Expr2Tree(curNode *OpNode) error {
 	}
 
 	return nil
+}
+
+// getFuncSpec returns the FuncSpec for the function/operation op
+// FRole is the default role for the function
+func getFuncSpec(op string) (*FuncSpec, FRole) {
+	for _, fSpec := range Functions {
+		if op == fSpec.Name {
+			var role FRole
+			switch fSpec.Return {
+			case reflect.String, reflect.Struct:
+				role = FRCat
+			case reflect.Interface:
+				role = FREither
+			default:
+				role = FRCts
+			}
+
+			return &fSpec, role
+		}
+	}
+
+	return nil, FREither
 }
 
 // find the first needle that is not within parens.  Ignore the first character--that cannot be a true operator.
@@ -268,7 +326,11 @@ func searchOp(expr, needles string) (op string, args []string) {
 
 // getArgs breaks up function arguments into elements of a slice
 func getArgs(inner string) (pieces []string) {
-	pieces = nil
+	// no arguments
+	if inner == "" {
+		return
+	}
+
 	ok := true
 
 	for ok {
@@ -285,30 +347,6 @@ func getArgs(inner string) (pieces []string) {
 	}
 
 	return pieces
-}
-
-// functionDetails returns # of arguments and level (row, summary) of the function.
-// It returns 0, "" if the function isn't found
-func functionDetails(funName string) (argNo int, funLevel string) {
-	args := strings.Split(funArgs, delim)
-	levels := strings.Split(funLevels, delim)
-
-	for ind, f := range strings.Split(functions, delim) {
-		if f != funName {
-			continue
-		}
-		expInt64, _ := strconv.ParseInt(args[ind], 10, 64)
-		expInt := int(expInt64)
-
-		level := "row"
-		if levels[ind] == "S" {
-			level = "summary"
-		}
-
-		return expInt, level
-	}
-
-	return 0, ""
 }
 
 // getFunction determines if expr is a function call.
@@ -336,14 +374,16 @@ func getFunction(expr string) (funName string, args []string, err error) {
 		}
 	}
 
+	fSpec, _ := getFuncSpec(f)
 	// Is this a known function?
-	if !checkSlice(f, functions) {
+	if fSpec == nil {
 		return f, nil, fmt.Errorf("unknown function: %s", f)
 	}
 
 	// get arguments
 	args = getArgs(inner)
-	if numArg, _ := functionDetails(f); numArg != len(args) && numArg > 0 {
+
+	if fSpec.Args != nil && len(fSpec.Args) != len(args) {
 		return f, args, fmt.Errorf("wrong number of arguments in %s", f)
 	}
 
@@ -431,45 +471,39 @@ func splitExpr(expr string) (op string, args []string, err error) {
 // ifCond evaluates an "if" condition.
 func ifCond(node *OpNode) error {
 	var deltas []int
-	node.Value, deltas = getDeltas(node.Inputs)
+	node.Raw, deltas = getDeltas(node)
 
 	// do some checking on lengths
 	indT, indF := 0, 0
-	for indRes := 0; indRes < len(node.Value); indRes++ {
-		x := node.Inputs[2].Value[indF]
-		if node.Inputs[0].Value[indRes] > 0.0 {
-			x = node.Inputs[1].Value[indT]
+	for indRes := 0; indRes < node.Raw.Len(); indRes++ {
+		x := node.Inputs[2].Raw.Data[indF]
+		if node.Inputs[0].Raw.Data[indRes].(float64) > 0.0 {
+			x = node.Inputs[1].Raw.Data[indT]
 		}
-		node.Value[indRes] = x
+		node.Raw.Data[indRes] = x
 		indT += deltas[1]
 		indF += deltas[2]
 	}
 
-	goNegative(node.Value, node.Neg)
+	goNegative(node.Raw, node.Neg)
 
 	return nil
 }
 
 // getDeltas returns an array for the results and a slice of increments for moving through the Inputs
-func getDeltas(inputs []*OpNode) (x []float64, deltas []int) {
-	if inputs == nil {
+func getDeltas(node *OpNode) (x *Raw, deltas []int) {
+	if node.Inputs == nil {
 		return nil, nil
 	}
 
 	n := 1
-	for ind := 0; ind < len(inputs); ind++ {
-		if inputs[ind].Value == nil && inputs[ind].Raw == nil {
+	for ind := 0; ind < len(node.Inputs); ind++ {
+		if node.Inputs[ind].Raw == nil {
 			return nil, nil
 		}
 
 		d := 0
-		nx := 0
-		if inputs[ind].Value != nil {
-			nx = len(inputs[ind].Value)
-		} else {
-			xx := inputs[ind].Raw.Data
-			nx = len(xx)
-		}
+		nx := node.Inputs[ind].Raw.Len()
 		if nx > 1 {
 			d = 1
 			if nx > n {
@@ -480,20 +514,20 @@ func getDeltas(inputs []*OpNode) (x []float64, deltas []int) {
 		deltas = append(deltas, d)
 	}
 
-	return make([]float64, n), deltas
+	return AllocRaw(n, node.Func.Return), deltas
 }
 
 // npv finds NPV when the discount rate is a constant
-func npv(discount, cashflows []float64) (pv float64) {
-	r := 1.0 / (1.0 + discount[0])
+func npv(discount, cashflows *Raw) (pv float64) {
+	r := 1.0 / (1.0 + discount.Data[0].(float64))
 	totalD := 1.0
-	for ind := 0; ind < len(cashflows); ind++ {
-		if len(discount) == 1 {
+	for ind := 0; ind < cashflows.Len(); ind++ {
+		if discount.Len() == 1 {
 			totalD *= r
 		} else {
-			totalD = math.Pow(1.0/(1.0+discount[ind]), float64(ind+1))
+			totalD = math.Pow(1.0/(1.0+discount.Data[ind].(float64)), float64(ind+1))
 		}
-		pv += cashflows[ind] * totalD
+		pv += cashflows.Data[ind].(float64) * totalD
 	}
 
 	return pv
@@ -501,7 +535,7 @@ func npv(discount, cashflows []float64) (pv float64) {
 
 // irr finds the internal rate of return of the cashflows against the initial outlay of cost.
 // guess0 is the initial guess to the optimizer.
-func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
+func irr(cost, guess0 float64, cashflows *Raw) (float64, error) {
 	const (
 		tolValue = 1e-4
 		maxIter  = 40
@@ -511,7 +545,8 @@ func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
 	irrValue := []float64{guess0}
 
 	obj := func(irrValue []float64) float64 {
-		resid := npv(irrValue, cashflows) - cost
+		irrv := NewRaw([]any{irrValue[0]}, nil)
+		resid := npv(irrv, cashflows) - cost
 		return resid * resid
 	}
 	problem := optimize.Problem{Func: obj}
@@ -535,7 +570,7 @@ func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
 		return 0, fmt.Errorf("irr failed")
 	}
 
-	pv := npv(optimal.X, cashflows)
+	pv := npv(NewRawCast(optimal.X, nil), cashflows)
 	if math.Abs(pv-cost) > math.Abs(tolValue*cost) {
 		return 0, fmt.Errorf("irr failed")
 	}
@@ -544,9 +579,11 @@ func irr(cost, guess0 float64, cashflows []float64) (float64, error) {
 }
 
 // sseMAD returns the SSE of y to yhat (op="sse") and the MAD (actually, the sum) o.w.
-func sseMAD(y, yhat []float64, op string) float64 {
-	resid := make([]float64, len(y))
-	flt.SubTo(resid, y, yhat)
+func sseMAD(y, yhat *Raw, op string) float64 {
+	resid := make([]float64, y.Len())
+	for ind, r := range y.Data {
+		resid[ind] = r.(float64) - yhat.Data[ind].(float64)
+	}
 
 	val := 0.0
 	if op == "sse" {
@@ -567,41 +604,53 @@ func EvalSFunction(node *OpNode) error {
 	const medianQ = 0.5
 	const irrGuess = 0.005
 
-	switch node.FunName {
+	var e error
+	var result *Raw
+
+	switch node.Func.Name {
 	case "sum":
-		node.Value = []float64{flt.Sum(node.Inputs[0].Value)}
+		result, e = node.Inputs[0].Raw.Sum()
 	case "max":
-		node.Value = []float64{flt.Max(node.Inputs[0].Value)}
+		result, e = node.Inputs[0].Raw.Max()
 	case "min":
-		node.Value = []float64{flt.Min(node.Inputs[0].Value)}
+		result, e = node.Inputs[0].Raw.Min()
 	case "mean":
-		node.Value = []float64{stat.Mean(node.Inputs[0].Value, nil)}
-	case "s":
-		node.Value = []float64{stat.StdDev(node.Inputs[0].Value, nil)}
-	case "median":
-		node.Value = []float64{stat.Quantile(medianQ, stat.Empirical, node.Inputs[0].Value, nil)}
+		result, e = node.Inputs[0].Raw.Mean()
+	case "std":
+		result, e = node.Inputs[0].Raw.Std()
+		//	case "median":
+		//		node.Value = []float64{stat.Quantile(medianQ, stat.Empirical, node.Inputs[0].Value, nil)}
 	case "count":
-		node.Value = []float64{float64(len(node.Inputs[0].Value))}
+		result = NewRaw([]any{node.Inputs[0].Raw.Len()}, nil)
 	case "npv":
-		node.Value = []float64{npv(node.Inputs[0].Value, node.Inputs[1].Value)}
+		result = NewRaw([]any{npv(node.Inputs[0].Raw, node.Inputs[1].Raw)}, nil)
 	case "irr":
-		irrValue, _ := irr(node.Inputs[0].Value[0], irrGuess, node.Inputs[1].Value)
-		node.Value = []float64{irrValue}
-	case "sse":
-		node.Value = []float64{sseMAD(node.Inputs[0].Value, node.Inputs[1].Value, "sse")}
+		irrValue, _ := irr(node.Inputs[0].Raw.Data[0].(float64), irrGuess, node.Inputs[1].Raw)
+		result = NewRaw([]any{irrValue}, nil)
+	case "sse", "mad":
+		result = NewRaw([]any{sseMAD(node.Inputs[0].Raw, node.Inputs[1].Raw, "sse")}, nil)
 	case "r2":
-		num := sseMAD(node.Inputs[0].Value, node.Inputs[1].Value, "sse")
-		den := stat.Variance(node.Inputs[0].Value, nil) * float64(len(node.Inputs[0].Value)-1)
-		node.Value = []float64{1.0 - num/den}
-	case "mad":
-		node.Value = []float64{sseMAD(node.Inputs[0].Value, node.Inputs[1].Value, "mad")}
-	case "corr":
-		node.Value = []float64{stat.Correlation(node.Inputs[0].Value, node.Inputs[1].Value, nil)}
+		num := sseMAD(node.Inputs[0].Raw, node.Inputs[1].Raw, "sse")
+
+		denR, ex := node.Inputs[0].Raw.Std()
+		if ex != nil {
+			return ex
+		}
+
+		den := denR.Data[0].(float64)
+		den = den * den * (float64(node.Inputs[0].Raw.Len() - 1))
+		result = NewRaw([]any{1.0 - num/den}, nil)
+		//	case "corr":
+		//		node.Value = []float64{stat.Correlation(node.Inputs[0].Value, node.Inputs[1].Value, nil)}
 	default:
-		return fmt.Errorf("unknown function: %s", node.FunName)
+		return fmt.Errorf("unknown function: %s", node.Func.Name)
 	}
 
-	goNegative(node.Value, node.Neg)
+	if e != nil {
+		return e
+	}
+	node.Raw = NewRaw([]any{result.Data[0].(float64)}, nil)
+	goNegative(node.Raw, node.Neg)
 
 	return nil
 }
@@ -609,7 +658,7 @@ func EvalSFunction(node *OpNode) error {
 func dateAddMonths(node *OpNode) error {
 	var deltas []int
 
-	_, deltas = getDeltas(node.Inputs)
+	_, deltas = getDeltas(node)
 
 	if node.Inputs[0].Raw == nil {
 		return fmt.Errorf("arg 1 to dateadd isn't a date")
@@ -625,8 +674,12 @@ func dateAddMonths(node *OpNode) error {
 			return fmt.Errorf("arg 1 to dateadd isn't a date")
 		}
 
-		adder := int(node.Inputs[1].Value[ind2])
-		dates[ind] = dt.AddDate(0, adder, 0)
+		var param any
+		if param = Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Int32); param == nil {
+			return fmt.Errorf("cannot convert")
+		}
+
+		dates[ind] = dt.AddDate(0, int(param.(int32)), 0)
 
 		ind1 += deltas[0]
 		ind2 += deltas[1]
@@ -637,38 +690,110 @@ func dateAddMonths(node *OpNode) error {
 	return nil
 }
 
-// evalFunction evaluates a function call
-func evalFunction(node *OpNode) error {
-	if !checkSlice(node.FunName, functions) {
-		return fmt.Errorf("%s function not implemented", node.FunName)
+func toDate(node *OpNode) error {
+	if node.Inputs[0].Raw.Kind != reflect.String {
+		return fmt.Errorf("date requires string input")
 	}
 
+	n := node.Inputs[0].Raw.Len()
+	xOut := make([]any, n)
+
+	for ind := 0; ind < n; ind++ {
+		xOut[ind] = any2Time(node.Inputs[0].Raw.Data[ind])
+	}
+
+	node.Raw = NewRaw(xOut, nil)
+
+	return nil
+}
+
+// toString converts Raw to string
+func toString(node *OpNode) error {
+	//TODO: handle other types
+	if node.Inputs[0].Raw.Kind != reflect.Float64 {
+		return fmt.Errorf("cannot convert")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	xOut := make([]any, n)
+
+	nDecA := Any2Kind(node.Inputs[1].Raw.Data[0], reflect.Int)
+	if nDecA == nil {
+		return fmt.Errorf("cannot convert")
+	}
+
+	for ind := 0; ind < n; ind++ {
+		fmtx := fmt.Sprintf("%%0.%df", nDecA.(int))
+		xOut[ind] = fmt.Sprintf(fmtx, node.Inputs[0].Raw.Data[ind])
+	}
+
+	node.Raw = NewRaw(xOut, nil)
+
+	return nil
+}
+
+func toCat(node *OpNode) error {
+	node.Role = FRCat
+
+	xIn := node.Inputs[0].Raw.Data
+	n := len(xIn)
+	xOut := make([]any, n)
+
+	// if float then convert to int
+	cur := node.Inputs[0].Raw.Kind
+	if cur == reflect.Float64 || cur == reflect.Float32 {
+		for ind := 0; ind < n; ind++ {
+			xOut[ind] = Any2Kind(xIn[ind], reflect.Int32)
+		}
+
+		node.Raw = NewRaw(xOut, nil)
+
+		return nil
+	}
+
+	for ind := 0; ind < n; ind++ {
+		xOut[ind] = xIn[ind]
+	}
+
+	node.Raw = NewRaw(xOut, nil)
+
+	return nil
+}
+
+// evalFunction evaluates a function call
+func evalFunction(node *OpNode) error {
 	// special cases
-	switch node.FunName {
+	switch node.Func.Name {
 	case "if":
 		return ifCond(node)
 	case "dateAdd":
 		return dateAddMonths(node)
+	case "toDate":
+		return toDate(node)
+	case "toString":
+		return toString(node)
+	case "cat":
+		return toCat(node)
 	}
 
-	if countRaw, e := consistent(node); countRaw > 0 || e != nil {
-		return fmt.Errorf("functions don't take strings as arguments")
+	if e := consistent(node); e != nil {
+		return e
 	}
 
 	var deltas []int
 
-	node.Value, deltas = getDeltas(node.Inputs)
+	node.Raw, deltas = getDeltas(node)
 
-	ind1 := len(node.Inputs[0].Value) - 1
+	ind1 := node.Inputs[0].Raw.Len() - 1
 	two := len(deltas) > 1
 	var ind2 int
 	if two {
 		if len(node.Inputs) > 1 {
-			ind2 = len(node.Inputs[1].Value) - 1
+			ind2 = node.Inputs[1].Raw.Len() - 1
 		}
 	}
 
-	if _, funLevel := functionDetails(node.FunName); funLevel == "summary" {
+	if node.Func != nil && node.Func.Level == 'S' {
 		if e := EvalSFunction(node); e != nil {
 			return e
 		}
@@ -676,55 +801,88 @@ func evalFunction(node *OpNode) error {
 
 	// These will be Row functions
 	// move backwards in the slice (required for the lag function)
-	for ind := len(node.Value) - 1; ind >= 0; ind-- {
-		switch node.FunName {
+	for ind := node.Raw.Len() - 1; ind >= 0; ind-- {
+		switch node.Func.Name {
 		case "cumAfter":
-			if ind < len(node.Value)-1 {
-				node.Value[ind] = flt.Sum(node.Inputs[0].Value[ind+1:])
+			if ind < node.Raw.Len()-1 {
+				data, e := NewRaw(node.Inputs[0].Raw.Data[ind+1:], nil).Sum()
+				if e != nil {
+					return fmt.Errorf("product error")
+				}
+				node.Raw.Data[ind] = data.Data[0]
 			} else {
-				node.Value[ind] = node.Inputs[1].Value[0]
+				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
 			}
 		case "prodAfter":
-			if ind < len(node.Value)-1 {
-				node.Value[ind] = flt.Prod(node.Inputs[0].Value[ind+1:])
+			if ind < node.Raw.Len()-1 {
+				data, e := NewRaw(node.Inputs[0].Raw.Data[ind+1:], nil).Prod()
+				if e != nil {
+					return fmt.Errorf("product error")
+				}
+				node.Raw.Data[ind] = data.Data[0]
 			} else {
-				node.Value[ind] = node.Inputs[1].Value[0]
+				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
 			}
 		case "countAfter":
-			node.Value[ind] = float64(len(node.Value) - ind - 1)
+			node.Raw.Data[ind] = node.Raw.Len() - ind - 1
 		case "cumBefore":
 			if ind > 0 {
-				node.Value[ind] = flt.Sum(node.Inputs[0].Value[:ind])
+				data, e := NewRaw(node.Inputs[0].Raw.Data[:ind], nil).Sum()
+				if e != nil {
+					return fmt.Errorf("product error")
+				}
+				node.Raw.Data[ind] = data.Data[0]
 			} else {
-				node.Value[ind] = node.Inputs[1].Value[0]
+				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
 			}
 		case "prodBefore":
 			if ind > 0 {
-				node.Value[ind] = flt.Prod(node.Inputs[0].Value[:ind])
+				data, e := NewRaw(node.Inputs[0].Raw.Data[:ind], nil).Prod()
+				if e != nil {
+					return fmt.Errorf("product error")
+				}
+				node.Raw.Data[ind] = data.Data[0]
 			} else {
-				node.Value[ind] = node.Inputs[1].Value[0]
+				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
 			}
 		case "countBefore":
-			node.Value[ind] = float64(ind)
+			node.Raw.Data[ind] = ind
 		case "log":
-			node.Value[ind] = math.Log(node.Inputs[0].Value[ind])
+			arg := Any2Kind(node.Inputs[0].Raw.Data[ind], reflect.Float64)
+			if arg == nil {
+				return fmt.Errorf("cannot convert")
+			}
+			node.Raw.Data[ind] = math.Log(arg.(float64))
 		case "exp":
-			node.Value[ind] = math.Exp(node.Inputs[0].Value[ind])
+			arg := Any2Kind(node.Inputs[0].Raw.Data[ind], reflect.Float64)
+			if arg == nil {
+				return fmt.Errorf("cannot convert")
+			}
+			node.Raw.Data[ind] = math.Exp(arg.(float64))
 		case "row":
-			node.Value[ind] = float64(ind)
+			node.Raw.Data[ind] = int32(ind)
 		case "pow":
-			node.Value[ind] = math.Pow(node.Inputs[0].Value[ind1], node.Inputs[1].Value[ind2])
+			base := Any2Kind(node.Inputs[0].Raw.Data[ind], reflect.Float64)
+			pow := Any2Kind(node.Inputs[1].Raw.Data[ind], reflect.Float64)
+			if base == nil || pow == nil {
+				return fmt.Errorf("cannot convert")
+			}
+			node.Raw.Data[ind] = math.Pow(base.(float64), pow.(float64))
 		case "index":
-			indx := int(node.Inputs[1].Value[ind])
-			if indx < 0 || indx >= len(node.Value) {
+			arg := Any2Kind(node.Inputs[1].Raw.Data[ind], reflect.Int)
+			if arg == nil {
+				return fmt.Errorf("cannot convert")
+			}
+			indx := arg.(int)
+			if indx < 0 || indx >= node.Raw.Len() {
 				return fmt.Errorf("index out of range")
 			}
-			node.Value[ind] = node.Inputs[0].Value[indx]
+			node.Raw.Data[ind] = node.Inputs[0].Raw.Data[indx]
 		case "lag":
 			if ind > 0 {
-				node.Value[ind] = node.Inputs[0].Value[ind-1]
+				node.Raw.Data[ind] = node.Inputs[0].Raw.Data[ind-1]
 			} else {
-				node.Value[ind] = node.Inputs[1].Value[0]
+				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
 			}
 		}
 
@@ -736,23 +894,27 @@ func evalFunction(node *OpNode) error {
 		}
 	}
 
-	goNegative(node.Value, node.Neg)
+	goNegative(node.Raw, node.Neg)
 
 	return nil
 }
 
 // evalConstant loads data which evaluates to a constant
 func evalConstant(node *OpNode) bool {
+	// TODO: add other options
 	if val, e := strconv.ParseFloat(node.Expression, 64); e == nil {
-		node.Value = make([]float64, 1)
-		node.Value[0] = val
-		goNegative(node.Value, node.Neg)
+		node.Raw = AllocRaw(1, reflect.Float64)
+		node.Raw.Data[0] = val
+		node.Role = FRCts
+
+		goNegative(node.Raw, node.Neg)
 
 		return true
 	}
 
 	if strings.Contains(node.Expression, "'") {
 		node.Raw = NewRaw([]any{node.Expression}, nil)
+		node.Role = FRCat
 
 		return true
 	}
@@ -763,58 +925,41 @@ func evalConstant(node *OpNode) bool {
 // fromPipeline loads data which originates in the pipeline
 func fromPipeline(node *OpNode, pipe Pipeline) error {
 	field := node.Expression
-	xLeftGD := pipe.Get(field)
-
-	if xLeftGD == nil {
-		return fmt.Errorf("%s not in pipeline", node.Expression)
-	}
-
-	ft := pipe.GetFType(field)
-
-	if ft.Role == FRCts {
-		node.Value = xLeftGD.Data.([]float64)
-
-		if node.Neg {
-			node.Value = make([]float64, pipe.Rows())
-			copy(node.Value, xLeftGD.Data.([]float64))
-			goNegative(node.Value, node.Neg)
-		}
-
-		return nil
-	}
-
-	if ft.Role != FRCat {
-		return fmt.Errorf("cannot operate on onehot or embedded fields")
-	}
 
 	var e error
 	node.Raw, e = pipe.GData().GetRaw(field)
 	if e != nil {
-		return e
+		return fmt.Errorf("%s not in pipeline", node.Expression)
 	}
 
-	// make sure this is a string or date
-	if node.Raw.Kind != reflect.String && node.Raw.Kind != reflect.Struct {
-		return fmt.Errorf("field %s must be string or for FRCat comparisons", field)
+	goNegative(node.Raw, node.Neg)
+
+	ft := pipe.GetFType(field)
+	if ft.Role == FROneHot || ft.Role == FREmbed {
+		return fmt.Errorf("cannot operate on onehot or embedded fields")
 	}
+
+	node.Role = ft.Role
 
 	return nil
 }
 
-// evalOpsCat evaluates operations for FRCat (string) fields
+// evalOpsCat evaluates operations (inequalities) for FRCat (string, date) fields
 func evalOpsCat(node *OpNode) error {
 	var deltas []int
-	node.Value, deltas = getDeltas(node.Inputs)
+	node.Raw, deltas = getDeltas(node)
 	ind1, ind2 := 0, 0
 
-	for ind := 0; ind < len(node.Value); ind++ {
+	for ind := 0; ind < node.Raw.Len(); ind++ {
 		// check same type...
-		test, e := Comparer(node.Inputs[0].Raw.Data[ind1], node.Inputs[1].Raw.Data[ind2], node.FunName)
+		node.Raw.Data[ind] = float64(0)
+		test, e := Comparer(node.Inputs[0].Raw.Data[ind1], node.Inputs[1].Raw.Data[ind2], node.Func.Name)
 		if e != nil {
 			return e
 		}
+
 		if test {
-			node.Value[ind] = 1
+			node.Raw.Data[ind] = float64(1)
 		}
 
 		ind1 += deltas[0]
@@ -825,21 +970,30 @@ func evalOpsCat(node *OpNode) error {
 }
 
 // consistent checks that the Inputs are either all FRCts or all FRCat.
-func consistent(node *OpNode) (countRaw int, err error) {
-	countCts := 0
-	for _, inps := range node.Inputs {
-		if inps.Value != nil {
-			countCts++
-		}
-		if inps.Raw != nil {
-			countRaw++
-		}
-	}
-	if countRaw > 0 && countCts > 0 {
-		return 0, fmt.Errorf("cannot mix strings and floats in %s", node.Expression)
+func consistent(node *OpNode) error {
+	if node.Func == nil {
+		return nil
 	}
 
-	return countRaw, nil
+	if len(node.Inputs) != len(node.Func.Args) {
+		return fmt.Errorf("argument count mismatch")
+	}
+
+	for ind, arg := range node.Func.Args {
+		switch arg {
+		case reflect.Float64:
+			switch node.Inputs[ind].Raw.Kind {
+			case reflect.Struct, reflect.String:
+				return fmt.Errorf("argument type mismatch, function %s", node.Func.Name)
+			}
+		case reflect.Struct:
+			if node.Inputs[ind].Raw.Kind != reflect.Struct {
+				return fmt.Errorf("argument type mismatch, function %s", node.Func.Name)
+			}
+		}
+	}
+
+	return nil
 }
 
 // evalOps evaluates an operation
@@ -848,61 +1002,64 @@ func evalOps(node *OpNode) error {
 		return fmt.Errorf("operations require two operands")
 	}
 
-	if _, e := consistent(node); e != nil {
+	if e := consistent(node); e != nil {
 		return e
 	}
 
-	// if Raw is not nil, we're dealing with strings
-	if node.Inputs[0].Raw != nil {
+	// interface?
+	if node.Func.Return == reflect.String || node.Func.Return == reflect.Struct || node.Func.Return == reflect.Interface {
 		return evalOpsCat(node)
 	}
 
 	var deltas []int
-	node.Value, deltas = getDeltas(node.Inputs)
+	node.Raw, deltas = getDeltas(node)
 	ind1, ind2 := 0, 0
 
-	for ind := 0; ind < len(node.Value); ind++ {
-		x0 := node.Inputs[0].Value[ind1]
-		x1 := node.Inputs[1].Value[ind2]
+	for ind := 0; ind < node.Raw.Len(); ind++ {
+		x0 := Any2Kind(node.Inputs[0].Raw.Data[ind1], reflect.Float64)
+		x1 := Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Float64)
+		if x0 == nil || x1 == nil {
+			return fmt.Errorf("cannot convert")
+		}
 
-		switch node.FunName {
+		switch node.Func.Name {
 		case "^":
-			node.Value[ind] = math.Pow(x0, x1)
+			node.Raw.Data[ind] = math.Pow(x0.(float64), x1.(float64))
 		case "&&":
 			val := 0.0
 
-			if x0 > 0.0 && x1 > 0.0 {
+			if x0.(float64) > 0.0 && x1.(float64) > 0.0 {
 				val = 1
 			}
 
-			node.Value[ind] = val
+			node.Raw.Data[ind] = val
 		case "||":
 			val := 0.0
 
-			if x0 > 0.0 || x1 > 0.0 {
+			if x0.(float64) > 0.0 || x1.(float64) > 0.0 {
 				val = 1
 			}
 
-			node.Value[ind] = val
+			node.Raw.Data[ind] = val
 		case ">", ">=", "==", "!=", "<", "<=":
-			node.Value[ind] = 0
-			test, _ := Comparer(any(x0), any(x1), node.FunName)
+			node.Raw.Data[ind] = float64(0)
+			test, _ := Comparer(x0, x1, node.Func.Name)
 			if test {
-				node.Value[ind] = 1
+				node.Raw.Data[ind] = float64(1)
 			}
 		case "+":
-			node.Value[ind] = x0 + x1
+			node.Raw.Data[ind] = x0.(float64) + x1.(float64)
 		case "*":
-			node.Value[ind] = x0 * x1
+			node.Raw.Data[ind] = x0.(float64) * x1.(float64)
 		case "/":
-			node.Value[ind] = x0 / x1
+			node.Raw.Data[ind] = x0.(float64) / x1.(float64)
 		}
 
 		ind1 += deltas[0]
 		ind2 += deltas[1]
 	}
 
-	goNegative(node.Value, node.Neg)
+	goNegative(node.Raw, node.Neg)
 
 	return nil
 }
@@ -925,12 +1082,12 @@ func Evaluate(curNode *OpNode, pipe Pipeline) error {
 	}
 
 	// check: are these operations +,-,*,/ ?
-	if checkSlice(curNode.FunName, operations) {
+	if curNode.Func != nil && checkSlice(curNode.Func.Name, operations) {
 		return evalOps(curNode)
 	}
 
 	// is this a function eval?
-	if checkSlice(curNode.FunName, functions) || checkSlice(curNode.FunName, ifs) {
+	if curNode.Func != nil {
 		return evalFunction(curNode)
 	}
 
@@ -948,13 +1105,13 @@ func Evaluate(curNode *OpNode, pipe Pipeline) error {
 }
 
 // goNegative negates Value if Neg is true
-func goNegative(x []float64, neg bool) {
+func goNegative(x *Raw, neg bool) {
 	if !neg {
 		return
 	}
 
-	for ind := 0; ind < len(x); ind++ {
-		x[ind] = -x[ind]
+	for ind := 0; ind < x.Len(); ind++ {
+		x.Data[ind] = -x.Data[ind].(float64)
 	}
 }
 
@@ -978,56 +1135,44 @@ func matchedParen(expr string) error {
 //   - You can access the values after Evaluate without adding the field to the Pipeline from the Value element
 //     of the root node.
 func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
-	if rootNode.Value == nil && rootNode.Raw == nil {
+	if rootNode.Raw == nil {
 		return fmt.Errorf("root node is nil")
 	}
 
-	if rootNode.Raw != nil {
-		if rootNode.Raw.Len() > 1 && rootNode.Raw.Len() != pipe.Rows() {
-			return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), len(rootNode.Value))
-		}
-
-		raw := rootNode.Raw
-		if raw.Len() == 1 {
-			tmp := raw.Data[0]
-			rawx := make([]any, pipe.Rows())
-			for ind := 0; ind < pipe.Rows(); ind++ {
-				rawx[ind] = tmp
-			}
-
-			raw = NewRaw(rawx, nil)
-		}
-
-		return pipe.GData().AppendD(raw, fieldName, nil)
+	if rootNode.Raw.Len() > 1 && rootNode.Raw.Len() != pipe.Rows() {
+		return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), rootNode.Raw.Len())
 	}
 
-	if len(rootNode.Value) > 1 && len(rootNode.Value) != pipe.Rows() {
-		return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), len(rootNode.Value))
-	}
-
-	xOut := rootNode.Value
-
-	// if it's there, drop it
-	if gd := pipe.Get(fieldName); gd != nil {
-		pipe.GData().Drop(fieldName)
-	}
-
-	if len(xOut) == 1 && pipe.Rows() > 1 {
-		xOut = make([]float64, pipe.Rows())
-		for ind := 0; ind < len(xOut); ind++ {
-			xOut[ind] = rootNode.Value[0]
+	rawx := rootNode.Raw.Data
+	if len(rawx) == 1 {
+		tmp := rawx[0]
+		rawx = make([]any, pipe.Rows())
+		for ind := 0; ind < pipe.Rows(); ind++ {
+			rawx[ind] = tmp
 		}
 	}
 
-	newRawField := NewRawCast(xOut, nil)
+	role := rootNode.Role
+	if rootNode.Role == FREither {
+		switch rootNode.Raw.Data[0].(type) {
+		case float64, float32, int, int32, int64:
+			role = FRCts
+		default:
+			role = FRCat
+		}
+	}
 
-	return pipe.GData().AppendC(newRawField, fieldName, false, nil)
+	if role == FRCat {
+		return pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, nil)
+	}
+
+	return pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, false, nil)
 }
 
 // setValue sets the value of the loop variable
 func setValue(loopVar string, val int, op *OpNode) {
 	if op.Expression == loopVar {
-		op.Value = []float64{float64(val)}
+		op.Raw = NewRaw([]any{val}, nil)
 		op.stet = true // instructs Evaluate to keep this value
 	}
 
@@ -1056,6 +1201,11 @@ func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe
 			if e := Evaluate(inner[nodeInd], pipe); e != nil {
 				return e
 			}
+
+			// if there, must drop it
+			if pipe.Get(assign[nodeInd]) != nil {
+				pipe.GData().Drop(assign[nodeInd])
+			}
 			if e := AddToPipe(inner[nodeInd], assign[nodeInd], pipe); e != nil {
 				return e
 			}
@@ -1071,8 +1221,24 @@ func CopyNode(src *OpNode) (dest *OpNode) {
 	dest.Expression = src.Expression
 	dest.Neg = src.Neg
 	dest.stet = src.stet
-	dest.FunName = src.FunName
-	copy(dest.Value, src.Value)
+	dest.Role = src.Role
+
+	if src.Func != nil {
+		dest.Func = &FuncSpec{
+			Name:   src.Func.Name,
+			Return: src.Func.Return,
+			Args:   nil,
+			Level:  src.Func.Level,
+		}
+		dest.Func.Args = make([]reflect.Kind, len(src.Func.Args))
+		copy(dest.Func.Args, src.Func.Args)
+	}
+
+	if src.Raw != nil {
+		anySlice := make([]any, src.Raw.Len())
+		copy(anySlice, src.Raw.Data)
+		dest.Raw = NewRaw(anySlice, nil)
+	}
 
 	if src.Inputs == nil {
 		return dest
@@ -1134,7 +1300,7 @@ func any2Time(inVal any) any {
 		for _, fmtx := range formats {
 			t1, e := time.Parse(fmtx, strings.ReplaceAll(str, "'", ""))
 			if e == nil {
-				return any(t1)
+				return t1
 			}
 		}
 	}
@@ -1142,26 +1308,156 @@ func any2Time(inVal any) any {
 	return nil
 }
 
-// GTAny compares xa > xb
-func GTAny(xa, xb any) (truth bool, err error) {
-	if reflect.TypeOf(xa) != reflect.TypeOf(xb) {
-		return false, fmt.Errorf("must be of same type")
-	}
-
-	switch x := xa.(type) {
-	case string:
-		x = strings.ReplaceAll(x, "'", "")
-		y := strings.ReplaceAll(xb.(string), "'", "")
-		return x > y, nil
+// Any2Kind returns the first element of inVal in the type requested (if possible)
+func Any2Kind(inVal any, kind reflect.Kind) any {
+	switch x := inVal.(type) {
+	case int:
+		switch kind {
+		case reflect.Float64:
+			return float64(x)
+		case reflect.Float32:
+			return float32(x)
+		case reflect.Int64:
+			return int64(x)
+		case reflect.Int32:
+			return int32(x)
+		case reflect.Int:
+			return x
+		case reflect.String:
+			return fmt.Sprintf("%v", x)
+		default:
+			return nil
+		}
 	case int32:
-		return x > xb.(int32), nil
+		switch kind {
+		case reflect.Float64:
+			return float64(x)
+		case reflect.Float32:
+			return float32(x)
+		case reflect.Int64:
+			return int64(x)
+		case reflect.Int32:
+			return x
+		case reflect.Int:
+			return int(x)
+		case reflect.String:
+			return fmt.Sprintf("%v", x)
+		default:
+			return nil
+		}
+	case int64:
+		switch kind {
+		case reflect.Float64:
+			return float64(x)
+		case reflect.Float32:
+			return float32(x)
+		case reflect.Int64:
+			return x
+		case reflect.Int32:
+			return int32(x)
+		case reflect.Int:
+			return int(x)
+		case reflect.String:
+			return fmt.Sprintf("%v", x)
+		default:
+			return nil
+		}
+	case float32:
+		switch kind {
+		case reflect.Float64:
+			return float64(x)
+		case reflect.Float32:
+			return x
+		case reflect.Int64:
+			return int64(x)
+		case reflect.Int32:
+			return int32(x)
+		case reflect.Int:
+			return int(x)
+		case reflect.String:
+			return fmt.Sprintf("%v", x)
+		default:
+			return nil
+		}
 	case float64:
-		return x > xb.(float64), nil
+		switch kind {
+		case reflect.Float64:
+			return x
+		case reflect.Float32:
+			return float32(x)
+		case reflect.Int64:
+			return int64(x)
+		case reflect.Int32:
+			return int32(x)
+		case reflect.Int:
+			return int(x)
+		case reflect.String:
+			return fmt.Sprintf("%v", x)
+		default:
+			return nil
+		}
+	case string:
+		switch kind {
+		case reflect.Float64:
+			xv, e := strconv.ParseFloat(x, 64)
+			if e != nil {
+				return nil
+			}
+			return xv
+		case reflect.Float32:
+			xv, e := strconv.ParseFloat(x, 32)
+			if e != nil {
+				return nil
+			}
+			return xv
+		case reflect.Int64:
+			xv, e := strconv.ParseInt(x, 10, 64)
+			if e != nil {
+				return nil
+			}
+			return xv
+		case reflect.Int32:
+			xv, e := strconv.ParseInt(x, 10, 32)
+			if e != nil {
+				return nil
+			}
+			return int32(xv)
+		case reflect.String:
+			return x
+		case reflect.Struct:
+			return any2Time(x)
+		default:
+			return nil
+		}
 	case time.Time:
-		tmp := x.Sub(xb.(time.Time))
-		_ = tmp
-		return x.Sub(xb.(time.Time)) > 0, nil
+		switch kind {
+		case reflect.String:
+			return x.Format("1/2/2006")
+		default:
+			return nil
+		}
 	}
 
-	return false, fmt.Errorf("unsupported comparison")
+	return nil
+}
+
+func str2Kind(str string) reflect.Kind {
+	switch str {
+	case "float64":
+		return reflect.Float64
+	case "float32":
+		return reflect.Float32
+	case "string":
+		return reflect.String
+	case "int":
+		return reflect.Int
+	case "int32":
+		return reflect.Int32
+	case "int64":
+		return reflect.Int64
+	case "time.Time":
+		return reflect.Struct
+	default:
+		return reflect.Interface
+	}
 }
