@@ -21,11 +21,11 @@ type GDatum struct {
 	FT      *FType  // FT stores the details of the field: it's role, # categories, mappings
 	Summary Summary // Summary of the Data (e.g. distribution)
 	Data    any     // Data. This will be either []float64 (FRCts, FROneHot, FREmbed) or []int32 (FRCat)
+	Raw     *Raw
 }
 
 type GData struct {
 	data          []*GDatum // data array
-	dataRaw       []*Raw    // raw version
 	rows          int       // # of observations in each GDatum
 	sortField     string    // field data is sorted on (empty if not sorted)
 	sortData      *GDatum   // *GDatum of sortField
@@ -583,16 +583,25 @@ func (gd *GData) UpdateFts(newFts FTypes) (*GData, error) {
 }
 
 // Drop drops a field from *GData
-func (gd *GData) Drop(field string) {
+func (gd *GData) Drop(field string) error {
 	newGd := make([]*GDatum, 0)
+	ok := false
 	for ind := 0; ind < len(gd.data); ind++ {
+		if gd.data[ind].FT.Name == field {
+			ok = true
+		}
+
 		if gd.data[ind].FT.Name != field {
 			newGd = append(newGd, gd.data[ind])
 		}
 	}
+	if !ok {
+		return fmt.Errorf("field %s not found", field)
+	}
 
 	gd.data = newGd
-	gd.dataRaw = nil // need to reset this so Read() will work next time
+
+	return nil
 }
 
 // Read reads row(s) in the format of chutils.  Note: valids are all chutils.Valid.  Invoking Read for the first
@@ -600,29 +609,6 @@ func (gd *GData) Drop(field string) {
 func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []chutils.Valid, err error) {
 	if nTarget <= 0 {
 		return nil, nil, fmt.Errorf("(*GData) Read invalid nTarget")
-	}
-
-	// protect against case where data has been added
-	if gd.dataRaw != nil {
-		if len(gd.dataRaw) != len(gd.data) {
-			gd.dataRaw = nil
-		}
-	}
-
-	// if this is the first read, then we need to populate the dataRaw array
-	if gd.dataRaw == nil {
-		gd.dataRaw = make([]*Raw, 0)
-		for ind := 0; ind < len(gd.data); ind++ {
-			datum := gd.data[ind]
-			if datum.FT.Role == FREmbed || datum.FT.Role == FROneHot {
-				continue
-			}
-			raw, e := gd.GetRaw(datum.FT.Name)
-			if e != nil {
-				return nil, nil, e
-			}
-			gd.dataRaw = append(gd.dataRaw, raw)
-		}
 	}
 
 	data = make([]chutils.Row, 0)
@@ -641,11 +627,18 @@ func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []c
 
 		ind := 0
 		for col := 0; col < len(gd.data); col++ {
+			var e error
 			datum := gd.data[col]
+			if datum.Raw == nil {
+				datum.Raw, e = gd.GetRaw(datum.FT.Name)
+				if e != nil {
+					return nil, nil, e
+				}
+			}
 			if datum.FT.Role == FREmbed || datum.FT.Role == FROneHot {
 				continue
 			}
-			x := gd.dataRaw[ind].Data[row]
+			x := gd.data[ind].Raw.Data[row]
 			rows = append(rows, x)
 			ind++
 		}
@@ -741,7 +734,7 @@ func (gd *GData) TableSpec() *chutils.TableDef {
 // AppendField adds a field to gd
 func (gd *GData) AppendField(newData *Raw, name string, fRole FRole) error {
 	// drop field if it's already there
-	gd.Drop(name)
+	_ = gd.Drop(name)
 
 	switch fRole {
 	case FRCts:

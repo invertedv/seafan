@@ -372,6 +372,17 @@ func TestGData_Read(t *testing.T) {
 		ind++
 	}
 	assert.Equal(t, ind, len(x0))
+
+	e = gd.Drop("Field1")
+	assert.Nil(t, e)
+	ind = 0
+	e = gd.Reset()
+	assert.Nil(t, e)
+
+	row, _, e = gd.Read(1, false)
+	assert.Nil(t, e)
+	assert.Equal(t, row[0][0].(float64), x0[0])
+	assert.Equal(t, len(row[0]), 1)
 }
 
 func TestGData_TableSpec(t *testing.T) {

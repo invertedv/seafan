@@ -826,7 +826,6 @@ func evalFunction(node *OpNode) error {
 
 // evalConstant loads data which evaluates to a constant
 func evalConstant(node *OpNode) bool {
-	// TODO: add other options
 	if val, e := strconv.ParseFloat(node.Expression, 64); e == nil {
 		node.Raw = AllocRaw(1, reflect.Float64)
 		node.Raw.Data[0] = val
@@ -1128,9 +1127,8 @@ func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe
 			}
 
 			// if there, must drop it
-			if pipe.Get(assign[nodeInd]) != nil {
-				pipe.GData().Drop(assign[nodeInd])
-			}
+			_ = pipe.GData().Drop(assign[nodeInd])
+
 			if e := AddToPipe(inner[nodeInd], assign[nodeInd], pipe); e != nil {
 				return e
 			}

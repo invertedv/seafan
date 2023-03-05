@@ -14,9 +14,6 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
-// TODO: more functions for *Raw ?
-// TODO: think about checking before coercing types
-
 // Simple date arithmetic is possible.  The function dateAdd(d,m) adds m months to d.
 // The data is:
 // row, newField1, newField2, newField3, date
