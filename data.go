@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -307,7 +308,6 @@ func AllocRaw(n int, kind reflect.Kind) *Raw {
 
 // GTAny compares xa > xb
 func GTAny(xa, xb any) (truth bool, err error) {
-
 	if xb == nil || xa == nil {
 		return true, nil
 	}
@@ -340,24 +340,21 @@ func GTAny(xa, xb any) (truth bool, err error) {
 
 // Sum sums elements
 func (r *Raw) Sum() (*Raw, error) {
-	if r.Len() == 0 {
+	if r.Data == nil {
 		return nil, fmt.Errorf("no data: (*Raw) Sum")
+	}
+
+	if !r.IsNumeric() {
+		return nil, fmt.Errorf("coversion to float64 not possible for %v, (*Raw) Prod", r.Kind)
 	}
 
 	s := 0.0
 	for _, val := range r.Data {
-		switch v := val.(type) {
-		case int32:
-			s += float64(v)
-		case int64:
-			s += float64(v)
-		case float32:
-			s += float64(v)
-		case float64:
-			s += v
-		default:
-			return nil, fmt.Errorf("must be numeric for (*Raw)Sum")
+		x := Any2Float64(val)
+		if x == nil {
+			return nil, fmt.Errorf("conversion to float64 error (*Raw) Sum")
 		}
+		s += x.(float64)
 	}
 
 	return NewRaw([]any{s}, nil), nil
@@ -365,24 +362,21 @@ func (r *Raw) Sum() (*Raw, error) {
 
 // Prod returns the product of the elements
 func (r *Raw) Prod() (*Raw, error) {
-	if r.Len() == 0 {
+	if r.Data == nil {
 		return nil, fmt.Errorf("no data: (*Raw) Sum")
+	}
+
+	if !r.IsNumeric() {
+		return nil, fmt.Errorf("coversion to float64 not possible for %v, (*Raw) Prod", r.Kind)
 	}
 
 	s := 1.0
 	for _, val := range r.Data {
-		switch v := val.(type) {
-		case int32:
-			s *= float64(v)
-		case int64:
-			s *= float64(v)
-		case float32:
-			s *= float64(v)
-		case float64:
-			s *= v
-		default:
-			return nil, fmt.Errorf("must be numeric for (*Raw)Prod")
+		x := Any2Float64(val)
+		if x == nil {
+			return nil, fmt.Errorf("conversion to float64 error (*Raw) Prod")
 		}
+		s *= x.(float64)
 	}
 
 	return NewRaw([]any{s}, nil), nil
@@ -395,19 +389,7 @@ func (r *Raw) Mean() (*Raw, error) {
 		return nil, e
 	}
 
-	var mean float64
-	nFlt := float64(r.Len())
-
-	switch val := meanR.Data[0].(type) {
-	case int32:
-		mean = float64(val) / nFlt
-	case int64:
-		mean = float64(val) / nFlt
-	case float32:
-		mean = float64(val) / nFlt
-	case float64:
-		mean = val / nFlt
-	}
+	mean := meanR.Data[0].(float64) / float64(r.Len())
 
 	return NewRaw([]any{mean}, nil), nil
 }
@@ -426,21 +408,14 @@ func (r *Raw) Std() (*Raw, error) {
 	std := 0.0
 	nFlt := float64(r.Len())
 	mean := meanR.Data[0].(float64)
-	var delta float64
+
 	for _, valx := range r.Data {
-		switch val := valx.(type) {
-		case int32:
-			delta = float64(val) - mean
-		case int64:
-			delta = float64(val) - mean
-		case float32:
-			delta = float64(val) - mean
-		case float64:
-			delta = float64(val) - mean
-		}
+		delta := Any2Float64(valx).(float64) - mean
 		std += delta * delta
 	}
+
 	std = math.Sqrt(std / (nFlt - 1))
+
 	return NewRaw([]any{std}, nil), nil
 }
 
@@ -461,7 +436,7 @@ func (r *Raw) Max() (*Raw, error) {
 	return NewRaw([]any{s}, nil), nil
 }
 
-// Max returns max
+// Min returns min
 func (r *Raw) Min() (*Raw, error) {
 	var s any
 	for _, val := range r.Data {
@@ -476,6 +451,213 @@ func (r *Raw) Min() (*Raw, error) {
 	}
 
 	return NewRaw([]any{s}, nil), nil
+}
+
+// IsNumeric returns true if the underlying type is numeric
+func (r *Raw) IsNumeric() bool {
+	if r.Data == nil {
+		return false
+	}
+
+	switch r.Kind {
+	case reflect.Float32, reflect.Float64, reflect.Int, reflect.Int32, reflect.Int64:
+		return true
+	default:
+		return false
+	}
+}
+
+// CumeAfter cumulates the data after the current row, for each row.
+//
+//	AggType can take on the following values:
+//	- "sum"  Cumulative sums are taken.
+//	- "product" Cumulative products are taken.
+//	- "count" Counts for rows are taken.
+//
+// For "sum" and "product", the value "missing" is used for the last row.
+func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
+	if !r.IsNumeric() {
+		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
+	}
+
+	cumes := make([]any, r.Len())
+
+	for ind := 0; ind < r.Len(); ind++ {
+		if ind < r.Len()-1 {
+			var e error
+			var result any
+			var data *Raw
+			switch aggType {
+			case "sum":
+				data, e = NewRaw(r.Data[ind+1:], nil).Sum()
+				result = data.Data[0]
+			case "product":
+				data, e = NewRaw(r.Data[ind+1:], nil).Prod()
+				result = data.Data[0]
+			case "count":
+				result = any(float64(r.Len() - 1 - ind))
+			default:
+				return nil, fmt.Errorf("unknown aggType (*Raw) CumeAfter")
+			}
+
+			if e != nil {
+				return nil, e
+			}
+
+			cumes[ind] = result
+		} else {
+			if aggType != "count" {
+				cumes[ind] = missing
+			}
+		}
+	}
+
+	return NewRaw(cumes, nil), nil
+}
+
+// CumeBefore cumulates the data before the current row, for each row.
+//
+//	AggType can take on the following values:
+//	- "sum"  Cumulative sums are taken.
+//	- "product" Cumulative products are taken.
+//	- "count", "row" Counts for rows are taken.
+//
+// For "sum" and "product", the value "missing" is used for the first row.
+func (r *Raw) CumeBefore(missing any, aggType string) (*Raw, error) {
+	if !r.IsNumeric() {
+		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
+	}
+
+	cumes := make([]any, r.Len())
+
+	for ind := 0; ind < r.Len(); ind++ {
+		if ind > 0 {
+			var data *Raw
+			var e error
+			var result any
+			switch aggType {
+			case "sum":
+				data, e = NewRaw(r.Data[ind+1:], nil).Sum()
+				result = data.Data[0]
+			case "product":
+				data, e = NewRaw(r.Data[ind+1:], nil).Prod()
+				result = data.Data[0]
+			case "count", "row":
+				result = float64(ind)
+			}
+			if e != nil {
+				return nil, e
+			}
+			cumes[ind] = result
+		} else {
+			if aggType != "count" {
+				cumes[ind] = missing
+			}
+		}
+	}
+
+	return NewRaw(cumes, nil), nil
+}
+
+// Lag returns r lagged by 1.  The first element is set to "missing".
+func (r *Raw) Lag(missing any) (*Raw, error) {
+	if r.Data == nil {
+		return nil, fmt.Errorf("no data: (*Raw) Lag")
+	}
+
+	xOut := make([]any, r.Len())
+	xOut[0] = missing
+
+	for ind := 1; ind < r.Len()-1; ind++ {
+		xOut[ind] = r.Data[ind-1]
+	}
+
+	return NewRaw(xOut, nil), nil
+}
+
+// Log takes the natural log of Raw
+func (r *Raw) Log() (*Raw, error) {
+	if !r.IsNumeric() {
+		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
+	}
+
+	xOut := make([]any, r.Len())
+	for ind, xval := range r.Data {
+		x := Any2Float64(xval).(float64)
+		if x <= 0 {
+			return nil, fmt.Errorf("log of non-positive number (*Raw) Log: %v", x)
+		}
+		xOut[ind] = math.Log(x)
+	}
+
+	return NewRaw(xOut, nil), nil
+}
+
+// Exp returns e to the Raw
+func (r *Raw) Exp() (*Raw, error) {
+	if !r.IsNumeric() {
+		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
+	}
+
+	xOut := make([]any, r.Len())
+	for ind, xval := range r.Data {
+		x := Any2Float64(xval).(float64)
+		xOut[ind] = math.Exp(x)
+	}
+
+	return NewRaw(xOut, nil), nil
+}
+
+// Pow returns Raw^exponent
+func (r *Raw) Pow(exponent *Raw) (*Raw, error) {
+	if !r.IsNumeric() || !exponent.IsNumeric() {
+		return nil, fmt.Errorf("numeric operation on %v %v (*Raw) Pow", r.Kind, exponent.Kind)
+	}
+
+	delta1, delta2 := 1, 1
+	if r.Len() == 1 {
+		delta1 = 0
+	}
+	if exponent.Len() == 1 {
+		delta2 = 0
+	}
+
+	if delta1 == 1 && delta2 == 1 && r.Len() != exponent.Len() {
+		return nil, fmt.Errorf("exponent and base must have the same length, if not length=1 (*Raw) Pow")
+	}
+
+	n := r.Len()
+	if m := exponent.Len(); m > n {
+		n = m
+	}
+
+	xOut := make([]any, r.Len())
+	ind1, ind2 := 0, 0
+	for ind := 0; ind < n; ind++ {
+		base := Any2Float64(r.Data[ind1]).(float64)
+		exp := Any2Float64(exponent.Data[ind2]).(float64)
+		xOut[ind] = math.Pow(base, exp)
+	}
+
+	return NewRaw(xOut, nil), nil
+}
+
+// Index returns data that is *Raw at the indices "indices"
+func (r *Raw) Index(indices *Raw) (*Raw, error) {
+	if !indices.IsNumeric() {
+		return nil, fmt.Errorf("indices must be numeric (*Raw) Index")
+	}
+
+	xOut := make([]any, indices.Len())
+	for ind, indval := range indices.Data {
+		index := Any2Int(indval).(int)
+		if index < 0 || index >= r.Len() {
+			return nil, fmt.Errorf("index out of range: %d (*Raw) Index", index)
+		}
+		xOut[ind] = r.Data[index]
+	}
+
+	return NewRaw(xOut, nil), nil
 }
 
 func (r *Raw) Less(i, j int) bool {
@@ -691,4 +873,235 @@ func Unique(xs []any) []any {
 	}
 
 	return u
+}
+
+// Comparer compares xa and xb
+func Comparer(xa, xb any, comp string) (truth bool, err error) {
+	// a constant date comes in as a string
+	if t1 := Any2Date(xa); t1 != nil {
+		xa = t1
+	}
+
+	if t2 := Any2Date(xb); t2 != nil {
+		xb = t2
+	}
+
+	test1, e1 := GTAny(xa, xb)
+	if e1 != nil {
+		return false, e1
+	}
+
+	test2, e2 := GTAny(xb, xa)
+	if e2 != nil {
+		return false, e2
+	}
+
+	switch comp {
+	case ">":
+		return test1, nil
+	case ">=":
+		return !test2, nil
+	case "==":
+		return !test1 && !test2, nil
+	case "!=":
+		return test1 || test2, nil
+	case "<":
+		return test2, nil
+	case "<=":
+		return !test1, nil
+	}
+
+	return false, fmt.Errorf("unsupported comparison: %s", comp)
+}
+
+// Any2Date attempts to convert inVal to a date (time.Time)
+func Any2Date(inVal any) any {
+	switch x := inVal.(type) {
+	case string:
+		formats := []string{"20060102", "1/2/2006", "01/02/2006"}
+		for _, fmtx := range formats {
+			t1, e := time.Parse(fmtx, strings.ReplaceAll(x, "'", ""))
+			if e == nil {
+				return t1
+			}
+		}
+	case time.Time:
+		return x
+	}
+
+	return nil
+}
+
+// Any2Float64 attempts to convert inVal to float64
+func Any2Float64(inVal any) any {
+	switch x := inVal.(type) {
+	case int:
+		return float64(x)
+	case int32:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case float32:
+		return float64(x)
+	case float64:
+		return x
+	case string:
+		xx, e := strconv.ParseFloat(x, 64)
+		if e != nil {
+			return nil
+		}
+		return xx
+	default:
+		return nil
+	}
+}
+
+// Any2Float32 attempts to convert inVal to float32
+func Any2Float32(inVal any) any {
+	switch x := inVal.(type) {
+	case int:
+		return float32(x)
+	case int32:
+		return float32(x)
+	case int64:
+		return float32(x)
+	case float32:
+		return x
+	case float64:
+		return x
+	case string:
+		xx, e := strconv.ParseFloat(x, 32)
+		if e != nil {
+			return nil
+		}
+		return float32(xx)
+	default:
+		return nil
+	}
+}
+
+// Any2Int64 attempts to convert inVal to int64
+func Any2Int64(inVal any) any {
+	switch x := inVal.(type) {
+	case int:
+		return int64(x)
+	case int32:
+		return int64(x)
+	case int64:
+		return x
+	case float32:
+		return int64(x)
+	case float64:
+		return int64(x)
+	case string:
+		xx, e := strconv.ParseInt(x, 10, 64)
+		if e != nil {
+			return nil
+		}
+		return xx
+	default:
+		return nil
+	}
+}
+
+// Any2Int32 attempts to convert inVal to int32
+func Any2Int32(inVal any) any {
+	switch x := inVal.(type) {
+	case int:
+		return int32(x)
+	case int32:
+		return int32(x)
+	case int64:
+		return int32(x)
+	case float32:
+		return int32(x)
+	case float64:
+		return int32(x)
+	case string:
+		xx, e := strconv.ParseInt(x, 10, 32)
+		if e != nil {
+			return nil
+		}
+		return int32(xx)
+	default:
+		return nil
+	}
+}
+
+// Any2Int attempts to convert inVal to int
+func Any2Int(inVal any) any {
+	switch x := inVal.(type) {
+	case int:
+		return x
+	case int32:
+		return int(x)
+	case int64:
+		return int(x)
+	case float32:
+		return int(x)
+	case float64:
+		return int(x)
+	case string:
+		xx, e := strconv.ParseInt(x, 10, 32)
+		if e != nil {
+			return nil
+		}
+		return int(xx)
+	default:
+		return nil
+	}
+}
+
+func Any2String(inVal any) any {
+	switch x := inVal.(type) {
+	case string:
+		return x
+	case time.Time:
+		return x.Format("1/2/2006")
+	default:
+		return fmt.Sprintf("%v", x)
+	}
+}
+
+func Any2Kind(inVal any, kind reflect.Kind) any {
+	switch kind {
+	case reflect.Float64:
+		return Any2Float64(inVal)
+	case reflect.Float32:
+		return Any2Float32(inVal)
+	case reflect.Int64:
+		return Any2Int64(inVal)
+	case reflect.Int32:
+		return Any2Int32(inVal)
+	case reflect.Int:
+		return Any2Int(inVal)
+	case reflect.String:
+		return Any2String(inVal)
+	case reflect.Struct:
+		return Any2Date(inVal)
+	default:
+		return nil
+	}
+}
+
+// str2Kind converts a string specifying a type to the reflect.Kind
+func str2Kind(str string) reflect.Kind {
+	switch str {
+	case "float64":
+		return reflect.Float64
+	case "float32":
+		return reflect.Float32
+	case "string":
+		return reflect.String
+	case "int":
+		return reflect.Int
+	case "int32":
+		return reflect.Int32
+	case "int64":
+		return reflect.Int64
+	case "time.Time":
+		return reflect.Struct
+	default:
+		return reflect.Interface
+	}
 }

@@ -24,9 +24,6 @@ const (
 	// delimiter for strings below
 	delim = "$"
 
-	// ifs is a list of relations for If statements
-	//	ifs = ">$>=$<$<=$==$!="
-
 	// logicals are disjunctions, conjunctions
 	logicals = "&&$||"
 
@@ -699,7 +696,7 @@ func toDate(node *OpNode) error {
 	xOut := make([]any, n)
 
 	for ind := 0; ind < n; ind++ {
-		xOut[ind] = any2Time(node.Inputs[0].Raw.Data[ind])
+		xOut[ind] = Any2Date(node.Inputs[0].Raw.Data[ind])
 	}
 
 	node.Raw = NewRaw(xOut, nil)
@@ -743,7 +740,7 @@ func toCat(node *OpNode) error {
 	cur := node.Inputs[0].Raw.Kind
 	if cur == reflect.Float64 || cur == reflect.Float32 {
 		for ind := 0; ind < n; ind++ {
-			xOut[ind] = Any2Kind(xIn[ind], reflect.Int32)
+			xOut[ind] = Any2Kind(xIn[ind], reflect.Int64)
 		}
 
 		node.Raw = NewRaw(xOut, nil)
@@ -807,7 +804,7 @@ func evalFunction(node *OpNode) error {
 			if ind < node.Raw.Len()-1 {
 				data, e := NewRaw(node.Inputs[0].Raw.Data[ind+1:], nil).Sum()
 				if e != nil {
-					return fmt.Errorf("product error")
+					return fmt.Errorf("sum error")
 				}
 				node.Raw.Data[ind] = data.Data[0]
 			} else {
@@ -1251,213 +1248,4 @@ func CopyNode(src *OpNode) (dest *OpNode) {
 	}
 
 	return dest
-}
-
-// Comparer compares xa and xb
-func Comparer(xa, xb any, comp string) (truth bool, err error) {
-	// a constant date comes in as a string
-	if t1 := any2Time(xa); t1 != nil {
-		xa = t1
-	}
-
-	if t2 := any2Time(xb); t2 != nil {
-		xb = t2
-	}
-
-	test1, e1 := GTAny(xa, xb)
-	if e1 != nil {
-		return false, e1
-	}
-
-	test2, e2 := GTAny(xb, xa)
-	if e2 != nil {
-		return false, e2
-	}
-
-	switch comp {
-	case ">":
-		return test1, nil
-	case ">=":
-		return !test2, nil
-	case "==":
-		return !test1 && !test2, nil
-	case "!=":
-		return test1 || test2, nil
-	case "<":
-		return test2, nil
-	case "<=":
-		return !test1, nil
-	}
-
-	return false, fmt.Errorf("unsupported comparison: %s", comp)
-}
-
-// any2Time sees if a string can be a date
-func any2Time(inVal any) any {
-	// recognized date formats
-	formats := []string{"20060102", "1/2/2006", "01/02/2006"}
-	if str, ok := inVal.(string); ok {
-		for _, fmtx := range formats {
-			t1, e := time.Parse(fmtx, strings.ReplaceAll(str, "'", ""))
-			if e == nil {
-				return t1
-			}
-		}
-	}
-
-	return nil
-}
-
-// Any2Kind returns the first element of inVal in the type requested (if possible)
-func Any2Kind(inVal any, kind reflect.Kind) any {
-	switch x := inVal.(type) {
-	case int:
-		switch kind {
-		case reflect.Float64:
-			return float64(x)
-		case reflect.Float32:
-			return float32(x)
-		case reflect.Int64:
-			return int64(x)
-		case reflect.Int32:
-			return int32(x)
-		case reflect.Int:
-			return x
-		case reflect.String:
-			return fmt.Sprintf("%v", x)
-		default:
-			return nil
-		}
-	case int32:
-		switch kind {
-		case reflect.Float64:
-			return float64(x)
-		case reflect.Float32:
-			return float32(x)
-		case reflect.Int64:
-			return int64(x)
-		case reflect.Int32:
-			return x
-		case reflect.Int:
-			return int(x)
-		case reflect.String:
-			return fmt.Sprintf("%v", x)
-		default:
-			return nil
-		}
-	case int64:
-		switch kind {
-		case reflect.Float64:
-			return float64(x)
-		case reflect.Float32:
-			return float32(x)
-		case reflect.Int64:
-			return x
-		case reflect.Int32:
-			return int32(x)
-		case reflect.Int:
-			return int(x)
-		case reflect.String:
-			return fmt.Sprintf("%v", x)
-		default:
-			return nil
-		}
-	case float32:
-		switch kind {
-		case reflect.Float64:
-			return float64(x)
-		case reflect.Float32:
-			return x
-		case reflect.Int64:
-			return int64(x)
-		case reflect.Int32:
-			return int32(x)
-		case reflect.Int:
-			return int(x)
-		case reflect.String:
-			return fmt.Sprintf("%v", x)
-		default:
-			return nil
-		}
-	case float64:
-		switch kind {
-		case reflect.Float64:
-			return x
-		case reflect.Float32:
-			return float32(x)
-		case reflect.Int64:
-			return int64(x)
-		case reflect.Int32:
-			return int32(x)
-		case reflect.Int:
-			return int(x)
-		case reflect.String:
-			return fmt.Sprintf("%v", x)
-		default:
-			return nil
-		}
-	case string:
-		switch kind {
-		case reflect.Float64:
-			xv, e := strconv.ParseFloat(x, 64)
-			if e != nil {
-				return nil
-			}
-			return xv
-		case reflect.Float32:
-			xv, e := strconv.ParseFloat(x, 32)
-			if e != nil {
-				return nil
-			}
-			return xv
-		case reflect.Int64:
-			xv, e := strconv.ParseInt(x, 10, 64)
-			if e != nil {
-				return nil
-			}
-			return xv
-		case reflect.Int32:
-			xv, e := strconv.ParseInt(x, 10, 32)
-			if e != nil {
-				return nil
-			}
-			return int32(xv)
-		case reflect.String:
-			return x
-		case reflect.Struct:
-			return any2Time(x)
-		default:
-			return nil
-		}
-	case time.Time:
-		switch kind {
-		case reflect.String:
-			return x.Format("1/2/2006")
-		default:
-			return nil
-		}
-	}
-
-	return nil
-}
-
-func str2Kind(str string) reflect.Kind {
-	switch str {
-	case "float64":
-		return reflect.Float64
-	case "float32":
-		return reflect.Float32
-	case "string":
-		return reflect.String
-	case "int":
-		return reflect.Int
-	case "int32":
-		return reflect.Int32
-	case "int64":
-		return reflect.Int64
-	case "time.Time":
-		return reflect.Struct
-	default:
-		return reflect.Interface
-	}
 }

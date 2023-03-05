@@ -14,7 +14,8 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
-// TODO: test date comparisons
+// TODO: more functions for *Raw ?
+// TODO: think about checking before coercing types
 
 // Simple date arithmetic is possible.  The function dateAdd(d,m) adds m months to d.
 // The data is:
@@ -81,9 +82,25 @@ func ExampleEvaluate_if() {
 	if err := AddToPipe(root, "march2023", pipe); err != nil {
 		panic(err)
 	}
+
 	fmt.Println(pipe.Get("march2023").Data.([]float64))
+	root = &OpNode{Expression: "if(date>'3/1/2023',1,0)"}
+
+	if err := Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err := Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	if err := AddToPipe(root, "afterMarch2023", pipe); err != nil {
+		panic(err)
+	}
+	fmt.Println(pipe.Get("afterMarch2023").Data.([]float64))
 	// output:
 	// [1 0 0 0 0 0]
+	// [0 1 1 1 1 0]
 }
 
 func TestEvaluate_date(t *testing.T) {
