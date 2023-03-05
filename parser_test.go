@@ -201,7 +201,12 @@ func TestEvalSFunction(t *testing.T) {
 	dataCF := "1, 2, 3, 4"      // c
 	dataDr := "0.1, .2, .3, .4" // D
 	dataPV := "6,0,0,0"         // e
-	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"f", "f", "f"})
+	dataS := "'x','a','z','t'"  // f
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV, dataS}, []string{"f", "f", "f", "s"})
+
+	pvx := tester("max(f)", pipe)
+	assert.Equal(t, pvx[0].(string), "z")
+
 	expIr := 0.19194
 	ir := tester("irr(e,c)", pipe)
 	assert.InDelta(t, ir[0], expIr, .0001, nil)
@@ -217,6 +222,28 @@ func TestEvalSFunction(t *testing.T) {
 	assert.InDelta(t, pv[0], ExpVal, .0001)
 }
 
+// TestEvaluate2 should all generate errors
+func TestEvaluate2(t *testing.T) {
+	Verbose = false
+	dataCF := "1, 2, 3, 4"      // c
+	dataDr := "0.1, .2, .3, .4" // D
+	dataPV := "6,0,0,0"         // e
+	dataS := "'x','a','z','t'"  // f
+	pipe := buildPipe([]string{dataCF, dataDr, dataPV, dataS}, []string{"f", "f", "f", "s"})
+
+	express := []string{"c+f", "f+1", "f*f", "index(c,f)", "c^f", "cumeAfter(c,'a')", "log(e)"}
+
+	for _, exp := range express {
+		root := &OpNode{Expression: exp}
+		err := Expr2Tree(root)
+		assert.Nil(t, err)
+
+		err = Evaluate(root, pipe)
+		assert.NotNil(t, err)
+	}
+
+}
+
 func TestEvaluate(t *testing.T) {
 	Verbose = false
 	dataC := "1, 2"
@@ -224,6 +251,7 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
+		"cumeBefore(c,42)",
 		"if(c==1,log(c),-c)",
 		"max(c)",
 		"c-D-D",
@@ -234,9 +262,9 @@ func TestEvaluate(t *testing.T) {
 		"-D*3 + D",
 		"lag(c,42)",
 		"countBefore(c)",
-		"cumBefore(c,42)",
+		"cumeBefore(c,42)",
 		"countAfter(c)",
-		"cumAfter(c, 42)",
+		"cumeAfter(c, 42)",
 		"std(c)",
 		"max(c)",
 		//		"median(c)",
@@ -261,6 +289,7 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{42, 1},
 		{0, -2},
 		{2},
 		{-5, -18},

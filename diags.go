@@ -738,5 +738,4 @@ func R2(y, yhat []float64) float64 {
 	}
 
 	return 100.0 * (1.0 - sse/tss)
-
 }

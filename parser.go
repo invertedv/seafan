@@ -104,7 +104,6 @@ func loadFunctions() {
 //
 // Available summary-level functions are:
 //   - mean(<expr>)
-//   - median(<expr>)
 //   - count(<expr>)
 //   - sum(<expr>)
 //   - max(<expr>)
@@ -598,7 +597,6 @@ func sseMAD(y, yhat *Raw, op string) float64 {
 
 // EvalSFunction evaluates a summary function.
 func EvalSFunction(node *OpNode) error {
-	const medianQ = 0.5
 	const irrGuess = 0.005
 
 	var e error
@@ -646,7 +644,7 @@ func EvalSFunction(node *OpNode) error {
 	if e != nil {
 		return e
 	}
-	node.Raw = NewRaw([]any{result.Data[0].(float64)}, nil)
+	node.Raw = NewRaw([]any{result.Data[0]}, nil)
 	goNegative(node.Raw, node.Neg)
 
 	return nil
@@ -759,6 +757,10 @@ func toCat(node *OpNode) error {
 
 // evalFunction evaluates a function call
 func evalFunction(node *OpNode) error {
+	if e := consistent(node); e != nil {
+		return e
+	}
+
 	// special cases
 	switch node.Func.Name {
 	case "if":
@@ -773,122 +775,46 @@ func evalFunction(node *OpNode) error {
 		return toCat(node)
 	}
 
-	if e := consistent(node); e != nil {
-		return e
-	}
-
-	var deltas []int
-
-	node.Raw, deltas = getDeltas(node)
-
-	ind1 := node.Inputs[0].Raw.Len() - 1
-	two := len(deltas) > 1
-	var ind2 int
-	if two {
-		if len(node.Inputs) > 1 {
-			ind2 = node.Inputs[1].Raw.Len() - 1
-		}
-	}
-
 	if node.Func != nil && node.Func.Level == 'S' {
 		if e := EvalSFunction(node); e != nil {
 			return e
 		}
+
+		goNegative(node.Raw, node.Neg)
+
+		return nil
 	}
 
-	// These will be Row functions
-	// move backwards in the slice (required for the lag function)
-	for ind := node.Raw.Len() - 1; ind >= 0; ind-- {
-		switch node.Func.Name {
-		case "cumAfter":
-			if ind < node.Raw.Len()-1 {
-				data, e := NewRaw(node.Inputs[0].Raw.Data[ind+1:], nil).Sum()
-				if e != nil {
-					return fmt.Errorf("sum error")
-				}
-				node.Raw.Data[ind] = data.Data[0]
-			} else {
-				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
-			}
-		case "prodAfter":
-			if ind < node.Raw.Len()-1 {
-				data, e := NewRaw(node.Inputs[0].Raw.Data[ind+1:], nil).Prod()
-				if e != nil {
-					return fmt.Errorf("product error")
-				}
-				node.Raw.Data[ind] = data.Data[0]
-			} else {
-				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
-			}
-		case "countAfter":
-			node.Raw.Data[ind] = node.Raw.Len() - ind - 1
-		case "cumBefore":
-			if ind > 0 {
-				data, e := NewRaw(node.Inputs[0].Raw.Data[:ind], nil).Sum()
-				if e != nil {
-					return fmt.Errorf("product error")
-				}
-				node.Raw.Data[ind] = data.Data[0]
-			} else {
-				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
-			}
-		case "prodBefore":
-			if ind > 0 {
-				data, e := NewRaw(node.Inputs[0].Raw.Data[:ind], nil).Prod()
-				if e != nil {
-					return fmt.Errorf("product error")
-				}
-				node.Raw.Data[ind] = data.Data[0]
-			} else {
-				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
-			}
-		case "countBefore":
-			node.Raw.Data[ind] = ind
-		case "log":
-			arg := Any2Kind(node.Inputs[0].Raw.Data[ind], reflect.Float64)
-			if arg == nil {
-				return fmt.Errorf("cannot convert")
-			}
-			node.Raw.Data[ind] = math.Log(arg.(float64))
-		case "exp":
-			arg := Any2Kind(node.Inputs[0].Raw.Data[ind], reflect.Float64)
-			if arg == nil {
-				return fmt.Errorf("cannot convert")
-			}
-			node.Raw.Data[ind] = math.Exp(arg.(float64))
-		case "row":
-			node.Raw.Data[ind] = int32(ind)
-		case "pow":
-			base := Any2Kind(node.Inputs[0].Raw.Data[ind], reflect.Float64)
-			pow := Any2Kind(node.Inputs[1].Raw.Data[ind], reflect.Float64)
-			if base == nil || pow == nil {
-				return fmt.Errorf("cannot convert")
-			}
-			node.Raw.Data[ind] = math.Pow(base.(float64), pow.(float64))
-		case "index":
-			arg := Any2Kind(node.Inputs[1].Raw.Data[ind], reflect.Int)
-			if arg == nil {
-				return fmt.Errorf("cannot convert")
-			}
-			indx := arg.(int)
-			if indx < 0 || indx >= node.Raw.Len() {
-				return fmt.Errorf("index out of range")
-			}
-			node.Raw.Data[ind] = node.Inputs[0].Raw.Data[indx]
-		case "lag":
-			if ind > 0 {
-				node.Raw.Data[ind] = node.Inputs[0].Raw.Data[ind-1]
-			} else {
-				node.Raw.Data[ind] = node.Inputs[1].Raw.Data[0]
-			}
-		}
+	var err error
+	switch node.Func.Name {
+	case "cumeAfter":
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "sum")
+	case "prodAfter":
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "prod")
+	case "countAfter":
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter(nil, "count")
+	case "cumeBefore":
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "sum")
+	case "prodBefore":
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "prod")
+	case "countBefore", "row":
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore(nil, "count")
+	case "lag":
+		node.Raw, err = node.Inputs[0].Raw.Lag(node.Inputs[1].Raw.Data[0])
+	case "pow":
+		node.Raw, err = node.Inputs[0].Raw.Pow(node.Inputs[1].Raw)
+	case "index":
+		node.Raw, err = node.Inputs[0].Raw.Index(node.Inputs[1].Raw)
+	case "exp":
+		node.Raw, err = node.Inputs[0].Raw.Exp()
+	case "log":
+		node.Raw, err = node.Inputs[0].Raw.Log()
+	default:
+		return fmt.Errorf("unknown function %s", node.Func.Name)
+	}
 
-		// decrement indices
-		ind1 -= deltas[0]
-
-		if two {
-			ind2 -= deltas[1]
-		}
+	if err != nil {
+		return err
 	}
 
 	goNegative(node.Raw, node.Neg)
@@ -966,7 +892,7 @@ func evalOpsCat(node *OpNode) error {
 	return nil
 }
 
-// consistent checks that the Inputs are either all FRCts or all FRCat.
+// consistent checks that the Inputs are consistent with what's needed
 func consistent(node *OpNode) error {
 	if node.Func == nil {
 		return nil

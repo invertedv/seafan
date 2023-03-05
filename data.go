@@ -345,7 +345,7 @@ func (r *Raw) Sum() (*Raw, error) {
 	}
 
 	if !r.IsNumeric() {
-		return nil, fmt.Errorf("coversion to float64 not possible for %v, (*Raw) Prod", r.Kind)
+		return nil, fmt.Errorf("coversion to float64 not possible for %v, (*Raw) Product", r.Kind)
 	}
 
 	s := 0.0
@@ -360,21 +360,21 @@ func (r *Raw) Sum() (*Raw, error) {
 	return NewRaw([]any{s}, nil), nil
 }
 
-// Prod returns the product of the elements
-func (r *Raw) Prod() (*Raw, error) {
+// Product returns the product of the elements
+func (r *Raw) Product() (*Raw, error) {
 	if r.Data == nil {
 		return nil, fmt.Errorf("no data: (*Raw) Sum")
 	}
 
 	if !r.IsNumeric() {
-		return nil, fmt.Errorf("coversion to float64 not possible for %v, (*Raw) Prod", r.Kind)
+		return nil, fmt.Errorf("coversion to float64 not possible for %v, (*Raw) Product", r.Kind)
 	}
 
 	s := 1.0
 	for _, val := range r.Data {
 		x := Any2Float64(val)
 		if x == nil {
-			return nil, fmt.Errorf("conversion to float64 error (*Raw) Prod")
+			return nil, fmt.Errorf("conversion to float64 error (*Raw) Product")
 		}
 		s *= x.(float64)
 	}
@@ -492,7 +492,7 @@ func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
 				data, e = NewRaw(r.Data[ind+1:], nil).Sum()
 				result = data.Data[0]
 			case "product":
-				data, e = NewRaw(r.Data[ind+1:], nil).Prod()
+				data, e = NewRaw(r.Data[ind+1:], nil).Product()
 				result = data.Data[0]
 			case "count":
 				result = any(float64(r.Len() - 1 - ind))
@@ -506,8 +506,11 @@ func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
 
 			cumes[ind] = result
 		} else {
-			if aggType != "count" {
+			switch aggType {
+			case "sum", "product":
 				cumes[ind] = missing
+			default:
+				cumes[ind] = float64(ind - 1)
 			}
 		}
 	}
@@ -537,10 +540,10 @@ func (r *Raw) CumeBefore(missing any, aggType string) (*Raw, error) {
 			var result any
 			switch aggType {
 			case "sum":
-				data, e = NewRaw(r.Data[ind+1:], nil).Sum()
+				data, e = NewRaw(r.Data[:ind], nil).Sum()
 				result = data.Data[0]
 			case "product":
-				data, e = NewRaw(r.Data[ind+1:], nil).Prod()
+				data, e = NewRaw(r.Data[:ind], nil).Product()
 				result = data.Data[0]
 			case "count", "row":
 				result = float64(ind)
@@ -550,8 +553,11 @@ func (r *Raw) CumeBefore(missing any, aggType string) (*Raw, error) {
 			}
 			cumes[ind] = result
 		} else {
-			if aggType != "count" {
+			switch aggType {
+			case "sum", "product":
 				cumes[ind] = missing
+			default:
+				cumes[ind] = float64(ind)
 			}
 		}
 	}
@@ -568,7 +574,7 @@ func (r *Raw) Lag(missing any) (*Raw, error) {
 	xOut := make([]any, r.Len())
 	xOut[0] = missing
 
-	for ind := 1; ind < r.Len()-1; ind++ {
+	for ind := 1; ind < r.Len(); ind++ {
 		xOut[ind] = r.Data[ind-1]
 	}
 
@@ -1010,7 +1016,7 @@ func Any2Int32(inVal any) any {
 	case int:
 		return int32(x)
 	case int32:
-		return int32(x)
+		return x
 	case int64:
 		return int32(x)
 	case float32:

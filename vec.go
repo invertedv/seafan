@@ -116,15 +116,15 @@ func (vec *VecData) SaveFTypes(fileName string) error {
 }
 
 // returns *FType from user-input FTypes.
-func (vec *VecData) getFType(feature string) *FType {
-	for _, ft := range vec.ftypes {
-		if ft.Name == feature {
-			return ft
-		}
-	}
-
-	return nil
-}
+//func (vec *VecData) getFType(feature string) *FType {
+//	for _, ft := range vec.ftypes {
+//		if ft.Name == feature {
+//			return ft
+//		}
+//	}
+//
+//	return nil
+//}
 
 // IsNormalized returns true if the field is normalized.
 func (vec *VecData) IsNormalized(field string) bool {
