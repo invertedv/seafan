@@ -124,24 +124,6 @@ func TestEvaluate_date(t *testing.T) {
 	assert.ElementsMatch(t, root.Raw.Data, results)
 }
 
-func TestEvaluate_string(t *testing.T) {
-	Verbose = false
-	dataCF := "'3/25/2022', '20230228' " // c
-	dataDr := "0.12311234, .2 "          // D
-	dataPV := "'0','0'"                  // e
-	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"s", "f", "s"})
-	exprs := "toString(D, 3)"
-	results := []any{"0.123", "0.200"}
-	root := &OpNode{Expression: exprs}
-	if err := Expr2Tree(root); err != nil {
-		panic(err)
-	}
-
-	e := Evaluate(root, pipe)
-	assert.Nil(t, e)
-	assert.ElementsMatch(t, root.Raw.Data, results)
-}
-
 // tests conditional statements with strings
 func TestExpr2Tree(t *testing.T) {
 	Verbose = false
@@ -241,7 +223,35 @@ func TestEvaluate2(t *testing.T) {
 		err = Evaluate(root, pipe)
 		assert.NotNil(t, err)
 	}
+}
 
+// TestEvaulate4 tests Lag
+func TestEvaluate_lag(t *testing.T) {
+	Verbose = false
+	dataC := "1, 2"
+	dataD := "'20230228', '20230301'"
+	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "s"})
+	exprs := []string{"lag(c,3)", "lag(D,3)"}
+	results := [][]any{{3.0, 1.0}, {"3", "20230228"}}
+	for ind, expr := range exprs {
+		act := tester(expr, pipe)
+		assert.ElementsMatch(t, results[ind], act)
+	}
+}
+
+// TestEvaluate3 tests toString and toDate functions
+func TestEvaluate_toString(t *testing.T) {
+	Verbose = false
+	dataC := "1, 2"
+	dataD := "'20230228', '20230301'"
+	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "s"})
+
+	exprs := []string{"toString(cat(c))", "toString(c)", "toString(toDate(D))"}
+	results := [][]string{{"1", "2"}, {"1.00", "2.00"}, {"2/28/2023", "3/1/2023"}}
+	for ind, expr := range exprs {
+		act := tester(expr, pipe)
+		assert.ElementsMatch(t, results[ind], act)
+	}
 }
 
 func TestEvaluate(t *testing.T) {
@@ -251,6 +261,8 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
+		"lag(c,42)",
+		"c+D",
 		"cumeBefore(c,42)",
 		"if(c==1,log(c),-c)",
 		"max(c)",
@@ -289,6 +301,8 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{42, 1},
+		{4, 12},
 		{42, 1},
 		{0, -2},
 		{2},

@@ -26,7 +26,7 @@ corr,float64,S,float64,float64,$
 r2,float64,S,float64,float64,$
 dateAdd,time.Time,R,time.Time,int32,$
 toDate,time.Time,R,string,,$
-toString,string,R,any,float64,$
+toString,string,R,any$
 toFloat,float64,R,,,$
 toInt,int32,R,,,$
 cat,any,R,any$

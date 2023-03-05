@@ -480,6 +480,15 @@ func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
 		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
 	}
 
+	// coerce to same type as r
+	var miss any
+	if missing != nil {
+		miss = Any2Kind(missing, r.Kind)
+		if miss == nil {
+			return nil, fmt.Errorf("cannot convert %v to %v (*Raw) Lag", missing, r.Kind)
+		}
+	}
+
 	cumes := make([]any, r.Len())
 
 	for ind := 0; ind < r.Len(); ind++ {
@@ -508,7 +517,7 @@ func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
 		} else {
 			switch aggType {
 			case "sum", "product":
-				cumes[ind] = missing
+				cumes[ind] = miss
 			default:
 				cumes[ind] = float64(ind - 1)
 			}
@@ -529,6 +538,15 @@ func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
 func (r *Raw) CumeBefore(missing any, aggType string) (*Raw, error) {
 	if !r.IsNumeric() {
 		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
+	}
+
+	// coerce to same type as r
+	var miss any
+	if missing != nil {
+		miss = Any2Kind(missing, r.Kind)
+		if miss == nil {
+			return nil, fmt.Errorf("cannot convert %v to %v (*Raw) Lag", missing, r.Kind)
+		}
 	}
 
 	cumes := make([]any, r.Len())
@@ -555,7 +573,7 @@ func (r *Raw) CumeBefore(missing any, aggType string) (*Raw, error) {
 		} else {
 			switch aggType {
 			case "sum", "product":
-				cumes[ind] = missing
+				cumes[ind] = miss
 			default:
 				cumes[ind] = float64(ind)
 			}
@@ -571,8 +589,14 @@ func (r *Raw) Lag(missing any) (*Raw, error) {
 		return nil, fmt.Errorf("no data: (*Raw) Lag")
 	}
 
+	// coerce to same type as r
+	miss := Any2Kind(missing, r.Kind)
+	if miss == nil {
+		return nil, fmt.Errorf("cannot convert %v to %v (*Raw) Lag", missing, r.Kind)
+	}
+
 	xOut := make([]any, r.Len())
-	xOut[0] = missing
+	xOut[0] = miss
 
 	for ind := 1; ind < r.Len(); ind++ {
 		xOut[ind] = r.Data[ind-1]
@@ -1070,6 +1094,10 @@ func Any2String(inVal any) any {
 }
 
 func Any2Kind(inVal any, kind reflect.Kind) any {
+	if inVal == nil {
+		return nil
+	}
+
 	switch kind {
 	case reflect.Float64:
 		return Any2Float64(inVal)

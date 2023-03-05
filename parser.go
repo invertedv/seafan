@@ -13,14 +13,15 @@ import (
 )
 
 var (
+	// All the functions that parser supports are defined here
 	//go:embed strings/functions.txt
 	FunctionsStr string
 
+	// Functions is a slice that describes all supported functions/operations
 	Functions []FuncSpec
 )
 
 const (
-
 	// delimiter for strings below
 	delim = "$"
 
@@ -30,40 +31,19 @@ const (
 	// Comparisons are comparison operators
 	comparisons = ">$>=$<$<=$==$!="
 
+	// these are separated out for order of precedence.
 	arith1 = "+$-"
 
 	arith2 = "*$/"
 
 	arith3 = "^"
 
-	// arithmetics is a list operators
+	// arithmetics is a list arithmetic operators
 	arithmetics = arith1 + "$" + arith2 + "$" + arith3
 
 	// operations is a list of supported operations
 	operations = logicals + "$" + comparisons + "$" + arithmetics
 )
-
-// loadFunctions loads the slice of FuncSpec that is all the defined functions
-func loadFunctions() {
-	funcs := strings.Split(strings.ReplaceAll(FunctionsStr, "\n", ""), "$")
-	for _, f := range funcs {
-		fdetail := strings.Split(f, ",")
-		fSpec := FuncSpec{Name: fdetail[0],
-			Return: str2Kind(fdetail[1]),
-			Level:  rune(fdetail[2][0]),
-		}
-		//			Return: 0,
-		//			Args:   nil,
-		//			Level:  0,
-
-		for ind := 3; ind < len(fdetail); ind++ {
-			if fdetail[ind] != "" {
-				fSpec.Args = append(fSpec.Args, str2Kind(fdetail[ind]))
-			}
-		}
-		Functions = append(Functions, fSpec)
-	}
-}
 
 // OpNode is a single node of an expression.
 // The input expression is successively broken into simpler expressions.  Each leaf is devoid of expressions--they
@@ -125,74 +105,64 @@ func loadFunctions() {
 //
 // Logical operators resolve to 0 or 1.
 type OpNode struct {
-	Expression string // expression this node implements
-	//	Value      []float64 // node value. Value is nil until Evaluate is run
-	Raw    *Raw // node Value if field is not FRCts
-	Func   *FuncSpec
-	Role   FRole
-	Neg    bool      // negate result when populating Value
-	Inputs []*OpNode // Inputs to node calculation
-	stet   bool      // if stet then Value is not updated (used by Loop)
+	Expression string    // expression this node implements
+	Raw        *Raw      // node Value
+	Func       *FuncSpec // details of the function required to evaulate this node.
+	Role       FRole     // FRole to use when adding this node to a Pipeline
+	Neg        bool      // negate result when populating Value
+	Inputs     []*OpNode // Inputs to node calculation
+	stet       bool      // if stet then Value is not updated (used by Loop)
 }
 
+// FuncSpec stores the details about a function call.
 type FuncSpec struct {
-	Name   string
-	Return reflect.Kind
-	Args   []reflect.Kind
-	Level  rune
+	Name   string         // The name of the function/operation.
+	Return reflect.Kind   // The type of the return.  This will either be float64 or any.
+	Args   []reflect.Kind // The types of the inputs to the function.
+	Level  rune           // 'S' if the function is summary-level (1 element) or 'R' if it is row-level.
 }
 
-// negLocation determines where to place a leading minus sign.
-//   - 0  there is no leading minus sign
-//   - 1  on the current Node
-//   - 2  on Inputs[0]
-func negLocation(expr string) int {
-	if expr == "" {
-		return 0
-	}
+// loadFunctions loads the slice of FuncSpec that is all the defined functions the parser supports.
+func loadFunctions() {
+	funcs := strings.Split(strings.ReplaceAll(FunctionsStr, "\n", ""), "$")
+	for _, f := range funcs {
+		fdetail := strings.Split(f, ",")
+		fSpec := FuncSpec{Name: fdetail[0],
+			Return: str2Kind(fdetail[1]),
+			Level:  rune(fdetail[2][0]),
+		}
+		//			Return: 0,
+		//			Args:   nil,
+		//			Level:  0,
 
-	if expr[0] != '-' {
-		return 0
+		for ind := 3; ind < len(fdetail); ind++ {
+			if fdetail[ind] != "" {
+				fSpec.Args = append(fSpec.Args, str2Kind(fdetail[ind]))
+			}
+		}
+		Functions = append(Functions, fSpec)
 	}
-
-	if _, allIn := allInParen(expr); allIn {
-		return 1
-	}
-
-	if _, args := searchOp(expr, arith1); args != nil {
-		return 2
-	}
-
-	if _, args := searchOp(expr, arith2); args != nil {
-		return 1
-	}
-
-	if _, args := searchOp(expr, arith3); args != nil {
-		return 1
-	}
-
-	return 1
 }
 
-// Expr2Tree builds the OpNode tree that is a binary representation of an expression.
+// Expr2Tree builds the OpNode tree that is a binary tree representation of an expression.
 // The process to add a field to a Pipeline is:
-//  1. Create the *OpNode tree to evaluate the expression using Expr2Tree
+//  1. Create the *OpNode tree using Expr2Tree to evaluate the expression
 //  2. Populate the values from a Pipeline using Evaluate.
-//  3. Add the values to the Pipeline using AddToPipe
+//  3. Add the values to the Pipeline using AddToPipe.
 //
-// Note, you can access the values after Evaluate without adding the field to the Pipeline from the Value element
+// Note, you can access the values after Evaluate without adding the field to the Pipeline from the Raw field
 // of the root node.
 //
 // The expression can include:
 //   - arithmetic operators: +, -, *, /
 //   - exponentation: ^
-//   - functions: log, exp
+//   - functions
 //   - logicals: &&, ||.  These evaluate to 0 or 1.
 //   - if statements: if(condition, value if true, value if false). The true value is applied if the condition evaluates
 //     to a positive value.
 //   - parentheses
 func Expr2Tree(curNode *OpNode) error {
-	// Load the slice of functions if they are not
+	// Load the global slice of functions if they are not
 	if Functions == nil {
 		loadFunctions()
 	}
@@ -281,6 +251,38 @@ func getFuncSpec(op string) (*FuncSpec, FRole) {
 	}
 
 	return nil, FREither
+}
+
+// negLocation determines where to place a leading minus sign.
+//   - 0  there is no leading minus sign
+//   - 1  on the current Node
+//   - 2  on Inputs[0]
+func negLocation(expr string) int {
+	if expr == "" {
+		return 0
+	}
+
+	if expr[0] != '-' {
+		return 0
+	}
+
+	if _, allIn := allInParen(expr); allIn {
+		return 1
+	}
+
+	if _, args := searchOp(expr, arith1); args != nil {
+		return 2
+	}
+
+	if _, args := searchOp(expr, arith2); args != nil {
+		return 1
+	}
+
+	if _, args := searchOp(expr, arith3); args != nil {
+		return 1
+	}
+
+	return 1
 }
 
 // find the first needle that is not within parens.  Ignore the first character--that cannot be a true operator.
@@ -428,7 +430,7 @@ func splitExpr(expr string) (op string, args []string, err error) {
 		return "", nil, nil
 	}
 
-	// If this is a function, we will create a node just to calculate it and then recurse to get the argument
+	// If this is a function, we will create a node just to calculate it and then recurse to get the arguments
 	if op, args, err = getFunction(expr); op != "" {
 		return op, args, err
 	}
@@ -456,7 +458,7 @@ func splitExpr(expr string) (op string, args []string, err error) {
 		return op, args, nil
 	}
 
-	op, args = searchOp(expr, "^")
+	op, args = searchOp(expr, arith3)
 	if args != nil {
 		return op, args, nil
 	}
@@ -595,7 +597,7 @@ func sseMAD(y, yhat *Raw, op string) float64 {
 	return val
 }
 
-// EvalSFunction evaluates a summary function.
+// EvalSFunction evaluates a summary function. A summary function returns a single value.
 func EvalSFunction(node *OpNode) error {
 	const irrGuess = 0.005
 
@@ -650,6 +652,7 @@ func EvalSFunction(node *OpNode) error {
 	return nil
 }
 
+// dateAddMonths adds months to a date field
 func dateAddMonths(node *OpNode) error {
 	var deltas []int
 
@@ -685,9 +688,10 @@ func dateAddMonths(node *OpNode) error {
 	return nil
 }
 
+// toDate converts a string to a date.
 func toDate(node *OpNode) error {
 	if node.Inputs[0].Raw.Kind != reflect.String {
-		return fmt.Errorf("date requires string input")
+		return fmt.Errorf("toDate requires string input")
 	}
 
 	n := node.Inputs[0].Raw.Len()
@@ -704,22 +708,20 @@ func toDate(node *OpNode) error {
 
 // toString converts Raw to string
 func toString(node *OpNode) error {
-	//TODO: handle other types
-	if node.Inputs[0].Raw.Kind != reflect.Float64 {
-		return fmt.Errorf("cannot convert")
-	}
-
+	const nDecimal = 2
 	n := node.Inputs[0].Raw.Len()
 	xOut := make([]any, n)
 
-	nDecA := Any2Kind(node.Inputs[1].Raw.Data[0], reflect.Int)
-	if nDecA == nil {
-		return fmt.Errorf("cannot convert")
-	}
-
 	for ind := 0; ind < n; ind++ {
-		fmtx := fmt.Sprintf("%%0.%df", nDecA.(int))
-		xOut[ind] = fmt.Sprintf(fmtx, node.Inputs[0].Raw.Data[ind])
+		switch x := node.Inputs[0].Raw.Data[ind].(type) {
+		case float64:
+			fmtx := fmt.Sprintf("%%0.%df", nDecimal)
+			xOut[ind] = fmt.Sprintf(fmtx, x)
+		case time.Time:
+			xOut[ind] = x.Format("1/2/2006")
+		default:
+			xOut[ind] = fmt.Sprintf("%v", x)
+		}
 	}
 
 	node.Raw = NewRaw(xOut, nil)
@@ -1004,7 +1006,7 @@ func Evaluate(curNode *OpNode, pipe Pipeline) error {
 		}
 	}
 
-	// check: are these operations +,-,*,/ ?
+	// check: are these operations: && || > >= = == != + - * / ^
 	if curNode.Func != nil && checkSlice(curNode.Func.Name, operations) {
 		return evalOps(curNode)
 	}
