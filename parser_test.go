@@ -228,12 +228,40 @@ func TestEvaluate_lag(t *testing.T) {
 	dataD := "'20230228', '20230301'"
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "s"})
 	exprs := []string{"lag(c,3)", "lag(D,3)"}
-	results := [][]any{{3.0, 1.0}, {"3", "20230228"}}
+	results := [][]any{{3.0, 1.0}, {"3.00", "20230228"}}
 
 	for ind, expr := range exprs {
 		act := tester(expr, pipe)
 		assert.ElementsMatch(t, results[ind], act)
 	}
+}
+
+// TestEvaluate_toFloat_cat tests toFloat, and cat()
+func TestEvaluate_toFloat_cat(t *testing.T) {
+	Verbose = false
+	dataC := "1, 2"
+	dataD := "'34', '50'"
+	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "s"})
+
+	exprs := []string{"toFloat(c)"}
+	results := [][]any{{1.0, 2.0}}
+	for ind, expr := range exprs {
+		act := tester(expr, pipe)
+		assert.ElementsMatch(t, results[ind], act)
+	}
+
+	root := &OpNode{Expression: "cat(c)"}
+	e := Expr2Tree(root)
+	assert.Nil(t, e)
+
+	e = Evaluate(root, pipe)
+	assert.Nil(t, e)
+	assert.Equal(t, root.Role, FRCat)
+
+	e = AddToPipe(root, "catval", pipe)
+	assert.Nil(t, e)
+
+	assert.Equal(t, pipe.Get("catval").FT.Role, FRCat)
 }
 
 // TestEvaluate3 tests toString and toDate functions
@@ -258,6 +286,8 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
+		"prodAfter(D,100)",
+		"prodBefore(D,0)",
 		"lag(c,42)",
 		"c+D",
 		"cumeBefore(c,42)",
@@ -298,6 +328,8 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{10, 100},
+		{0, 3},
 		{42, 1},
 		{4, 12},
 		{42, 1},

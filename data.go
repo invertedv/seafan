@@ -1088,6 +1088,8 @@ func Any2String(inVal any) any {
 		return x
 	case time.Time:
 		return x.Format("1/2/2006")
+	case float32, float64:
+		return fmt.Sprintf("%0.2f", x)
 	default:
 		return fmt.Sprintf("%v", x)
 	}

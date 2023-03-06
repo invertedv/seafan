@@ -27,7 +27,7 @@ r2,float64,S,float64,float64,$
 dateAdd,time.Time,R,time.Time,int32,$
 toDate,time.Time,R,string,,$
 toString,string,R,any$
-toFloat,float64,R,,,$
+toFloat,float64,R,any,,$
 toInt,int32,R,,,$
 cat,any,R,any$
 +,float64,R,float64,float64$

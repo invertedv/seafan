@@ -68,16 +68,18 @@ const (
 //   - log(<expr>)
 //   - lag(<expr>,<missing>), where <missing> is used for the first element.
 //   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
-//   - row(<expr>) row number in pipeline (starts with 0)
+//   - row(<expr>) row number in pipeline. Row starts as 0 and is continuous.
 //   - countAfter(<expr>), countBefore(<expr>) is the number of rows after (before) the current row.
 //   - cumAfter(<expr>,<missing>), cumBefore(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
 //   - prodAfter(<expr>,<missing>), prodBefore(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
 //     and <missing> is used for the last (first) element.
 //   - index(<expr>,<index>) returns <expr> in the order of <index>
-//   - cat(<expr>) converts a continuous field, <expr>, to a categorical one.
+//   - cat(<expr>) converts <expr> to a categorical field. Only applicable to continuous fields.
 //   - toDate(<expr>) converts a string field to a date
-//   - toString(<expr>,<dec>) converts a float to a string with <dec> places after the decimal
-//   - dateAdd(<date>,<months>) addes <months> to the date, <date>
+//   - toString(<expr>) converts <expr> to string
+//   - toFloat(<expr>) converts <expr> to float
+//   - toInt(<expr>) converts <expr> to int.  Same as cat().
+//   - dateAdd(<date>,<months>) adds <months> to the date, <date>
 //
 // The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
 // countAfter, countBefore do NOT include the current row.
@@ -688,68 +690,20 @@ func dateAddMonths(node *OpNode) error {
 	return nil
 }
 
-// toDate converts a string to a date.
-func toDate(node *OpNode) error {
-	if node.Inputs[0].Raw.Kind != reflect.String {
-		return fmt.Errorf("toDate requires string input")
-	}
-
-	n := node.Inputs[0].Raw.Len()
-	xOut := make([]any, n)
-
-	for ind := 0; ind < n; ind++ {
-		xOut[ind] = Any2Date(node.Inputs[0].Raw.Data[ind])
-	}
-
-	node.Raw = NewRaw(xOut, nil)
-
-	return nil
-}
-
-// toString converts Raw to string
-func toString(node *OpNode) error {
-	const nDecimal = 2
-	n := node.Inputs[0].Raw.Len()
-	xOut := make([]any, n)
-
-	for ind := 0; ind < n; ind++ {
-		switch x := node.Inputs[0].Raw.Data[ind].(type) {
-		case float64:
-			fmtx := fmt.Sprintf("%%0.%df", nDecimal)
-			xOut[ind] = fmt.Sprintf(fmtx, x)
-		case time.Time:
-			xOut[ind] = x.Format("1/2/2006")
-		default:
-			xOut[ind] = fmt.Sprintf("%v", x)
-		}
-	}
-
-	node.Raw = NewRaw(xOut, nil)
-
-	return nil
-}
-
-func toCat(node *OpNode) error {
-	node.Role = FRCat
-
+// toWhatever attempts to convert the values in node to kind
+func toWhatever(node *OpNode, kind reflect.Kind) error {
 	xIn := node.Inputs[0].Raw.Data
 	n := len(xIn)
 	xOut := make([]any, n)
 
-	// if float then convert to int
-	cur := node.Inputs[0].Raw.Kind
-	if cur == reflect.Float64 || cur == reflect.Float32 {
-		for ind := 0; ind < n; ind++ {
-			xOut[ind] = Any2Kind(xIn[ind], reflect.Int64)
+	for ind := 0; ind < n; ind++ {
+		val := Any2Kind(xIn[ind], kind)
+
+		if val == nil {
+			return fmt.Errorf("conversion to %v failed", kind)
 		}
 
-		node.Raw = NewRaw(xOut, nil)
-
-		return nil
-	}
-
-	for ind := 0; ind < n; ind++ {
-		xOut[ind] = xIn[ind]
+		xOut[ind] = val
 	}
 
 	node.Raw = NewRaw(xOut, nil)
@@ -770,11 +724,15 @@ func evalFunction(node *OpNode) error {
 	case "dateAdd":
 		return dateAddMonths(node)
 	case "toDate":
-		return toDate(node)
+		return toWhatever(node, reflect.Struct)
 	case "toString":
-		return toString(node)
-	case "cat":
-		return toCat(node)
+		return toWhatever(node, reflect.String)
+	case "toFloat":
+		node.Role = FRCts
+		return toWhatever(node, reflect.Float64)
+	case "toInt", "cat":
+		node.Role = FRCat
+		return toWhatever(node, reflect.Int32)
 	}
 
 	if node.Func != nil && node.Func.Level == 'S' {
@@ -792,14 +750,16 @@ func evalFunction(node *OpNode) error {
 	case "cumeAfter":
 		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "sum")
 	case "prodAfter":
-		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "prod")
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "product")
 	case "countAfter":
 		node.Raw, err = node.Inputs[0].Raw.CumeAfter(nil, "count")
 	case "cumeBefore":
 		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "sum")
 	case "prodBefore":
-		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "prod")
-	case "countBefore", "row":
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "product")
+	case "countBefore":
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore(nil, "count")
+	case "row":
 		node.Raw, err = node.Inputs[0].Raw.CumeBefore(nil, "count")
 	case "lag":
 		node.Raw, err = node.Inputs[0].Raw.Lag(node.Inputs[1].Raw.Data[0])
@@ -899,7 +859,7 @@ func evalOpsCat(node *OpNode) error {
 	return nil
 }
 
-// consistent checks that the Inputs are consistent with what's needed
+// consistent checks that the Inputs are consistent with what's needed as specified in node.Func.args
 func consistent(node *OpNode) error {
 	if node.Func == nil {
 		return nil
@@ -982,6 +942,10 @@ func evalOps(node *OpNode) error {
 		case "*":
 			node.Raw.Data[ind] = x0.(float64) * x1.(float64)
 		case "/":
+			if x1.(float64) == 0.0 {
+				return fmt.Errorf("divide by zero")
+			}
+
 			node.Raw.Data[ind] = x0.(float64) / x1.(float64)
 		}
 
@@ -1001,7 +965,7 @@ func evalOps(node *OpNode) error {
 //  2. Populate the values from a Pipeline using Evaluate.
 //  3. Add the values to the Pipeline using AddToPipe
 //
-// Note, you can access the values after Evaluate without adding the field to the Pipeline from the Value element
+// Note, you can access the values after Evaluate without adding the field to the Pipeline from the *Raw item
 // of the root node.
 func Evaluate(curNode *OpNode, pipe Pipeline) error {
 	// recurse to evaluate from bottom up
@@ -1072,6 +1036,9 @@ func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
 	if rootNode.Raw.Len() > 1 && rootNode.Raw.Len() != pipe.Rows() {
 		return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), rootNode.Raw.Len())
 	}
+
+	// drop if already there
+	_ = pipe.GData().Drop(fieldName)
 
 	rawx := rootNode.Raw.Data
 	if len(rawx) == 1 {
