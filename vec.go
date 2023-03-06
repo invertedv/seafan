@@ -15,6 +15,7 @@ type VecData struct {
 	epochCount int    // current epoch
 	ftypes     FTypes // user input selections
 	callback   Opts   // user callbacks executed at the start of Init()
+	keepRaw    bool   // if true, *Raw data is retained
 	name       string // pipeline name
 }
 
@@ -30,6 +31,10 @@ func NewVecData(name string, data *GData, opts ...Opts) *VecData {
 	}
 
 	return vec
+}
+
+func (vec *VecData) GetKeepRaw() bool {
+	return vec.keepRaw
 }
 
 func (vec *VecData) Slice(sl Slicer) (Pipeline, error) {

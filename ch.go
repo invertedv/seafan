@@ -23,8 +23,9 @@ type ChData struct {
 	data       *GData        // processed data
 	epochCount int           // current epoch
 	ftypes     FTypes        // user input selections
-	callback   Opts          // user callbacks executed at the start of Init()
-	name       string        // pipeline name
+	keepRaw    bool
+	callback   Opts   // user callbacks executed at the start of Init()
+	name       string // pipeline name
 }
 
 func NewChData(name string, opts ...Opts) *ChData {
@@ -34,6 +35,11 @@ func NewChData(name string, opts ...Opts) *ChData {
 	}
 
 	return ch
+}
+
+// GetKeepRaw returns true if *Raw data is retained
+func (ch *ChData) GetKeepRaw() bool {
+	return ch.keepRaw
 }
 
 // GetFTypes returns FTypes for ch Pipeline.
@@ -168,11 +174,11 @@ func (ch *ChData) Init() (err error) {
 
 		switch ft.Role {
 		case FRCts:
-			if err = gd.AppendC(trans[ind], nm, ft.Normalized, ft.FP); err != nil {
+			if err = gd.AppendC(trans[ind], nm, ft.Normalized, ft.FP, ch.keepRaw); err != nil {
 				return Wrapper(err, "(*ChData).Init")
 			}
 		default:
-			if err = gd.AppendD(trans[ind], names[ind], ft.FP); err != nil {
+			if err = gd.AppendD(trans[ind], names[ind], ft.FP, ch.keepRaw); err != nil {
 				return Wrapper(err, "(*ChData).Init")
 			}
 		}

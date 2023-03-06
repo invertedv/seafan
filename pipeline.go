@@ -30,6 +30,7 @@ type Pipeline interface {
 	FieldList() []string                    // fields available
 	GData() *GData                          // return underlying GData
 	Get(field string) *GDatum               // return data for field
+	GetKeepRaw() bool                       // returns whether keep raw data
 	Slice(sl Slicer) (Pipeline, error)      // slice the pipeline
 	Shuffle()                               // shuffle data
 	Describe(field string, topK int) string // describes a field
@@ -62,6 +63,18 @@ func WithCycle(cycle bool) Opts {
 		switch d := c.(type) {
 		case *ChData:
 			d.cycle = cycle
+		}
+	}
+
+	return f
+}
+
+// WithKeepRaw sets bool whether to keep the *Raw data in the pipeline.
+func WithKeepRaw(keepRaw bool) Opts {
+	f := func(c Pipeline) {
+		switch d := c.(type) {
+		case *ChData:
+			d.keepRaw = keepRaw
 		}
 	}
 
@@ -270,7 +283,7 @@ func WithReader(rdr any) Opts {
 
 // SQLToPipe creates a pipe from the query sql
 // Optional fts specifies the FTypes, usually to match an existing pipeline.
-func SQLToPipe(sql string, fts FTypes, conn *chutils.Connect) (pipe Pipeline, err error) {
+func SQLToPipe(sql string, fts FTypes, keepRaw bool, conn *chutils.Connect) (pipe Pipeline, err error) {
 	rdr := s.NewReader(sql, conn)
 	defer func() { _ = rdr.Close() }()
 
@@ -285,6 +298,7 @@ func SQLToPipe(sql string, fts FTypes, conn *chutils.Connect) (pipe Pipeline, er
 	}
 
 	WithReader(rdr)(pipe)
+	WithKeepRaw(keepRaw)(pipe)
 
 	WithBatchSize(0)(pipe)
 	if e := pipe.Init(); e != nil {
@@ -296,7 +310,7 @@ func SQLToPipe(sql string, fts FTypes, conn *chutils.Connect) (pipe Pipeline, er
 
 // CSVToPipe creates a pipe from a CSV file
 // Optional fts specifies the FTypes, usually to match an existing pipeline.
-func CSVToPipe(csvFile string, fts FTypes) (pipe Pipeline, err error) {
+func CSVToPipe(csvFile string, fts FTypes, keepRaw bool) (pipe Pipeline, err error) {
 	const tol = 0.98
 
 	handle, ex := os.Open(csvFile)
@@ -328,6 +342,8 @@ func CSVToPipe(csvFile string, fts FTypes) (pipe Pipeline, err error) {
 	WithReader(rdr)(pipe)
 
 	WithBatchSize(0)(pipe)
+	WithKeepRaw(keepRaw)(pipe)
+
 	if e := pipe.Init(); e != nil {
 		return nil, e
 	}
@@ -460,12 +476,12 @@ func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) 
 	gdata := &GData{}
 
 	// skip joinField here
-	if e := addRaw(gdata, joinRaw1, field1, pipe1.GetFTypes(), ""); e != nil {
+	if e := addRaw(gdata, joinRaw1, field1, pipe1.GetFTypes(), "", pipe1.GetKeepRaw()); e != nil {
 		return nil, e
 	}
 
 	// include joinField here
-	if e := addRaw(gdata, joinRaw2, field2, pipe2.GetFTypes(), joinField); e != nil {
+	if e := addRaw(gdata, joinRaw2, field2, pipe2.GetFTypes(), joinField, pipe1.GetKeepRaw()); e != nil {
 		return nil, e
 	}
 
@@ -481,7 +497,7 @@ func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) 
 //   - fts - the FType of the fields
 //
 // If joinField is in fieldNames, it is not added to gdOutput
-func addRaw(gdOutput *GData, inData [][]any, fieldNames []string, fts FTypes, joinField string) error {
+func addRaw(gdOutput *GData, inData [][]any, fieldNames []string, fts FTypes, joinField string, keepRaw bool) error {
 	for col := 0; col < len(fieldNames); col++ {
 		rawcol := NewRaw(inData[col], nil)
 		ft := fts[col]
@@ -493,11 +509,11 @@ func addRaw(gdOutput *GData, inData [][]any, fieldNames []string, fts FTypes, jo
 
 		switch ft.Role {
 		case FRCat:
-			if e := gdOutput.AppendD(rawcol, fieldNames[col], ft.FP); e != nil {
+			if e := gdOutput.AppendD(rawcol, fieldNames[col], ft.FP, keepRaw); e != nil {
 				return fmt.Errorf("addRaw error AppendD: %s", ft.Name)
 			}
 		default:
-			if e := gdOutput.AppendC(rawcol, fieldNames[col], ft.Normalized, ft.FP); e != nil {
+			if e := gdOutput.AppendC(rawcol, fieldNames[col], ft.Normalized, ft.FP, keepRaw); e != nil {
 				return fmt.Errorf("addRaw error AppendC: %s", ft.Name)
 			}
 		}

@@ -21,7 +21,7 @@ func TestGData_UpdateFts(t *testing.T) {
 	}
 
 	gd := NewGData()
-	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 	assert.Nil(t, e)
 
 	newFt := &FType{
@@ -37,7 +37,7 @@ func TestGData_UpdateFts(t *testing.T) {
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, gd.data[0].Data.([]float64), newGd.data[0].Data.([]float64))
 	gd = NewGData()
-	e = gd.AppendC(NewRaw(x0, nil), "Field0", true, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", true, nil, false)
 	assert.Nil(t, e)
 
 	fp := &FParam{
@@ -68,7 +68,7 @@ func TestGData_UpdateFts2(t *testing.T) {
 	gd := NewGData()
 
 	xt := []any{"d", "e", "a", "b", "c"}
-	e = gd.AppendD(NewRaw(xt, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(xt, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 
 	xt1 := []any{"e", "b", "c", "d"}
@@ -104,21 +104,21 @@ func TestGData_AppendC(t *testing.T) {
 		x0 = append(x0, float64(ind))
 	}
 
-	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 	assert.Nil(t, e)
 
 	xt := []any{"a", "b", "c"}
-	e = gd.AppendD(NewRaw(xt, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(xt, nil), "Field1", nil, false)
 
 	assert.NotNil(t, e)
 
 	gd = NewGData()
-	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil, false)
 
 	assert.Nil(t, e)
 
@@ -139,7 +139,7 @@ func TestGData_AppendC(t *testing.T) {
 		Default:  nil,
 		Lvl:      nil,
 	}
-	e = gd.AppendC(NewRaw(x0, nil), "Field2", true, fp)
+	e = gd.AppendC(NewRaw(x0, nil), "Field2", true, fp, false)
 
 	assert.Nil(t, e)
 
@@ -160,7 +160,7 @@ func TestGData_AppendC(t *testing.T) {
 		Lvl:      lvl,
 	}
 	x3 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "r"}
-	e = gd.AppendD(NewRaw(x3, nil), "Field3", fp)
+	e = gd.AppendD(NewRaw(x3, nil), "Field3", fp, false)
 
 	assert.Nil(t, e)
 
@@ -204,12 +204,12 @@ func TestGData_Shuffle(t *testing.T) {
 		x0 = append(x0, float64(ind))
 	}
 
-	e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
 	exp := []int32{0, 1, 2, 0, 1, 2, 0, 2, 2, 2}
-	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 	e = gd.MakeOneHot("Field1", "Field2")
 	assert.Nil(t, e)
@@ -246,11 +246,11 @@ func TestGData_Sort(t *testing.T) {
 		expX0 = append(expX0, float64(ind))
 	}
 
-	e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e := gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil, false)
 	expX1 := []int32{0, 0, 0, 1, 1, 2, 2, 2, 2, 2}
 
 	assert.Nil(t, e)
@@ -284,13 +284,13 @@ func TestGData_GetRaw(t *testing.T) {
 		x0 = append(x0, float64(9-ind))
 	}
 
-	e := gd.AppendC(NewRaw(x0, nil), "Field0", true, nil)
+	e := gd.AppendC(NewRaw(x0, nil), "Field0", true, nil, false)
 	assert.Nil(t, e)
-	e = gd.AppendC(NewRaw(x0, nil), "Field3", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field3", false, nil, false)
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 
 	e = gd.MakeOneHot("Field1", "Field2")
@@ -332,11 +332,11 @@ func TestGData_Read(t *testing.T) {
 	}
 
 	gd := NewGData()
-	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 
 	c, e := gd.CountLines()
@@ -395,17 +395,17 @@ func TestGData_TableSpec(t *testing.T) {
 	}
 
 	gd := NewGData()
-	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil)
+	e = gd.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
 	assert.Nil(t, e)
 
 	x1 := []any{"a", "b", "c", "a", "b", "c", "a", "c", "c", "c"}
-	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil)
+	e = gd.AppendD(NewRaw(x1, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 	e = gd.MakeOneHot("Field1", "Field3")
 	assert.Nil(t, e)
 
 	x2 := []any{int32(0), int32(1), int32(2), int32(0), int32(1), int32(2), int32(0), int32(1), int32(2), int32(3)}
-	e = gd.AppendD(NewRaw(x2, nil), "Field2", nil)
+	e = gd.AppendD(NewRaw(x2, nil), "Field2", nil, false)
 	assert.Nil(t, e)
 
 	td := gd.TableSpec()

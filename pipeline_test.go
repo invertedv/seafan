@@ -25,7 +25,7 @@ func ExampleCSVToPipe() {
 	}
 
 	data := os.Getenv("data") + "/pipeTest1.csv"
-	pipe, e := CSVToPipe(data, FTypes{ft})
+	pipe, e := CSVToPipe(data, FTypes{ft}, false)
 	if e != nil {
 		panic(e)
 	}
@@ -73,7 +73,7 @@ func ExampleJoin() {
 		FP:         nil,
 	}
 	data := os.Getenv("data")
-	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", FTypes{ft})
+	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", FTypes{ft}, false)
 	if e != nil {
 		panic(e)
 	}
@@ -83,7 +83,7 @@ func ExampleJoin() {
 		panic(e)
 	}
 
-	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", FTypes{ft})
+	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", FTypes{ft}, false)
 	if e != nil {
 		panic(e)
 	}
@@ -111,12 +111,12 @@ func ExampleJoin_dateJoin() {
 
 	// In this example, we don't need to specify an FType since dates will be FRCat.
 	data := os.Getenv("data")
-	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
 	if e != nil {
 		panic(e)
 	}
 
-	pipe1, e := CSVToPipe(data+"/pipeTest3.csv", nil)
+	pipe1, e := CSVToPipe(data+"/pipeTest3.csv", nil, false)
 	if e != nil {
 		panic(e)
 	}
@@ -154,7 +154,7 @@ func ExampleJoin_cat() {
 	Verbose = false
 
 	data := os.Getenv("data")
-	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	pipe2, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
 	if e != nil {
 		panic(e)
 	}
@@ -179,7 +179,7 @@ func ExampleJoin_cat() {
 		panic(e)
 	}
 
-	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", nil)
+	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", nil, false)
 	if e != nil {
 		panic(e)
 	}
@@ -194,7 +194,9 @@ func ExampleJoin_cat() {
 	}
 
 	// note, the field "row" is not being joined on but is in both pipes -- need to drop it from one of them
-	pipe1.GData().Drop("row")
+	if e := pipe1.GData().Drop("row"); e != nil {
+		panic(e)
+	}
 
 	joinPipe, e := Join(pipe1, pipe2, "rowCat")
 	if e != nil {

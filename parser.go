@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	// All the functions that parser supports are defined here
+	// FunctionsStr lists the functions that parser supports, the number and types of arguments, type of return
 	//go:embed strings/functions.txt
 	FunctionsStr string
 
@@ -856,7 +856,13 @@ func fromPipeline(node *OpNode, pipe Pipeline) error {
 		return fmt.Errorf("%s not in pipeline", node.Expression)
 	}
 
-	goNegative(node.Raw, node.Neg)
+	// if node.Neg then need to copy data into node.Raw so it doesn't affect the data in the Pipeline
+	if node.Neg {
+		xOut := make([]any, node.Raw.Len())
+		copy(xOut, node.Raw.Data)
+		node.Raw = NewRaw(xOut, nil)
+		goNegative(node.Raw, node.Neg)
+	}
 
 	ft := pipe.GetFType(field)
 	if ft.Role == FROneHot || ft.Role == FREmbed {
@@ -1087,10 +1093,10 @@ func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
 	}
 
 	if role == FRCat {
-		return pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, nil)
+		return pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, nil, pipe.GetKeepRaw())
 	}
 
-	return pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, false, nil)
+	return pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, false, nil, pipe.GetKeepRaw())
 }
 
 // setValue sets the value of the loop variable

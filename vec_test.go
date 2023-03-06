@@ -13,13 +13,13 @@ func getData(t *testing.T) *GData {
 	x3 := []int32{4, 5, 6, 1, 2, 2, 2}
 
 	gData := NewGData()
-	e := gData.AppendC(NewRawCast(x1, nil), "x1", false, nil)
+	e := gData.AppendC(NewRawCast(x1, nil), "x1", false, nil, false)
 	assert.Nil(t, e)
 
-	e = gData.AppendD(NewRawCast(x2, nil), "x2", nil)
+	e = gData.AppendD(NewRawCast(x2, nil), "x2", nil, false)
 	assert.Nil(t, e)
 
-	e = gData.AppendD(NewRawCast(x3, nil), "x3", nil)
+	e = gData.AppendD(NewRawCast(x3, nil), "x3", nil, false)
 	assert.Nil(t, e)
 
 	e = gData.MakeOneHot("x2", "x2Oh")

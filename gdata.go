@@ -76,7 +76,7 @@ func (gd *GData) check(name string) error {
 }
 
 // AppendC appends a continuous feature
-func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) error {
+func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam, keepRaw bool) error {
 	if e := gd.check(name); e != nil {
 		return e
 	}
@@ -148,6 +148,11 @@ func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) erro
 		FT:      ft,
 		Summary: summ,
 	}
+
+	if keepRaw {
+		c.Raw = raw
+	}
+
 	gd.data = append(gd.data, c)
 	gd.rows = len(c.Data.([]float64))
 
@@ -159,7 +164,7 @@ func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam) erro
 }
 
 // AppendD appends a discrete feature
-func (gd *GData) AppendD(raw *Raw, name string, fp *FParam) error {
+func (gd *GData) AppendD(raw *Raw, name string, fp *FParam, keepRaw bool) error {
 	if e := gd.check(name); e != nil {
 		return e
 	}
@@ -205,6 +210,11 @@ func (gd *GData) AppendD(raw *Raw, name string, fp *FParam) error {
 		DistrD: distr,
 	}
 	d := &GDatum{Data: ds, FT: ft, Summary: summ}
+
+	if keepRaw {
+		d.Raw = raw
+	}
+
 	gd.data = append(gd.data, d)
 	gd.rows = len(d.Data.([]int32))
 
@@ -411,9 +421,17 @@ func (gd *GData) Swap(i, j int) {
 		switch gd.data[ind].FT.Role {
 		case FRCts:
 			gd.data[ind].Data.([]float64)[i], gd.data[ind].Data.([]float64)[j] = gd.data[ind].Data.([]float64)[j], gd.data[ind].Data.([]float64)[i]
+
+			// if *Raw data isn't nil, must swap it, too
+			if gd.data[ind].Raw != nil {
+				gd.data[ind].Raw.Data[i], gd.data[ind].Raw.Data[j] = gd.data[ind].Raw.Data[j], gd.data[ind].Raw.Data[i]
+			}
 		case FRCat:
 			gd.data[ind].Data.([]int32)[i], gd.data[ind].Data.([]int32)[j] = gd.data[ind].Data.([]int32)[j], gd.data[ind].Data.([]int32)[i]
 
+			if gd.data[ind].Raw != nil {
+				gd.data[ind].Raw.Data[i], gd.data[ind].Raw.Data[j] = gd.data[ind].Raw.Data[j], gd.data[ind].Raw.Data[i]
+			}
 		case FROneHot, FREmbed:
 			cats := gd.data[ind].FT.Cats
 			for c := 0; c < cats; c++ {
@@ -498,6 +516,11 @@ func (gd *GData) GetData() []*GDatum {
 // GetRaw returns the raw data for the field.
 func (gd *GData) GetRaw(field string) (*Raw, error) {
 	fd := gd.Get(field)
+
+	if fd.Raw != nil {
+		return fd.Raw, nil
+	}
+
 	if fd == nil {
 		return nil, Wrapper(ErrGData, fmt.Sprintf("(*GData) GetRaw: field %s not field", field))
 	}
@@ -505,13 +528,13 @@ func (gd *GData) GetRaw(field string) (*Raw, error) {
 	case FRCts:
 		switch fd.FT.Normalized {
 		case false:
-			return NewRawCast(fd.Data.([]float64), nil), nil
+			fd.Raw = NewRawCast(fd.Data.([]float64), nil)
 		case true:
 			x := make([]any, gd.rows)
 			for ind := 0; ind < len(x); ind++ {
 				x[ind] = fd.Data.([]float64)[ind]*fd.FT.FP.Scale + fd.FT.FP.Location
 			}
-			return NewRaw(x, nil), nil
+			fd.Raw = NewRaw(x, nil)
 		}
 	case FRCat:
 		key, _ := fd.FT.FP.Lvl.Sort(false, true)
@@ -519,11 +542,12 @@ func (gd *GData) GetRaw(field string) (*Raw, error) {
 		for ind := 0; ind < len(x); ind++ {
 			x[ind] = key[int(fd.Data.([]int32)[ind])]
 		}
-		return NewRaw(x, nil), nil
+		fd.Raw = NewRaw(x, nil)
 	case FROneHot, FREmbed:
 		return gd.GetRaw(fd.FT.From)
 	}
-	return nil, Wrapper(ErrGData, "(*GData) GetRaw: unexpected error")
+
+	return fd.Raw, nil
 }
 
 // UpdateFts produces a new *GData using the given FTypes.  The return only has those fields contained in newFts
@@ -553,11 +577,11 @@ func (gd *GData) UpdateFts(newFts FTypes) (*GData, error) {
 
 		switch newFt.Role {
 		case FRCts:
-			if e := newGd.AppendC(raw, newFt.Name, newFt.Normalized, newFt.FP); e != nil {
+			if e := newGd.AppendC(raw, newFt.Name, newFt.Normalized, newFt.FP, false); e != nil {
 				return nil, e
 			}
 		case FRCat:
-			if e := newGd.AppendD(raw, newFt.Name, newFt.FP); e != nil {
+			if e := newGd.AppendD(raw, newFt.Name, newFt.FP, false); e != nil {
 				return nil, e
 			}
 		}
@@ -732,17 +756,17 @@ func (gd *GData) TableSpec() *chutils.TableDef {
 }
 
 // AppendField adds a field to gd
-func (gd *GData) AppendField(newData *Raw, name string, fRole FRole) error {
+func (gd *GData) AppendField(newData *Raw, name string, fRole FRole, keepRaw bool) error {
 	// drop field if it's already there
 	_ = gd.Drop(name)
 
 	switch fRole {
 	case FRCts:
-		if e := gd.AppendC(newData, name, false, nil); e != nil {
+		if e := gd.AppendC(newData, name, false, nil, keepRaw); e != nil {
 			return e
 		}
 	case FRCat, FROneHot, FREmbed:
-		if e := gd.AppendD(newData, name, nil); e != nil {
+		if e := gd.AppendD(newData, name, nil, keepRaw); e != nil {
 			return e
 		}
 	}

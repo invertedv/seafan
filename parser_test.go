@@ -27,7 +27,7 @@ func ExampleEvaluate_dateAdd() {
 	Verbose = false
 
 	data := os.Getenv("data")
-	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
 	if e != nil {
 		panic(e)
 	}
@@ -61,7 +61,7 @@ func ExampleEvaluate_if() {
 	Verbose = false
 
 	data := os.Getenv("data")
-	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil)
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
 	if e != nil {
 		panic(e)
 	}
@@ -106,8 +106,6 @@ func TestEvaluate_date(t *testing.T) {
 	dataDr := "0.1, .2 "                 // D
 	dataPV := "'0','0'"                  // e
 	pipe := buildPipe([]string{dataCF, dataDr, dataPV}, []string{"s", "f", "s"})
-	x := Functions
-	_ = x
 	exprs := "toDate(c)"
 	results := []any{any(time.Date(2022, 3, 25, 0, 0, 0, 0, time.UTC)),
 		any(time.Date(2023, 2, 28, 0, 0, 0, 0, time.UTC))}
@@ -132,6 +130,7 @@ func TestExpr2Tree(t *testing.T) {
 	results := [][]float64{{0, 1, 0, 0}, {1, 0, 1, 0}, {1, 0, 1, 0}, {0, 0, 0, 1}, {0, 0, 0, 0},
 		{0, 0, 0, 0}, {1, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 1}, {0, 1, 0, 1}, {0, 0, 0, 0}}
 	errs := []bool{false, false, false, false, true, true, false, true, false, false, true}
+
 	for ind, expr := range exprs {
 		root := &OpNode{Expression: expr}
 
@@ -230,6 +229,7 @@ func TestEvaluate_lag(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "s"})
 	exprs := []string{"lag(c,3)", "lag(D,3)"}
 	results := [][]any{{3.0, 1.0}, {"3", "20230228"}}
+
 	for ind, expr := range exprs {
 		act := tester(expr, pipe)
 		assert.ElementsMatch(t, results[ind], act)

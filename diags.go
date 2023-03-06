@@ -561,7 +561,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 	gData := pipeIn.GData()
 	fitRaw := NewRawCast(UnNormalize(fit, obsFit), nil)
 
-	if e := gData.AppendField(fitRaw, name, FRCts); e != nil {
+	if e := gData.AppendField(fitRaw, name, FRCts, pipeIn.GetKeepRaw()); e != nil {
 		return e
 	}
 
