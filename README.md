@@ -21,6 +21,7 @@ Seafan features:
 - Model diagnostics for categorical targets.
   - KS plots
   - Decile plots
+  - Marginal effects plots
 <br><br>
 - Utilities.
   - Plotting wrapper for [plotly](https://github.com/MetalBlueberry/go-plotly) for xy plots.
