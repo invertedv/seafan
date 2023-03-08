@@ -516,6 +516,9 @@ func (gd *GData) GetData() []*GDatum {
 // GetRaw returns the raw data for the field.
 func (gd *GData) GetRaw(field string) (*Raw, error) {
 	fd := gd.Get(field)
+	if fd == nil {
+		return nil, fmt.Errorf("field %s not found", field)
+	}
 
 	if fd.Raw != nil {
 		return fd.Raw, nil
