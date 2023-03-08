@@ -4,8 +4,10 @@ package seafan
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/invertedv/chutils"
 	cf "github.com/invertedv/chutils/file"
@@ -416,7 +418,8 @@ func PipeToCSV(pipe Pipeline, outFile string) error {
 //   - JoinField must be categorical.
 //   - The only field pipe1 and pipe2 can have in common is joinField
 //   - pipe2 must be sorted by the join field. Duplicates in the join field in pipe2 won't work
-func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) {
+//   - if left, then a left join is  done
+func Join(pipe1, pipe2 Pipeline, joinField string, left bool) (joined Pipeline, err error) {
 	gd1, gd2 := pipe1.GData(), pipe2.GData()
 
 	// The safest (though not fastest) way to do this is to recover the raw data from the pipelines
@@ -459,7 +462,36 @@ func Join(pipe1, pipe2 Pipeline, joinField string) (joined Pipeline, err error) 
 		needle := raw1[on1Loc].Data[ind]
 
 		loc2 := locInd(needle, raw2[on2Loc])
+
+		// not there:
 		if loc2 < 0 {
+			if left {
+				for cols := 0; cols < n1; cols++ {
+					joinRaw1[cols] = append(joinRaw1[cols], raw1[cols].Data[ind])
+				}
+
+				for cols := 0; cols < n2; cols++ {
+					var miss any
+					switch raw2[cols].Kind {
+					case reflect.String:
+						// repeat last element for strings... could look for default value
+						miss = raw2[cols].Data[raw2[cols].Len()-1]
+					case reflect.Float64:
+						miss = float64(0)
+					case reflect.Float32:
+						miss = float32(0)
+					case reflect.Int64:
+						miss = int64(0)
+					case reflect.Int32:
+						miss = int32(0)
+					case reflect.Struct:
+						miss = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+					}
+
+					joinRaw2[cols] = append(joinRaw2[cols], miss)
+				}
+			}
+
 			continue
 		}
 

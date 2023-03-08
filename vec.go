@@ -2,6 +2,7 @@ package seafan
 
 import (
 	"fmt"
+	"reflect"
 
 	G "gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
@@ -119,17 +120,6 @@ func (vec *VecData) GetFTypes() FTypes {
 func (vec *VecData) SaveFTypes(fileName string) error {
 	return Wrapper(vec.GetFTypes().Save(fileName), "(*VecData).SaveFTypes")
 }
-
-// returns *FType from user-input FTypes.
-//func (vec *VecData) getFType(feature string) *FType {
-//	for _, ft := range vec.ftypes {
-//		if ft.Name == feature {
-//			return ft
-//		}
-//	}
-//
-//	return nil
-//}
 
 // IsNormalized returns true if the field is normalized.
 func (vec *VecData) IsNormalized(field string) bool {
@@ -275,4 +265,39 @@ func (vec *VecData) IsSorted() bool {
 // SortField returns the name of the sort field.
 func (vec *VecData) SortField() string {
 	return vec.data.SortField()
+}
+
+// VecDataAny builds a pipeline for a slice of vectors ([]any).  The first dimension is the field.
+func VecDataAny(data [][]any, fields []string, ftypes FTypes) (pipe Pipeline, err error) {
+	gd := NewGData()
+	for ind, field := range fields {
+		raw := NewRaw(data[ind], nil)
+
+		role := FRCts
+		if raw.Kind == reflect.String || raw.Kind == reflect.Struct {
+			role = FRCat
+		}
+
+		if ft := ftypes.Get(field); ft != nil {
+			if role != FRCat && role != FRCts {
+				return nil, fmt.Errorf("must be FRCat or FRCts, field %s is not VecDataAny", field)
+			}
+			role = ft.Role
+		}
+
+		if role == FRCat {
+			if e := gd.AppendD(raw, field, nil, true); e != nil {
+				return nil, e
+			}
+			continue
+		}
+
+		if e := gd.AppendC(raw, field, false, nil, true); e != nil {
+			return nil, e
+		}
+	}
+
+	pipe = NewVecData("values", gd)
+
+	return pipe, nil
 }

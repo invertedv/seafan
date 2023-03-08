@@ -631,6 +631,25 @@ func (gd *GData) Drop(field string) error {
 	return nil
 }
 
+// Keep drops all fields not in "fields"
+func (gd *GData) Keep(fields []string) error {
+	newGd := make([]*GDatum, 0)
+
+	for ind := 0; ind < len(fields); ind++ {
+		gdatum := gd.Get(fields[ind])
+
+		if gdatum == nil {
+			return fmt.Errorf("field not found: %s, (*GData) Keep", fields[ind])
+		}
+
+		newGd = append(newGd, gdatum)
+	}
+
+	gd.data = newGd
+
+	return nil
+}
+
 // Read reads row(s) in the format of chutils.  Note: valids are all chutils.Valid.  Invoking Read for the first
 // time causes it to recreate the raw data of existing fields -- so the memory requirement will go up.
 func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []chutils.Valid, err error) {

@@ -87,7 +87,7 @@ func ExampleJoin() {
 	if e != nil {
 		panic(e)
 	}
-	joinPipe, e := Join(pipe1, pipe2, "row")
+	joinPipe, e := Join(pipe1, pipe2, "row", false)
 	if e != nil {
 		panic(e)
 	}
@@ -120,7 +120,7 @@ func ExampleJoin_dateJoin() {
 	if e != nil {
 		panic(e)
 	}
-	joinPipe, e := Join(pipe1, pipe2, "date")
+	joinPipe, e := Join(pipe1, pipe2, "date", false)
 	if e != nil {
 		fmt.Println("oops -- not sorted")
 	}
@@ -130,7 +130,7 @@ func ExampleJoin_dateJoin() {
 		panic(err)
 	}
 
-	joinPipe, e = Join(pipe1, pipe2, "date")
+	joinPipe, e = Join(pipe1, pipe2, "date", false)
 	if e != nil {
 		panic(e)
 	}
@@ -198,7 +198,7 @@ func ExampleJoin_cat() {
 		panic(e)
 	}
 
-	joinPipe, e := Join(pipe1, pipe2, "rowCat")
+	joinPipe, e := Join(pipe1, pipe2, "rowCat", false)
 	if e != nil {
 		panic(e)
 	}
