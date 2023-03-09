@@ -77,6 +77,8 @@ func WithKeepRaw(keepRaw bool) Opts {
 		switch d := c.(type) {
 		case *ChData:
 			d.keepRaw = keepRaw
+		case *VecData:
+			d.keepRaw = keepRaw
 		}
 	}
 
@@ -518,6 +520,7 @@ func Join(pipe1, pipe2 Pipeline, joinField string, left bool) (joined Pipeline, 
 	}
 
 	joined = NewVecData("joined", gdata)
+	WithKeepRaw(pipe1.GetKeepRaw())(joined)
 
 	return joined, nil
 }
