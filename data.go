@@ -438,7 +438,7 @@ func (r *Raw) Max() (*Raw, error) {
 
 // Min returns min
 func (r *Raw) Min() (*Raw, error) {
-	var s any
+	s := r.Data[0]
 	for _, val := range r.Data {
 		gt, e := GTAny(val, s)
 		if e != nil {
