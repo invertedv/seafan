@@ -215,3 +215,36 @@ func ExampleJoin_cat() {
 	// # Rows:  4
 	// common row values:  [1 2 3 4]
 }
+
+// This example shows how to append one pipeline to another
+func ExampleAppend() {
+	Verbose = false
+
+	data := os.Getenv("data")
+	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	pipe2, e := CSVToPipe(data+"/pipeTest4.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	pipeOut, e := Append(pipe1, pipe2)
+	if e != nil {
+		panic(e)
+	}
+
+	fmt.Println("pipe1 rows: ", pipe1.Rows())
+	fmt.Println("pipe2 rows: ", pipe2.Rows())
+	fmt.Println("appended pipe rows: ", pipeOut.Rows())
+	fmt.Println("# of fields: ", len(pipeOut.FieldList()))
+	fmt.Println("Field3: ", pipeOut.Get("Field3").Raw.Data)
+	// output:
+	// pipe1 rows:  7
+	// pipe2 rows:  2
+	// appended pipe rows:  9
+	// # of fields:  3
+	// Field3:  [3 2.2 1.9 10.1 12.99 100 1001.4 -1 -2]
+}

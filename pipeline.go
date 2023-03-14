@@ -615,3 +615,42 @@ func disjoint(fields1, fields2 []string, joinField string) error {
 
 	return nil
 }
+
+// Append appends pipe2 to the bottom of pipe1. pipe2 must have all the fields of pipe1 but may have extra,
+// which are not in the returned pipe
+func Append(pipe1, pipe2 Pipeline) (Pipeline, error) {
+	if pipe1 == nil {
+		return pipe2, nil
+	}
+
+	flds1 := pipe1.FieldList()
+	flds2 := pipe2.FieldList()
+	for _, fld := range flds1 {
+		if searchSlice(fld, flds2) < 0 {
+			return nil, fmt.Errorf("field %s not in append pipe", fld)
+		}
+	}
+
+	gd1 := pipe1.GData()
+	gd2 := pipe2.GData()
+	forVec := make([][]any, gd1.FieldCount())
+	for ind := 0; ind < len(flds1); ind++ {
+		var (
+			d1, d2 *Raw
+			e      error
+		)
+		fld := flds1[ind]
+		if d1, e = gd1.GetRaw(fld); e != nil {
+			return nil, e
+		}
+
+		if d2, e = gd2.GetRaw(fld); e != nil {
+			return nil, e
+		}
+
+		data := append(d1.Data, d2.Data...)
+		forVec[ind] = data
+	}
+
+	return VecDataAny(forVec, flds1, nil)
+}
