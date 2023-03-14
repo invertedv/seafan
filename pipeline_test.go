@@ -248,3 +248,29 @@ func ExampleAppend() {
 	// # of fields:  3
 	// Field3:  [3 2.2 1.9 10.1 12.99 100 1001.4 -1 -2]
 }
+
+func ExampleSubset() {
+	Verbose = false
+
+	data := os.Getenv("data")
+	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	indKeep := []int{0, 3}
+	pipeSubset, e := Subset(pipe1, indKeep)
+
+	if e != nil {
+		panic(e)
+	}
+
+	var check *Raw
+	if check, e = pipeSubset.GData().GetRaw("Field1"); e != nil {
+		panic(e)
+	}
+
+	fmt.Println("Field1: ", check.Data)
+	// output:
+	// Field1:  [a x]
+}

@@ -654,3 +654,38 @@ func Append(pipe1, pipe2 Pipeline) (Pipeline, error) {
 
 	return VecDataAny(forVec, flds1, nil)
 }
+
+// Subset subsets the pipeline to the rows in keepRows
+func Subset(inPipe Pipeline, keepRows []int) (outPipe Pipeline, err error) {
+	if inPipe == nil {
+		return nil, nil
+	}
+
+	flds := inPipe.FieldList()
+	outAny := make([][]any, len(flds))
+	gd := inPipe.GData()
+	for ind := 0; ind < len(flds); ind++ {
+		var (
+			raw  *Raw
+			e    error
+			data []any
+		)
+		raw, e = gd.GetRaw(flds[ind])
+		if e != nil {
+			return nil, e
+		}
+
+		for indx := 0; indx < len(keepRows); indx++ {
+			indKeep := keepRows[indx]
+			if indKeep >= len(raw.Data) {
+				return nil, fmt.Errorf("index out of range: %d to array of length %d", indKeep, len(raw.Data))
+			}
+
+			data = append(data, raw.Data[indKeep])
+		}
+
+		outAny[ind] = data
+	}
+
+	return VecDataAny(outAny, flds, inPipe.GetFTypes())
+}
