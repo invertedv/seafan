@@ -652,7 +652,7 @@ func Append(pipe1, pipe2 Pipeline) (Pipeline, error) {
 		forVec[ind] = data
 	}
 
-	return VecDataAny(forVec, flds1, nil)
+	return VecFromAny(forVec, flds1, nil)
 }
 
 // Subset subsets the pipeline to the rows in keepRows
@@ -687,7 +687,7 @@ func Subset(inPipe Pipeline, keepRows []int) (outPipe Pipeline, err error) {
 		outAny[ind] = data
 	}
 
-	return VecDataAny(outAny, flds, inPipe.GetFTypes())
+	return VecFromAny(outAny, flds, inPipe.GetFTypes())
 }
 
 // Where restricts inPipe to rows where field is in equalTo

@@ -375,7 +375,6 @@ func TestGData_Read(t *testing.T) {
 
 	e = gd.Drop("Field1")
 	assert.Nil(t, e)
-	ind = 0
 	e = gd.Reset()
 	assert.Nil(t, e)
 

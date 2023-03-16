@@ -10,6 +10,7 @@ min,any,S,any,,$
 std,float64,S,float64,,$
 median,float64,S,float64,,$
 count,int32,S,,,$
+range,int32,R,float64,float64,$
 cumeAfter,float64,R,float64,float64,$
 countAfter,float64,R,any,,$
 cumeBefore,float64,R,float64,float64,$

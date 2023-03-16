@@ -79,7 +79,7 @@ func ExampleJoin() {
 	}
 
 	// sort pipe2 by join field
-	if e := pipe2.GData().Sort("row", true); e != nil {
+	if e = pipe2.GData().Sort("row", true); e != nil {
 		panic(e)
 	}
 
@@ -151,6 +151,11 @@ func ExampleJoin_dateJoin() {
 // This example shows another way to accomplish a join if the join field is already in the pipe and is
 // not FRCat.  The parser function cat() converts a FRCts field to FRCat.
 func ExampleJoin_cat() {
+	var (
+		outPipe1, outPipe2 Pipeline
+		err                error
+	)
+
 	Verbose = false
 
 	data := os.Getenv("data")
@@ -162,20 +167,20 @@ func ExampleJoin_cat() {
 	// set up parser to execute a function converted field "row" to categorical
 	root := &OpNode{Expression: "cat(row)"}
 
-	if err := Expr2Tree(root); err != nil {
+	if err = Expr2Tree(root); err != nil {
 		panic(err)
 	}
 
-	if err := Evaluate(root, pipe2); err != nil {
+	if err = Evaluate(root, pipe2); err != nil {
 		panic(err)
 	}
 
-	if err := AddToPipe(root, "rowCat", pipe2); err != nil {
+	if outPipe2, err = AddToPipe(root, "rowCat", pipe2); err != nil {
 		panic(err)
 	}
 
 	// now sort pipe by our new field
-	if e := pipe2.GData().Sort("rowCat", true); e != nil {
+	if e = pipe2.GData().Sort("rowCat", true); e != nil {
 		panic(e)
 	}
 
@@ -185,20 +190,20 @@ func ExampleJoin_cat() {
 	}
 
 	// create the field in the next pipe, too.
-	if err := Evaluate(root, pipe1); err != nil {
+	if err = Evaluate(root, pipe1); err != nil {
 		panic(err)
 	}
 
-	if err := AddToPipe(root, "rowCat", pipe1); err != nil {
+	if outPipe1, err = AddToPipe(root, "rowCat", pipe1); err != nil {
 		panic(err)
 	}
 
 	// note, the field "row" is not being joined on but is in both pipes -- need to drop it from one of them
-	if e := pipe1.GData().Drop("row"); e != nil {
+	if e = pipe1.GData().Drop("row"); e != nil {
 		panic(e)
 	}
 
-	joinPipe, e := Join(pipe1, pipe2, "rowCat", false)
+	joinPipe, e := Join(outPipe1, outPipe2, "rowCat", false)
 	if e != nil {
 		panic(e)
 	}

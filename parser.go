@@ -599,6 +599,36 @@ func sseMAD(y, yhat *Raw, op string) float64 {
 	return val
 }
 
+// generate a slice that runs from start to end
+func ranger(start, end any) (*Raw, error) {
+	beg := int32(start.(float64))
+	finish := int32(end.(float64))
+	if beg == finish {
+		return nil, fmt.Errorf("empty range")
+	}
+
+	var data []any
+
+	var delta int32 = 1
+	if finish < beg {
+		delta = -1
+	}
+
+	ind, ok := beg, true
+	for ok {
+		data = append(data, ind)
+		ind += delta
+
+		if ind == finish {
+			ok = false
+		}
+	}
+
+	rng := NewRaw(data, nil)
+
+	return rng, nil
+}
+
 // EvalSFunction evaluates a summary function. A summary function returns a single value.
 func EvalSFunction(node *OpNode) error {
 	const irrGuess = 0.005
@@ -617,8 +647,6 @@ func EvalSFunction(node *OpNode) error {
 		result, e = node.Inputs[0].Raw.Mean()
 	case "std":
 		result, e = node.Inputs[0].Raw.Std()
-		//	case "median":
-		//		node.Value = []float64{stat.Quantile(medianQ, stat.Empirical, node.Inputs[0].Value, nil)}
 	case "count":
 		result = NewRaw([]any{node.Inputs[0].Raw.Len()}, nil)
 	case "npv":
@@ -765,6 +793,8 @@ func evalFunction(node *OpNode) error {
 		node.Raw, err = node.Inputs[0].Raw.Lag(node.Inputs[1].Raw.Data[0])
 	case "pow":
 		node.Raw, err = node.Inputs[0].Raw.Pow(node.Inputs[1].Raw)
+	case "range":
+		node.Raw, err = ranger(node.Inputs[0].Raw.Data[0], node.Inputs[1].Raw.Data[0])
 	case "index":
 		node.Raw, err = node.Inputs[0].Raw.Index(node.Inputs[1].Raw)
 	case "exp":
@@ -958,7 +988,7 @@ func evalOps(node *OpNode) error {
 	return nil
 }
 
-// Evaluate evaluates an expression parsed by Expr2Tree.
+// Evaluate evaluates an expression parsed bypipe( Expr2Tree.
 // The user calls Evaluate with the top node as returned by Expr2Tree
 // To add a field to a pipeline:
 //  1. Create the *OpNode tree to evaluate the expression using Expr2Tree
@@ -1018,6 +1048,38 @@ func matchedParen(expr string) error {
 	return nil
 }
 
+func one2Many(pipe Pipeline, rows int) (Pipeline, error) {
+	if pipe.Rows() != 1 {
+		return nil, fmt.Errorf("one2Many needs a pipe of Rows()=1")
+	}
+
+	gd := pipe.GData()
+	dataNew := make([][]any, gd.FieldCount())
+	for ind, fld := range gd.FieldList() {
+		gdata, err := gd.GetRaw(fld)
+		if err != nil {
+			return nil, err
+		}
+
+		data := make([]any, rows)
+
+		for indx := 0; indx < rows; indx++ {
+			data[indx] = gdata.Data[0]
+		}
+
+		dataNew[ind] = data
+	}
+
+	newpipe, err := VecFromAny(dataNew, gd.FieldList(), pipe.GetFTypes())
+	if err != nil {
+		return nil, err
+	}
+
+	WithKeepRaw(true)(newpipe)
+
+	return newpipe, nil
+}
+
 // AddToPipe adds the Value slice in rootNode to pipe. The field will have name fieldName.
 // To do this:
 //  1. Create the *OpNode tree to evaluate the expression using Expr2Tree
@@ -1028,13 +1090,19 @@ func matchedParen(expr string) error {
 //   - AddToPipe can be within a CallBack to populate each new call to the database with the calculated fields.
 //   - You can access the values after Evaluate without adding the field to the Pipeline from the Value element
 //     of the root node.
-func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
+func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) (outPipe Pipeline, err error) {
 	if rootNode.Raw == nil {
-		return fmt.Errorf("root node is nil")
+		return nil, fmt.Errorf("root node is nil")
 	}
 
-	if rootNode.Raw.Len() > 1 && rootNode.Raw.Len() != pipe.Rows() {
-		return fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), rootNode.Raw.Len())
+	if rootNode.Raw.Len() > 1 && pipe.Rows() > 1 && rootNode.Raw.Len() != pipe.Rows() {
+		return nil, fmt.Errorf("AddtoPipe: exected length %d got length %d", pipe.Rows(), rootNode.Raw.Len())
+	}
+
+	if pipe.Rows() == 1 && rootNode.Raw.Len() > 1 {
+		if pipe, err = one2Many(pipe, rootNode.Raw.Len()); err != nil {
+			return nil, err
+		}
 	}
 
 	// drop if already there
@@ -1060,10 +1128,12 @@ func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) error {
 	}
 
 	if role == FRCat {
-		return pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, nil, pipe.GetKeepRaw())
+		err = pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, nil, pipe.GetKeepRaw())
+		return pipe, err
 	}
 
-	return pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, false, nil, pipe.GetKeepRaw())
+	err = pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, false, nil, pipe.GetKeepRaw())
+	return pipe, err
 }
 
 // setValue sets the value of the loop variable
@@ -1093,16 +1163,17 @@ func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe
 
 	for loopInd := start; loopInd < end; loopInd++ {
 		for nodeInd := 0; nodeInd < len(inner); nodeInd++ {
+			var e error
 			setValue(loopVar, loopInd, inner[nodeInd])
 
-			if e := Evaluate(inner[nodeInd], pipe); e != nil {
+			if e = Evaluate(inner[nodeInd], pipe); e != nil {
 				return e
 			}
 
 			// if there, must drop it
 			_ = pipe.GData().Drop(assign[nodeInd])
 
-			if e := AddToPipe(inner[nodeInd], assign[nodeInd], pipe); e != nil {
+			if pipe, e = AddToPipe(inner[nodeInd], assign[nodeInd], pipe); e != nil {
 				return e
 			}
 		}

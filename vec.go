@@ -267,8 +267,8 @@ func (vec *VecData) SortField() string {
 	return vec.data.SortField()
 }
 
-// VecDataAny builds a pipeline for a slice of vectors ([]any).  The first dimension is the field.
-func VecDataAny(data [][]any, fields []string, ftypes FTypes) (pipe Pipeline, err error) {
+// VecFromAny builds a pipeline for a slice of vectors ([]any).  The first dimension is the field.
+func VecFromAny(data [][]any, fields []string, ftypes FTypes) (pipe Pipeline, err error) {
 	gd := NewGData()
 	for ind, field := range fields {
 		raw := NewRaw(data[ind], nil)
@@ -280,7 +280,7 @@ func VecDataAny(data [][]any, fields []string, ftypes FTypes) (pipe Pipeline, er
 
 		if ft := ftypes.Get(field); ft != nil {
 			if role != FRCat && role != FRCts {
-				return nil, fmt.Errorf("must be FRCat or FRCts, field %s is not VecDataAny", field)
+				return nil, fmt.Errorf("must be FRCat or FRCts, field %s is not VecFromAny", field)
 			}
 			role = ft.Role
 		}

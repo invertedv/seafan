@@ -25,6 +25,10 @@ import (
 // 100,row100,4100.0,5200.0, 8/1/2020
 func ExampleEvaluate_dateAdd() {
 	Verbose = false
+	var (
+		outPipe Pipeline
+		err     error
+	)
 
 	data := os.Getenv("data")
 	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
@@ -34,19 +38,21 @@ func ExampleEvaluate_dateAdd() {
 
 	root := &OpNode{Expression: "dateAdd(date,row)"}
 
-	if err := Expr2Tree(root); err != nil {
+	if err = Expr2Tree(root); err != nil {
 		panic(err)
 	}
 
-	if err := Evaluate(root, pipe); err != nil {
+	if err = Evaluate(root, pipe); err != nil {
 		panic(err)
 	}
 
-	if err := AddToPipe(root, "nextMonth", pipe); err != nil {
+	if outPipe, err = AddToPipe(root, "nextMonth", pipe); err != nil {
 		panic(err)
 	}
+
 	fmt.Println("date + row months")
-	raw, e := pipe.GData().GetRaw("nextMonth")
+
+	raw, e := outPipe.GData().GetRaw("nextMonth")
 	if e != nil {
 		panic(e)
 	}
@@ -58,6 +64,11 @@ func ExampleEvaluate_dateAdd() {
 }
 
 func ExampleEvaluate_if() {
+	var (
+		outPipe Pipeline
+		err     error
+	)
+
 	Verbose = false
 
 	data := os.Getenv("data")
@@ -68,33 +79,33 @@ func ExampleEvaluate_if() {
 
 	root := &OpNode{Expression: "if(date=='3/1/2023',1,0)"}
 
-	if err := Expr2Tree(root); err != nil {
+	if err = Expr2Tree(root); err != nil {
 		panic(err)
 	}
 
-	if err := Evaluate(root, pipe); err != nil {
+	if err = Evaluate(root, pipe); err != nil {
 		panic(err)
 	}
 
-	if err := AddToPipe(root, "march2023", pipe); err != nil {
+	if outPipe, err = AddToPipe(root, "march2023", pipe); err != nil {
 		panic(err)
 	}
 
 	fmt.Println(pipe.Get("march2023").Data.([]float64))
 	root = &OpNode{Expression: "if(date>'3/1/2023',1,0)"}
 
-	if err := Expr2Tree(root); err != nil {
+	if err = Expr2Tree(root); err != nil {
 		panic(err)
 	}
 
-	if err := Evaluate(root, pipe); err != nil {
+	if err = Evaluate(root, pipe); err != nil {
 		panic(err)
 	}
 
-	if err := AddToPipe(root, "afterMarch2023", pipe); err != nil {
+	if outPipe, err = AddToPipe(root, "afterMarch2023", pipe); err != nil {
 		panic(err)
 	}
-	fmt.Println(pipe.Get("afterMarch2023").Data.([]float64))
+	fmt.Println(outPipe.Get("afterMarch2023").Data.([]float64))
 	// output:
 	// [1 0 0 0 0 0]
 	// [0 1 1 1 1 0]
@@ -238,6 +249,11 @@ func TestEvaluate_lag(t *testing.T) {
 
 // TestEvaluate_toFloat_cat tests toFloat, and cat()
 func TestEvaluate_toFloat_cat(t *testing.T) {
+	var (
+		outPipe Pipeline
+		err     error
+	)
+
 	Verbose = false
 	dataC := "1, 2"
 	dataD := "'34', '50'"
@@ -251,17 +267,17 @@ func TestEvaluate_toFloat_cat(t *testing.T) {
 	}
 
 	root := &OpNode{Expression: "cat(c)"}
-	e := Expr2Tree(root)
-	assert.Nil(t, e)
+	err = Expr2Tree(root)
+	assert.Nil(t, err)
 
-	e = Evaluate(root, pipe)
-	assert.Nil(t, e)
+	err = Evaluate(root, pipe)
+	assert.Nil(t, err)
 	assert.Equal(t, root.Role, FRCat)
 
-	e = AddToPipe(root, "catval", pipe)
-	assert.Nil(t, e)
+	outPipe, err = AddToPipe(root, "catval", pipe)
+	assert.Nil(t, err)
 
-	assert.Equal(t, pipe.Get("catval").FT.Role, FRCat)
+	assert.Equal(t, outPipe.Get("catval").FT.Role, FRCat)
 }
 
 // TestEvaluate3 tests toString and toDate functions
@@ -277,6 +293,32 @@ func TestEvaluate_toString(t *testing.T) {
 		act := tester(expr, pipe)
 		assert.ElementsMatch(t, results[ind], act)
 	}
+}
+
+func TestEvaluate_range(t *testing.T) {
+	var (
+		outPipe Pipeline
+		err     error
+	)
+
+	Verbose = false
+	dataC := "1"
+	dataD := "30"
+	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f"})
+	fmt.Println(pipe.Rows())
+
+	root := &OpNode{Expression: "range(0,10)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	err = Evaluate(root, pipe)
+	assert.Nil(t, err)
+
+	outPipe, err = AddToPipe(root, "range", pipe)
+	assert.Nil(t, err)
+
+	assert.Equal(t, outPipe.Rows(), 10)
 }
 
 func TestEvaluate(t *testing.T) {
@@ -471,6 +513,11 @@ func tester(eqn string, pipe Pipeline) []any {
 
 // We'll add two fields to the pipeline: the sum=c+D and max=max(c,D)
 func ExampleAddToPipe() {
+	var (
+		outPipe Pipeline
+		err     error
+	)
+
 	Verbose = false
 
 	// builds a Pipline with two fields:
@@ -492,28 +539,28 @@ func ExampleAddToPipe() {
 	// field1 and field2 nodes now have the structure of the expressions
 
 	// evaluate these on pipe
-	if e1 := Evaluate(field1, pipe); e1 != nil {
-		panic(e1)
+	if err = Evaluate(field1, pipe); err != nil {
+		panic(err)
 	}
 
-	if e1 := Evaluate(field2, pipe); e1 != nil {
-		panic(e1)
+	if err = Evaluate(field2, pipe); err != nil {
+		panic(err)
 	}
 
 	// now add them to pipe
-	if e := AddToPipe(field1, "sum", pipe); e != nil {
-		panic(e)
+	if outPipe, err = AddToPipe(field1, "sum", pipe); err != nil {
+		panic(err)
 	}
 
-	if e := AddToPipe(field2, "max", pipe); e != nil {
-		panic(e)
+	if outPipe, err = AddToPipe(field2, "max", outPipe); err != nil {
+		panic(err)
 	}
 
 	// see what we got
-	field1Val := pipe.Get("sum")
+	field1Val := outPipe.Get("sum")
 	fmt.Println(field1Val.Data.([]float64))
 
-	field2Val := pipe.Get("max")
+	field2Val := outPipe.Get("max")
 	fmt.Println(field2Val.Data.([]float64))
 
 	// Output:
