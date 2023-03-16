@@ -689,3 +689,78 @@ func Subset(inPipe Pipeline, keepRows []int) (outPipe Pipeline, err error) {
 
 	return VecDataAny(outAny, flds, inPipe.GetFTypes())
 }
+
+// Where restricts inPipe to rows where field is in equalTo
+func Where(inPipe Pipeline, field string, equalTo []any) (outPipe Pipeline, err error) {
+	var raw *Raw
+
+	if raw, err = inPipe.GData().GetRaw(field); err != nil {
+		return nil, err
+	}
+
+	var rows []int
+
+	for ind := 0; ind < raw.Len(); ind++ {
+		match := false
+		switch x := raw.Data[ind].(type) {
+		case float32:
+			for _, eq := range equalTo {
+				if y, ok := eq.(float32); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case float64:
+			for _, eq := range equalTo {
+				if y, ok := eq.(float64); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case int32:
+			for _, eq := range equalTo {
+				if y, ok := eq.(int32); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case int64:
+			for _, eq := range equalTo {
+				if y, ok := eq.(int64); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case string:
+			for _, eq := range equalTo {
+				if y, ok := eq.(string); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case time.Time:
+			for _, eq := range equalTo {
+				if y, ok := eq.(time.Time); ok {
+					if match = x.Sub(y) == 0; match {
+						break
+					}
+				}
+			}
+		}
+
+		if match {
+			rows = append(rows, ind)
+		}
+	}
+
+	if rows == nil {
+		return nil, fmt.Errorf("no matches in Where")
+	}
+
+	return Subset(inPipe, rows)
+}

@@ -274,3 +274,28 @@ func ExampleSubset() {
 	// output:
 	// Field1:  [a x]
 }
+
+// Where restricts a pipe to rows that have given values in the specified field
+func ExampleWhere() {
+	Verbose = false
+
+	data := os.Getenv("data")
+	pipe1, e := CSVToPipe(data+"/pipeTest1.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	pipeOut, err := Where(pipe1, "Field1", []any{"c", "x"})
+	if err != nil {
+		panic(e)
+	}
+
+	var check *Raw
+	if check, e = pipeOut.GData().GetRaw("Field1"); e != nil {
+		panic(e)
+	}
+
+	fmt.Println("Field1: ", check.Data)
+	// output:
+	// Field1:  [c x]
+}
