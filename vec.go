@@ -302,6 +302,7 @@ func (vec *VecData) SortField() string {
 	return vec.data.SortField()
 }
 
+// Row creates a new pipeline with only the row, take
 func (vec *VecData) Row(take int) (newPipe Pipeline, err error) {
 	var gdNew *GData
 
@@ -312,10 +313,12 @@ func (vec *VecData) Row(take int) (newPipe Pipeline, err error) {
 	return NewVecData("new pipe", gdNew), nil
 }
 
+// FieldCount returns the number of fields in the pipeline
 func (vec *VecData) FieldCount() int {
 	return vec.data.FieldCount()
 }
 
+// Subset creates a new pipeline with only the rows, rows
 func (vec *VecData) Subset(rows []int) (newPipe Pipeline, err error) {
 	var gdNew *GData
 
@@ -326,6 +329,7 @@ func (vec *VecData) Subset(rows []int) (newPipe Pipeline, err error) {
 	return NewVecData("new pipe", gdNew), nil
 }
 
+// Where creates a new pipeline with rows where field is in equalTo. The comparison uses the *Raw data.
 func (vec *VecData) Where(field string, equalTo []any) (newPipe Pipeline, err error) {
 	var gdNew *GData
 
@@ -336,14 +340,17 @@ func (vec *VecData) Where(field string, equalTo []any) (newPipe Pipeline, err er
 	return NewVecData("new pipe", gdNew), nil
 }
 
+// Keep keeps only the listed fields in the pipeline
 func (vec *VecData) Keep(fields []string) error {
 	return vec.GData().Keep(fields)
 }
 
+// Drop drops the listed field from the pipeline
 func (vec *VecData) Drop(field string) error {
 	return vec.GData().Drop(field)
 }
 
+// AppendRows appends rows to the existing GData and then re-initializes each GDatum, using the fTypes, if provided.
 func (vec *VecData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err error) {
 	gdOut, e := vec.GData().AppendRows(gd, fTypes)
 	if e != nil {
@@ -353,12 +360,16 @@ func (vec *VecData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err 
 	return NewVecData("out", gdOut), nil
 }
 
+// AppendRowsRaw simply appends rows, in place, to the existing GData.  Only the *Raw data is updated.
+// The .Data field is set to nil.
 func (vec *VecData) AppendRowsRaw(gd *GData) error {
 	vec.nRow += gd.rows
 
 	return vec.GData().AppendRowsRaw(gd)
 }
 
+// ReInit re-initializes the Data field from Raw for each GDatum. If ftypes is not nil, these values
+// are used, otherwise the FParam values are re-derived from the data. A new pipeline is returned.
 func (vec *VecData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
 	var gdNew *GData
 

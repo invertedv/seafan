@@ -395,6 +395,7 @@ func (ch *ChData) SortField() string {
 	return ch.data.SortField()
 }
 
+// Row creates a new pipeline with only the row, take
 func (ch *ChData) Row(take int) (newPipe Pipeline, err error) {
 	var gdNew *GData
 
@@ -405,6 +406,7 @@ func (ch *ChData) Row(take int) (newPipe Pipeline, err error) {
 	return NewVecData("new pipe", gdNew), nil
 }
 
+// Subset creates a new pipeline with only the rows, rows
 func (ch *ChData) Subset(rows []int) (newPipe Pipeline, err error) {
 	var gdNew *GData
 
@@ -415,6 +417,7 @@ func (ch *ChData) Subset(rows []int) (newPipe Pipeline, err error) {
 	return NewVecData("new pipe", gdNew), nil
 }
 
+// Where creates a new pipeline with rows where field is in equalTo. The comparison uses the *Raw data.
 func (ch *ChData) Where(field string, equalTo []any) (newPipe Pipeline, err error) {
 	var gdNew *GData
 
@@ -425,18 +428,22 @@ func (ch *ChData) Where(field string, equalTo []any) (newPipe Pipeline, err erro
 	return NewVecData("new pipe", gdNew), nil
 }
 
+// FieldCount returns the number of fields in the pipeline
 func (ch *ChData) FieldCount() int {
 	return ch.data.FieldCount()
 }
 
+// Keep keeps only the listed fields in the pipeline
 func (ch *ChData) Keep(fields []string) error {
 	return ch.GData().Keep(fields)
 }
 
+// Drop drops the listed field from the pipeline
 func (ch *ChData) Drop(field string) error {
 	return ch.GData().Drop(field)
 }
 
+// AppendRows appends rows to the existing GData and then re-initializes each GDatum, using the fTypes, if provided.
 func (ch *ChData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err error) {
 	gdOut, e := ch.GData().AppendRows(gd, fTypes)
 	if e != nil {
@@ -446,12 +453,16 @@ func (ch *ChData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err er
 	return NewVecData("out", gdOut), nil
 }
 
+// AppendRowsRaw simply appends rows, in place, to the existing GData.  Only the *Raw data is updated.
+// The .Data field is set to nil.
 func (ch *ChData) AppendRowsRaw(gd *GData) error {
 	ch.nRow += gd.rows
 
 	return ch.GData().AppendRowsRaw(gd)
 }
 
+// ReInit re-initializes the Data field from Raw for each GDatum. If ftypes is not nil, these values
+// are used, otherwise the FParam values are re-derived from the data. A new pipeline is returned.
 func (ch *ChData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
 	var gdNew *GData
 

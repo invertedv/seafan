@@ -970,7 +970,6 @@ func (gd *GData) Where(field string, equalTo []any) (gdOut *GData, err error) {
 	}
 
 	return gd.Subset(rows)
-
 }
 
 // AppendRowsRaw simply appends rows, in place, to the existing GData.  Only the *Raw data is updated.
@@ -998,7 +997,7 @@ func (gd *GData) AppendRowsRaw(gdApp *GData) error {
 	return nil
 }
 
-// AppendRows appends rows to the existing GData and then re-initializes each GDatum, using the FType, if provided.
+// AppendRows appends rows to the existing GData and then re-initializes each GDatum, using the fTypes, if provided.
 func (gd *GData) AppendRows(gdApp *GData, fTypes FTypes) (gdOut *GData, err error) {
 	gdOut = NewGData()
 	for ind, fld := range gd.FieldList() {
@@ -1049,6 +1048,8 @@ func (gd *GData) AppendRows(gdApp *GData, fTypes FTypes) (gdOut *GData, err erro
 	return gdOut, nil
 }
 
+// ReInit re-initializes the Data field from Raw for each GDatum. If ftypes is not nil, these values
+// are used, otherwise the FParam values are re-derived from the data.
 func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {
 	gdOut = NewGData()
 
