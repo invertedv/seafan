@@ -818,3 +818,157 @@ func (gd *GData) Back2Raw() (rawData []*Raw, nCol int, fields []string, err erro
 
 	return rawData, nCol, fields, nil
 }
+
+func (gd *GData) Row(take int) (gdNew *GData, err error) {
+	if take < 0 || take >= gd.Rows() {
+		return nil, fmt.Errorf("row out of range (*GData)Row: %d", take)
+	}
+
+	gdNew = NewGData()
+
+	for ind, fld := range gd.FieldList() {
+		var rawBig *Raw
+		if rawBig, err = gd.GetRaw(fld); err != nil {
+			return nil, err
+		}
+
+		raw := NewRaw([]any{rawBig.Data[take]}, nil)
+		datum := gd.data[ind]
+
+		switch datum.FT.Role {
+		case FRCat:
+			err = gdNew.AppendD(raw, datum.FT.Name, datum.FT.FP, datum.Raw != nil)
+		case FRCts, FREither:
+			err = gdNew.AppendC(raw, datum.FT.Name, datum.FT.Normalized, datum.FT.FP, datum.Raw != nil)
+		case FROneHot, FREmbed:
+			err = gdNew.MakeOneHot(datum.FT.From, datum.FT.Name)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return gdNew, nil
+}
+
+// Subset subsets the pipeline to the rows in keepRows
+func (gd *GData) Subset(keepRows []int) (gdOut *GData, err error) {
+	flds := gd.FieldList()
+	gdOut = NewGData()
+
+	for ind := 0; ind < len(flds); ind++ {
+		var (
+			raw  *Raw
+			e    error
+			data []any
+		)
+
+		raw, e = gd.GetRaw(flds[ind])
+		if e != nil {
+			return nil, e
+		}
+		datum := gd.data[ind]
+
+		for indx := 0; indx < len(keepRows); indx++ {
+			indKeep := keepRows[indx]
+			if indKeep >= len(raw.Data) || indKeep < 0 {
+				return nil, fmt.Errorf("index out of range: %d to array of length %d", indKeep, len(raw.Data))
+			}
+
+			data = append(data, raw.Data[indKeep])
+		}
+
+		rawNew := NewRaw(data, nil)
+
+		switch datum.FT.Role {
+		case FRCat:
+			e = gdOut.AppendD(rawNew, datum.FT.Name, datum.FT.FP, datum.Raw != nil)
+		case FRCts, FREither:
+			e = gdOut.AppendC(rawNew, datum.FT.Name, datum.FT.Normalized, datum.FT.FP, datum.Raw != nil)
+		case FROneHot, FREmbed:
+			e = gdOut.MakeOneHot(datum.FT.From, datum.FT.Name)
+		}
+
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	return gdOut, nil
+}
+
+func (gd *GData) Where(field string, equalTo []any) (gdOut *GData, err error) {
+	var raw *Raw
+
+	if raw, err = gd.GetRaw(field); err != nil {
+		return nil, err
+	}
+
+	var rows []int
+
+	for ind := 0; ind < raw.Len(); ind++ {
+		match := false
+		switch x := raw.Data[ind].(type) {
+		case float32:
+			for _, eq := range equalTo {
+				if y, ok := eq.(float32); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case float64:
+			for _, eq := range equalTo {
+				if y, ok := eq.(float64); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case int32:
+			for _, eq := range equalTo {
+				if y, ok := eq.(int32); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case int64:
+			for _, eq := range equalTo {
+				if y, ok := eq.(int64); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case string:
+			for _, eq := range equalTo {
+				if y, ok := eq.(string); ok {
+					if match = x == y; match {
+						break
+					}
+				}
+			}
+		case time.Time:
+			for _, eq := range equalTo {
+				if y, ok := eq.(time.Time); ok {
+					if match = x.Sub(y) == 0; match {
+						break
+					}
+				}
+			}
+		}
+
+		if match {
+			rows = append(rows, ind)
+		}
+	}
+
+	if rows == nil {
+		return nil, fmt.Errorf("no matches in Where")
+	}
+
+	return gd.Subset(rows)
+
+}

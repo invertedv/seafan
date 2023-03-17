@@ -12,6 +12,47 @@ import (
 	G "gorgonia.org/gorgonia"
 )
 
+func TestChData_Row(t *testing.T) {
+	dataPath := os.Getenv("data")
+	fileName := dataPath + "/test1.csv"
+	f, e := os.Open(fileName)
+
+	assert.Nil(t, e)
+
+	rdr := file.NewReader(fileName, ',', '\n', 0, 0, 1, 0, f, 0)
+	e = rdr.Init("", chutils.MergeTree)
+
+	assert.Nil(t, e)
+
+	e = rdr.TableSpec().Impute(rdr, 0, .99)
+
+	assert.Nil(t, e)
+
+	bsize := 100
+	ch := NewChData("Test ch Pipeline", WithBatchSize(bsize),
+		WithReader(rdr), WithCycle(true),
+		WithCats("y", "y1", "y2", "x4"),
+		WithOneHot("yoh", "y"),
+		WithOneHot("y1oh", "y1"),
+		WithOneHot("x4oh", "x4"),
+		WithNormalized("x1", "x2", "x3"),
+		WithKeepRaw(true),
+		WithOneHot("y2oh", "y2"))
+	e = ch.Init()
+
+	assert.Nil(t, e)
+	var newPipe Pipeline
+	take := 1
+	newPipe, e = ch.Row(take)
+	assert.Nil(t, e)
+	assert.Equal(t, newPipe.Rows(), 1)
+
+	x4 := newPipe.Get("x4")
+	assert.NotNil(t, x4)
+	x4Big := ch.Get("x4")
+	assert.Equal(t, x4Big.Raw.Data[take].(int64), x4.Raw.Data[0].(int64))
+
+}
 func TestChData_Init(t *testing.T) {
 	dataPath := os.Getenv("data")
 	fileName := dataPath + "/test1.csv"

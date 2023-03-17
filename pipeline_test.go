@@ -264,7 +264,7 @@ func ExampleSubset() {
 	}
 
 	indKeep := []int{0, 3}
-	pipeSubset, e := Subset(pipe1, indKeep)
+	pipeSubset, e := pipe1.Subset(indKeep)
 
 	if e != nil {
 		panic(e)
@@ -290,7 +290,7 @@ func ExampleWhere() {
 		panic(e)
 	}
 
-	pipeOut, err := Where(pipe1, "Field1", []any{"c", "x"})
+	pipeOut, err := pipe1.Where("Field1", []any{"c", "x"})
 	if err != nil {
 		panic(e)
 	}

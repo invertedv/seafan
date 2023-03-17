@@ -34,6 +34,41 @@ func NewVecData(name string, data *GData, opts ...Opts) *VecData {
 	return vec
 }
 
+// VecFromAny builds a pipeline for a slice of vectors ([]any).  The first dimension is the field.
+func VecFromAny(data [][]any, fields []string, ftypes FTypes) (pipe Pipeline, err error) {
+	gd := NewGData()
+	for ind, field := range fields {
+		raw := NewRaw(data[ind], nil)
+
+		role := FRCts
+		if raw.Kind == reflect.String || raw.Kind == reflect.Struct {
+			role = FRCat
+		}
+
+		if ft := ftypes.Get(field); ft != nil {
+			if role != FRCat && role != FRCts {
+				return nil, fmt.Errorf("must be FRCat or FRCts, field %s is not VecFromAny", field)
+			}
+			role = ft.Role
+		}
+
+		if role == FRCat {
+			if e := gd.AppendD(raw, field, nil, true); e != nil {
+				return nil, e
+			}
+			continue
+		}
+
+		if e := gd.AppendC(raw, field, false, nil, true); e != nil {
+			return nil, e
+		}
+	}
+
+	pipe = NewVecData("values", gd)
+
+	return pipe, nil
+}
+
 func (vec *VecData) GetKeepRaw() bool {
 	return vec.keepRaw
 }
@@ -267,37 +302,36 @@ func (vec *VecData) SortField() string {
 	return vec.data.SortField()
 }
 
-// VecFromAny builds a pipeline for a slice of vectors ([]any).  The first dimension is the field.
-func VecFromAny(data [][]any, fields []string, ftypes FTypes) (pipe Pipeline, err error) {
-	gd := NewGData()
-	for ind, field := range fields {
-		raw := NewRaw(data[ind], nil)
+func (vec *VecData) Row(take int) (newPipe Pipeline, err error) {
+	var gdNew *GData
 
-		role := FRCts
-		if raw.Kind == reflect.String || raw.Kind == reflect.Struct {
-			role = FRCat
-		}
-
-		if ft := ftypes.Get(field); ft != nil {
-			if role != FRCat && role != FRCts {
-				return nil, fmt.Errorf("must be FRCat or FRCts, field %s is not VecFromAny", field)
-			}
-			role = ft.Role
-		}
-
-		if role == FRCat {
-			if e := gd.AppendD(raw, field, nil, true); e != nil {
-				return nil, e
-			}
-			continue
-		}
-
-		if e := gd.AppendC(raw, field, false, nil, true); e != nil {
-			return nil, e
-		}
+	if gdNew, err = vec.GData().Row(take); err != nil {
+		return nil, err
 	}
 
-	pipe = NewVecData("values", gd)
+	return NewVecData("new pipe", gdNew), nil
+}
 
-	return pipe, nil
+func (vec *VecData) FieldCount() int {
+	return vec.data.FieldCount()
+}
+
+func (vec *VecData) Subset(rows []int) (newPipe Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = vec.GData().Subset(rows); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new pipe", gdNew), nil
+}
+
+func (vec *VecData) Where(field string, equalTo []any) (newPipe Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = vec.GData().Where(field, equalTo); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new pipe", gdNew), nil
 }

@@ -394,3 +394,37 @@ func (ch *ChData) IsSorted() bool {
 func (ch *ChData) SortField() string {
 	return ch.data.SortField()
 }
+
+func (ch *ChData) Row(take int) (newPipe Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = ch.GData().Row(take); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new pipe", gdNew), nil
+}
+
+func (ch *ChData) Subset(rows []int) (newPipe Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = ch.GData().Subset(rows); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new pipe", gdNew), nil
+}
+
+func (ch *ChData) Where(field string, equalTo []any) (newPipe Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = ch.GData().Where(field, equalTo); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new pipe", gdNew), nil
+}
+
+func (ch *ChData) FieldCount() int {
+	return ch.data.FieldCount()
+}

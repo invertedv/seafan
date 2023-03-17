@@ -18,24 +18,27 @@ import (
 // The Pipeline interface specifies the methods required to be a data Pipeline. The Pipeline is the middleware between
 // the data and the fitting routines.
 type Pipeline interface {
-	Init() error                            // initialize the pipeline
-	Rows() int                              // # of observations in the pipeline (size of the epoch)
-	Batch(inputs G.Nodes) bool              // puts the next batch in the input nodes
-	Epoch(setTo int) int                    // manage epoch count
-	IsNormalized(field string) bool         // true if feature is normalized
-	IsCat(field string) bool                // true if feature is one-hot encoded
-	Cols(field string) int                  // # of columns in the feature
-	IsCts(field string) bool                // true if the feature is continuous
-	GetFType(field string) *FType           // Get FType for the feature
-	GetFTypes() FTypes                      // Get Ftypes for pipeline
-	BatchSize() int                         // batch size
-	FieldList() []string                    // fields available
-	GData() *GData                          // return underlying GData
-	Get(field string) *GDatum               // return data for field
-	GetKeepRaw() bool                       // returns whether keep raw data
-	Slice(sl Slicer) (Pipeline, error)      // slice the pipeline
-	Shuffle()                               // shuffle data
-	Describe(field string, topK int) string // describes a field
+	Init() error                                                     // initialize the pipeline
+	Rows() int                                                       // # of observations in the pipeline (size of the epoch)
+	Batch(inputs G.Nodes) bool                                       // puts the next batch in the input nodes
+	Epoch(setTo int) int                                             // manage epoch count
+	IsNormalized(field string) bool                                  // true if feature is normalized
+	IsCat(field string) bool                                         // true if feature is one-hot encoded
+	Cols(field string) int                                           // # of columns in the feature
+	IsCts(field string) bool                                         // true if the feature is continuous
+	GetFType(field string) *FType                                    // Get FType for the feature
+	GetFTypes() FTypes                                               // Get Ftypes for pipeline
+	BatchSize() int                                                  // batch size
+	FieldList() []string                                             // fields available
+	FieldCount() int                                                 // number of fields in the pipeline
+	GData() *GData                                                   // return underlying GData
+	Get(field string) *GDatum                                        // return data for field
+	GetKeepRaw() bool                                                // returns whether keep raw data
+	Slice(sl Slicer) (Pipeline, error)                               // slice the pipeline
+	Shuffle()                                                        // shuffle data
+	Describe(field string, topK int) string                          // describes a field
+	Subset(rows []int) (newPipe Pipeline, err error)                 // subsets pipeline to rows
+	Where(field string, equalTo []any) (newPipe Pipeline, err error) // subset pipeline to where field=equalTo
 }
 
 // Opts function sets an option to a Pipeline
@@ -653,114 +656,4 @@ func Append(pipe1, pipe2 Pipeline) (Pipeline, error) {
 	}
 
 	return VecFromAny(forVec, flds1, nil)
-}
-
-// Subset subsets the pipeline to the rows in keepRows
-func Subset(inPipe Pipeline, keepRows []int) (outPipe Pipeline, err error) {
-	if inPipe == nil {
-		return nil, nil
-	}
-
-	flds := inPipe.FieldList()
-	outAny := make([][]any, len(flds))
-	gd := inPipe.GData()
-	for ind := 0; ind < len(flds); ind++ {
-		var (
-			raw  *Raw
-			e    error
-			data []any
-		)
-		raw, e = gd.GetRaw(flds[ind])
-		if e != nil {
-			return nil, e
-		}
-
-		for indx := 0; indx < len(keepRows); indx++ {
-			indKeep := keepRows[indx]
-			if indKeep >= len(raw.Data) {
-				return nil, fmt.Errorf("index out of range: %d to array of length %d", indKeep, len(raw.Data))
-			}
-
-			data = append(data, raw.Data[indKeep])
-		}
-
-		outAny[ind] = data
-	}
-
-	return VecFromAny(outAny, flds, inPipe.GetFTypes())
-}
-
-// Where restricts inPipe to rows where field is in equalTo
-func Where(inPipe Pipeline, field string, equalTo []any) (outPipe Pipeline, err error) {
-	var raw *Raw
-
-	if raw, err = inPipe.GData().GetRaw(field); err != nil {
-		return nil, err
-	}
-
-	var rows []int
-
-	for ind := 0; ind < raw.Len(); ind++ {
-		match := false
-		switch x := raw.Data[ind].(type) {
-		case float32:
-			for _, eq := range equalTo {
-				if y, ok := eq.(float32); ok {
-					if match = x == y; match {
-						break
-					}
-				}
-			}
-		case float64:
-			for _, eq := range equalTo {
-				if y, ok := eq.(float64); ok {
-					if match = x == y; match {
-						break
-					}
-				}
-			}
-		case int32:
-			for _, eq := range equalTo {
-				if y, ok := eq.(int32); ok {
-					if match = x == y; match {
-						break
-					}
-				}
-			}
-		case int64:
-			for _, eq := range equalTo {
-				if y, ok := eq.(int64); ok {
-					if match = x == y; match {
-						break
-					}
-				}
-			}
-		case string:
-			for _, eq := range equalTo {
-				if y, ok := eq.(string); ok {
-					if match = x == y; match {
-						break
-					}
-				}
-			}
-		case time.Time:
-			for _, eq := range equalTo {
-				if y, ok := eq.(time.Time); ok {
-					if match = x.Sub(y) == 0; match {
-						break
-					}
-				}
-			}
-		}
-
-		if match {
-			rows = append(rows, ind)
-		}
-	}
-
-	if rows == nil {
-		return nil, fmt.Errorf("no matches in Where")
-	}
-
-	return Subset(inPipe, rows)
 }

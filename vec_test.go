@@ -13,13 +13,13 @@ func getData(t *testing.T) *GData {
 	x3 := []int32{4, 5, 6, 1, 2, 2, 2}
 
 	gData := NewGData()
-	e := gData.AppendC(NewRawCast(x1, nil), "x1", false, nil, false)
+	e := gData.AppendC(NewRawCast(x1, nil), "x1", false, nil, true)
 	assert.Nil(t, e)
 
-	e = gData.AppendD(NewRawCast(x2, nil), "x2", nil, false)
+	e = gData.AppendD(NewRawCast(x2, nil), "x2", nil, true)
 	assert.Nil(t, e)
 
-	e = gData.AppendD(NewRawCast(x3, nil), "x3", nil, false)
+	e = gData.AppendD(NewRawCast(x3, nil), "x3", nil, true)
 	assert.Nil(t, e)
 
 	e = gData.MakeOneHot("x2", "x2Oh")
@@ -52,6 +52,34 @@ func TestVecData_Batch(t *testing.T) {
 
 		assert.ElementsMatch(t, act, vecData.Get("x1").Data)
 	}
+}
+
+func TestVecData_Row(t *testing.T) {
+	gData := getData(t)
+	vecData := NewVecData("test", gData)
+
+	take := 1
+	newPipe, e := vecData.Row(take)
+	assert.Nil(t, e)
+
+	x2 := newPipe.Get("x2")
+	x2Big := vecData.Get("x2")
+	assert.Equal(t, x2Big.Raw.Data[take].(string), x2.Raw.Data[0].(string))
+
+}
+
+func TestVecData_Where(t *testing.T) {
+	gData := getData(t)
+	vecData := NewVecData("test", gData)
+
+	equalTo := []any{"b", "c"}
+	newPipe, e := vecData.Where("x2", equalTo)
+	assert.Nil(t, e)
+
+	x2, e := newPipe.GData().GetRaw("x2")
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, x2.Data, equalTo)
+
 }
 
 func TestSliceVecData(t *testing.T) {
