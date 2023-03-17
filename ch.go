@@ -436,3 +436,28 @@ func (ch *ChData) Keep(fields []string) error {
 func (ch *ChData) Drop(field string) error {
 	return ch.GData().Drop(field)
 }
+
+func (ch *ChData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err error) {
+	gdOut, e := ch.GData().AppendRows(gd, fTypes)
+	if e != nil {
+		return nil, e
+	}
+
+	return NewVecData("out", gdOut), nil
+}
+
+func (ch *ChData) AppendRowsRaw(gd *GData) error {
+	ch.nRow += gd.rows
+
+	return ch.GData().AppendRowsRaw(gd)
+}
+
+func (ch *ChData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = ch.GData().ReInit(ftypes); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new", gdNew), nil
+}

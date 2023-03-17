@@ -972,3 +972,117 @@ func (gd *GData) Where(field string, equalTo []any) (gdOut *GData, err error) {
 	return gd.Subset(rows)
 
 }
+
+// AppendRowsRaw simply appends rows, in place, to the existing GData.  Only the *Raw data is updated.
+// The .Data field is set to nil.
+func (gd *GData) AppendRowsRaw(gdApp *GData) error {
+	for ind, fld := range gd.FieldList() {
+		rawApp, e := gdApp.GetRaw(fld)
+		if e != nil {
+			return e
+		}
+
+		if gd.data[ind].Raw == nil {
+			raw, e := gd.GetRaw(fld)
+			if e != nil {
+				return e
+			}
+			gd.data[ind].Raw = raw
+		}
+		gd.data[ind].Raw.Data = append(gd.data[ind].Raw.Data, rawApp.Data...)
+		gd.data[ind].Data = nil
+	}
+
+	gd.rows += gdApp.rows
+
+	return nil
+}
+
+// AppendRows appends rows to the existing GData and then re-initializes each GDatum, using the FType, if provided.
+func (gd *GData) AppendRows(gdApp *GData, fTypes FTypes) (gdOut *GData, err error) {
+	gdOut = NewGData()
+	for ind, fld := range gd.FieldList() {
+		rawApp, e := gdApp.GetRaw(fld)
+		if e != nil {
+			return nil, e
+		}
+
+		hasRaw := true
+		if gd.data[ind].Raw == nil {
+			hasRaw = false
+			raw, ex := gd.GetRaw(fld)
+			if ex != nil {
+				return nil, ex
+			}
+			gd.data[ind].Raw = raw
+		}
+		dataOut := make([]any, gd.data[ind].Raw.Len())
+
+		ft := gd.data[ind].FT
+		// if fTypes is nil, set fp to nil so FP will be recalculated
+		var fp *FParam = nil
+		if fTypes != nil {
+			if ftApp := fTypes.Get(fld); ftApp != nil {
+				ft = ftApp
+				fp = ftApp.FP
+			}
+		}
+
+		copy(dataOut, gd.data[ind].Raw.Data)
+		dataOut = append(dataOut, rawApp.Data...)
+		rawNew := NewRaw(dataOut, nil)
+
+		switch ft.Role {
+		case FRCat:
+			e = gdOut.AppendD(rawNew, ft.Name, fp, hasRaw)
+		case FRCts, FREither:
+			e = gdOut.AppendC(rawNew, ft.Name, ft.Normalized, fp, hasRaw)
+		case FROneHot, FREmbed:
+			e = gdOut.MakeOneHot(ft.From, ft.Name)
+		}
+
+		if e != nil {
+			return nil, e
+		}
+	}
+
+	return gdOut, nil
+}
+
+func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {
+	gdOut = NewGData()
+
+	for ind, fld := range gd.FieldList() {
+		var (
+			ft *FType
+			fp *FParam
+		)
+
+		if fTypes != nil {
+			ft = fTypes.Get(fld)
+			fp = ft.FP
+		}
+
+		if ft == nil {
+			ft = gd.data[ind].FT
+		}
+
+		var rawData *Raw
+		rawData, err = gd.GetRaw(fld)
+
+		switch ft.Role {
+		case FRCat:
+			err = gdOut.AppendD(rawData, ft.Name, fp, true)
+		case FRCts, FREither:
+			err = gdOut.AppendC(rawData, ft.Name, ft.Normalized, fp, true)
+		case FROneHot, FREmbed:
+			err = gdOut.MakeOneHot(ft.From, ft.Name)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return gdOut, nil
+}

@@ -18,29 +18,32 @@ import (
 // The Pipeline interface specifies the methods required to be a data Pipeline. The Pipeline is the middleware between
 // the data and the fitting routines.
 type Pipeline interface {
-	Init() error                                                     // initialize the pipeline
-	Rows() int                                                       // # of observations in the pipeline (size of the epoch)
-	Batch(inputs G.Nodes) bool                                       // puts the next batch in the input nodes
-	Epoch(setTo int) int                                             // manage epoch count
-	IsNormalized(field string) bool                                  // true if feature is normalized
-	IsCat(field string) bool                                         // true if feature is one-hot encoded
-	Cols(field string) int                                           // # of columns in the feature
-	IsCts(field string) bool                                         // true if the feature is continuous
-	GetFType(field string) *FType                                    // Get FType for the feature
-	GetFTypes() FTypes                                               // Get Ftypes for pipeline
-	BatchSize() int                                                  // batch size
-	FieldList() []string                                             // fields available
-	FieldCount() int                                                 // number of fields in the pipeline
-	GData() *GData                                                   // return underlying GData
-	Get(field string) *GDatum                                        // return data for field
-	GetKeepRaw() bool                                                // returns whether raw data is kept
-	Slice(sl Slicer) (Pipeline, error)                               // slice the pipeline
-	Shuffle()                                                        // shuffle data
-	Describe(field string, topK int) string                          // describes a field
-	Subset(rows []int) (newPipe Pipeline, err error)                 // subsets pipeline to rows
-	Where(field string, equalTo []any) (newPipe Pipeline, err error) // subset pipeline to where field=equalTo
-	Keep(fields []string) error                                      // keep on fields in the pipeline
-	Drop(field string) error                                         // drop field from the pipeline
+	Init() error                                                       // initialize the pipeline
+	Rows() int                                                         // # of observations in the pipeline (size of the epoch)
+	Batch(inputs G.Nodes) bool                                         // puts the next batch in the input nodes
+	Epoch(setTo int) int                                               // manage epoch count
+	IsNormalized(field string) bool                                    // true if feature is normalized
+	IsCat(field string) bool                                           // true if feature is one-hot encoded
+	Cols(field string) int                                             // # of columns in the feature
+	IsCts(field string) bool                                           // true if the feature is continuous
+	GetFType(field string) *FType                                      // Get FType for the feature
+	GetFTypes() FTypes                                                 // Get Ftypes for pipeline
+	BatchSize() int                                                    // batch size
+	FieldList() []string                                               // fields available
+	FieldCount() int                                                   // number of fields in the pipeline
+	GData() *GData                                                     // return underlying GData
+	Get(field string) *GDatum                                          // return data for field
+	GetKeepRaw() bool                                                  // returns whether raw data is kept
+	Slice(sl Slicer) (Pipeline, error)                                 // slice the pipeline
+	Shuffle()                                                          // shuffle data
+	Describe(field string, topK int) string                            // describes a field
+	Subset(rows []int) (newPipe Pipeline, err error)                   // subsets pipeline to rows
+	Where(field string, equalTo []any) (newPipe Pipeline, err error)   // subset pipeline to where field=equalTo
+	Keep(fields []string) error                                        // keep on fields in the pipeline
+	Drop(field string) error                                           // drop field from the pipeline
+	AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err error) // appends gd to pipeline
+	AppendRowsRaw(gd *GData) error                                     // appends gd ONLY to *Raw data
+	ReInit(ftypes *FTypes) (pipeOut Pipeline, err error)               // reinitialized pipeline from *Raw data
 }
 
 // Opts function sets an option to a Pipeline

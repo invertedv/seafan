@@ -343,3 +343,28 @@ func (vec *VecData) Keep(fields []string) error {
 func (vec *VecData) Drop(field string) error {
 	return vec.GData().Drop(field)
 }
+
+func (vec *VecData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err error) {
+	gdOut, e := vec.GData().AppendRows(gd, fTypes)
+	if e != nil {
+		return nil, e
+	}
+
+	return NewVecData("out", gdOut), nil
+}
+
+func (vec *VecData) AppendRowsRaw(gd *GData) error {
+	vec.nRow += gd.rows
+
+	return vec.GData().AppendRowsRaw(gd)
+}
+
+func (vec *VecData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
+	var gdNew *GData
+
+	if gdNew, err = vec.GData().ReInit(ftypes); err != nil {
+		return nil, err
+	}
+
+	return NewVecData("new", gdNew), nil
+}
