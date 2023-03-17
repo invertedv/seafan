@@ -33,12 +33,14 @@ type Pipeline interface {
 	FieldCount() int                                                 // number of fields in the pipeline
 	GData() *GData                                                   // return underlying GData
 	Get(field string) *GDatum                                        // return data for field
-	GetKeepRaw() bool                                                // returns whether keep raw data
+	GetKeepRaw() bool                                                // returns whether raw data is kept
 	Slice(sl Slicer) (Pipeline, error)                               // slice the pipeline
 	Shuffle()                                                        // shuffle data
 	Describe(field string, topK int) string                          // describes a field
 	Subset(rows []int) (newPipe Pipeline, err error)                 // subsets pipeline to rows
 	Where(field string, equalTo []any) (newPipe Pipeline, err error) // subset pipeline to where field=equalTo
+	Keep(fields []string) error                                      // keep on fields in the pipeline
+	Drop(field string) error                                         // drop field from the pipeline
 }
 
 // Opts function sets an option to a Pipeline

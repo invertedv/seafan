@@ -335,3 +335,11 @@ func (vec *VecData) Where(field string, equalTo []any) (newPipe Pipeline, err er
 
 	return NewVecData("new pipe", gdNew), nil
 }
+
+func (vec *VecData) Keep(fields []string) error {
+	return vec.GData().Keep(fields)
+}
+
+func (vec *VecData) Drop(field string) error {
+	return vec.GData().Drop(field)
+}

@@ -428,3 +428,11 @@ func (ch *ChData) Where(field string, equalTo []any) (newPipe Pipeline, err erro
 func (ch *ChData) FieldCount() int {
 	return ch.data.FieldCount()
 }
+
+func (ch *ChData) Keep(fields []string) error {
+	return ch.GData().Keep(fields)
+}
+
+func (ch *ChData) Drop(field string) error {
+	return ch.GData().Drop(field)
+}
