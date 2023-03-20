@@ -1087,3 +1087,315 @@ func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {
 
 	return gdOut, nil
 }
+
+// GetFYtypes returns a slice of *FType corresponding to GData.data
+func (gd *GData) GetFTypes() FTypes {
+	fts := make(FTypes, 0)
+	for _, d := range gd.data {
+		fts = append(fts, d.FT)
+	}
+
+	return fts
+}
+
+func equalInd(data *Raw, startInd int) (inds []int, err error) {
+	var comp bool
+	for ind := startInd; ind < data.Len(); ind++ {
+		if comp, err = Comparer(data.Data[startInd], data.Data[ind], "=="); err != nil {
+			return nil, err
+		}
+
+		if !comp {
+			break
+		}
+
+		inds = append(inds, ind)
+	}
+
+	return inds, nil
+}
+
+func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err error) {
+	var comp bool
+
+	// out of right rows? if so, return remainder of left
+	if rInd == right.Len() {
+		for ind := lInd; ind < left.Len(); ind++ {
+			lEqual = append(lEqual, ind)
+		}
+
+		return lEqual, nil, nil
+	}
+
+	// find all on left side that equal our first element
+	if lEqual, err = equalInd(left, lInd); err != nil {
+		return nil, nil, err
+	}
+
+	if comp, err = Comparer(left.Data[lInd], right.Data[rInd], "<"); err != nil {
+		return nil, nil, err
+	}
+
+	// left less than next right?
+	if comp {
+		return lEqual, nil, nil
+	}
+
+	// find first equal
+	rEq := -1
+	for ind := rInd; ind < right.Len(); ind++ {
+		if comp, err = Comparer(left.Data[lInd], right.Data[ind], "=="); err != nil {
+			return nil, nil, err
+		}
+		if comp {
+			rEq = ind
+			break
+		}
+	}
+
+	// none equal
+	if rEq == -1 {
+		return lEqual, nil, nil
+	}
+	if rEqual, err = equalInd(right, rEq); err != nil {
+		return nil, nil, err
+	}
+
+	return lEqual, rEqual, nil
+}
+
+//go:generate stringer -type=JoinType
+type JoinType int
+
+const (
+	Inner JoinType = 0 + iota
+	Left
+	Right
+	Outer
+)
+
+func collectResults(left, right []*Raw, rFts FTypes, lEqual, rEqual []int, lResult, rResult [][]any,
+	joinRaw *Raw, joinResult []any) (lUp, rUp [][]any, joinUp []any) {
+	//
+
+	joinUp = joinResult
+	lUp = lResult
+	rUp = rResult
+
+	for _, indL := range lEqual {
+		if rEqual == nil {
+			joinUp = append(joinUp, joinRaw.Data[indL])
+
+			for col := 0; col < len(left); col++ {
+				lUp[col] = append(lUp[col], left[col].Data[indL])
+			}
+
+			for col := 0; col < len(right); col++ {
+				miss := getMiss(rFts[col], right[col].Kind)
+				rUp[col] = append(rUp[col], miss)
+			}
+
+			continue
+		}
+
+		for indR := range rEqual {
+			joinUp = append(joinUp, joinRaw.Data[indL])
+
+			for col := 0; col < len(left); col++ {
+				lUp[col] = append(lUp[col], left[col].Data[indL])
+			}
+
+			for col := 0; col < len(right); col++ {
+				rUp[col] = append(rUp[col], right[col].Data[indR])
+			}
+		}
+	}
+
+	return lUp, rUp, joinUp
+}
+
+func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *GData, err error) {
+	var (
+		ulRaw, urRaw, lRaw, rRaw             []*Raw
+		lJoin, rJoin                         *Raw
+		lFts, rFts                           FTypes
+		ulFields, urFields, lFields, rFields []string
+	)
+
+	if right == nil {
+		return nil, fmt.Errorf("join GData is nil")
+	}
+
+	if lJoin, err = gd.GetRaw(onField); err != nil {
+		return nil, err
+	}
+
+	if rJoin, err = right.GetRaw(onField); err != nil {
+		return nil, err
+	}
+
+	if gd.sortField != onField {
+		if e := gd.Sort(onField, true); e != nil {
+			return nil, e
+		}
+	}
+
+	if right.sortField != onField {
+		if e := right.Sort(onField, true); e != nil {
+			return nil, e
+		}
+	}
+
+	if ulRaw, _, ulFields, err = gd.Back2Raw(); err != nil {
+		return nil, err
+	}
+	if urRaw, _, urFields, err = right.Back2Raw(); err != nil {
+		return nil, err
+	}
+
+	ulFts, urFts := gd.GetFTypes(), right.GetFTypes()
+
+	// subset to fields to keep
+	lFields, lRaw, lFts = subsetFields(ulFields, ulRaw, ulFts, []string{onField})
+
+	omit := []string{onField}
+
+	for _, fld := range urFields {
+		if searchSlice(fld, lFields) >= 0 {
+			omit = append(omit, fld)
+		}
+	}
+
+	rFields, rRaw, rFts = subsetFields(urFields, urRaw, urFts, omit)
+
+	lInd, rInd := 0, 0
+	lResult, rResult := make([][]any, len(lFields)), make([][]any, len(rFields))
+	joinResult := make([]any, 0)
+
+	for {
+		// list of all indices that equal jl.Data[lInd]
+		lEqual, rEqual, e := collectEqual(lJoin, rJoin, lInd, rInd)
+		if e != nil {
+			return nil, e
+		}
+
+		if rEqual != nil {
+			// exact matches always join
+			lResult, rResult, joinResult = collectResults(lRaw, rRaw, rFts, lEqual, rEqual, lResult, rResult, lJoin, joinResult)
+
+			// Did we skip rows on right?
+			if (joinType == Right || joinType == Outer) && rEqual[0] > rInd {
+				// Add all missing rows
+				var rTake []int
+				for ind := rInd; ind < rEqual[0]; ind++ {
+					rTake = append(rTake, ind)
+				}
+
+				lResult, rResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
+			}
+
+			rInd = rEqual[len(rEqual)-1] + 1
+		}
+
+		// if left or outer join, add unmatched left values
+		if (joinType == Left || joinType == Outer) && rEqual == nil {
+			lResult, rResult, joinResult = collectResults(lRaw, rRaw, rFts, lEqual, nil, lResult, rResult, lJoin, joinResult)
+		}
+
+		if lEqual[len(lEqual)-1] == gd.Rows()-1 {
+			break
+		}
+
+		lInd = lEqual[len(lEqual)-1] + 1
+	}
+
+	// Did we leave some right rows behind?
+	if (joinType == Right || joinType == Outer) && rInd < right.Len() {
+		// Add all missing rows
+		var rTake []int
+		for ind := rInd; ind < right.Len(); ind++ {
+			rTake = append(rTake, ind)
+		}
+
+		lResult, rResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
+	}
+
+	result = NewGData()
+	if e := result.AddRaw(lResult, lFields, lFts, true); e != nil {
+		return nil, e
+	}
+
+	if e := result.AddRaw(rResult, rFields, rFts, true); e != nil {
+		return nil, e
+	}
+
+	if e := result.AppendD(NewRaw(joinResult, nil), onField, nil, true); e != nil {
+		return nil, e
+	}
+
+	return result, nil
+}
+
+// Adds a number of fields to a *GData. The fts are only used to determine the Role
+func (gd *GData) AddRaw(data [][]any, fields []string, fts FTypes, keepRaw bool) error {
+	for ind := 0; ind < len(fields); ind++ {
+		raw := NewRaw(data[ind], nil)
+		switch fts[ind].Role {
+		case FRCat:
+			if e := gd.AppendD(raw, fields[ind], nil, keepRaw); e != nil {
+				return e
+			}
+		case FRCts, FREither:
+			if e := gd.AppendC(raw, fields[ind], false, nil, keepRaw); e != nil {
+				return e
+			}
+		case FROneHot, FREmbed:
+			if e := gd.MakeOneHot(fts[ind].From, fts[ind].Name); e != nil {
+				return e
+			}
+
+		}
+	}
+
+	return nil
+}
+
+// getMiss gets/sets the default value of a field
+func getMiss(ft *FType, kind reflect.Kind) any {
+	if ft.FP.Default != nil {
+		return ft.FP.Default
+	}
+
+	switch kind {
+	case reflect.Float64:
+		ft.FP.Default = 0.0
+	case reflect.Float32:
+		ft.FP.Default = float32(0)
+	case reflect.Int32:
+		ft.FP.Default = int32(0)
+	case reflect.Int64:
+		ft.FP.Default = int64(0)
+	case reflect.String:
+		ft.FP.Default = "missing"
+	case reflect.Struct:
+		ft.FP.Default = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+
+	return ft.FP.Default
+}
+
+// subsets a *Raw slice to drop the omit fields
+func subsetFields(uFields []string, uRaw []*Raw, uFts FTypes, omit []string) (fields []string, raw []*Raw, fts FTypes) {
+	for ind := 0; ind < len(uFields); ind++ {
+		fld := uFields[ind]
+		if searchSlice(fld, omit) >= 0 {
+			continue
+		}
+
+		fields = append(fields, fld)
+		raw = append(raw, uRaw[ind])
+		fts = append(fts, uFts[ind])
+	}
+
+	return fields, raw, fts
+}

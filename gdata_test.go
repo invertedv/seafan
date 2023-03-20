@@ -1,6 +1,7 @@
 package seafan
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -424,4 +425,41 @@ func TestGData_TableSpec(t *testing.T) {
 	for ind, fd := range td.FieldDefs {
 		assert.Equal(t, fd.Name, fNames[ind])
 	}
+}
+
+func TestGData_Join(t *testing.T) {
+	gdLeft := NewGData()
+	x0 := make([]any, 0)
+	var e error
+
+	for ind := 0; ind < 10; ind++ {
+		x0 = append(x0, float64(ind))
+	}
+
+	e = gdLeft.AppendC(NewRaw(x0, nil), "Field0", false, nil, false)
+	assert.Nil(t, e)
+
+	xt := []any{"a", "b", "c", "a", "b", "c", "e", "f", "g", "h"}
+	e = gdLeft.AppendD(NewRaw(xt, nil), "Field1", nil, false)
+	assert.Nil(t, e)
+
+	gdRight := NewGData()
+	var x1 []any
+	for ind := 0; ind < 5; ind++ {
+		x1 = append(x1, float64(ind))
+	}
+
+	e = gdRight.AppendC(NewRaw(x1, nil), "Field2", false, nil, false)
+	assert.Nil(t, e)
+
+	xt = []any{"a", "b", "c", "k", "a"}
+	e = gdRight.AppendD(NewRaw(xt, nil), "Field1", nil, false)
+	assert.Nil(t, e)
+
+	var gdJoin *GData
+	gdJoin, e = gdLeft.Join(gdRight, "Field1", Right)
+
+	assert.Nil(t, e)
+	fmt.Println(gdJoin.Rows())
+
 }

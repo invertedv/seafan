@@ -905,7 +905,7 @@ func Unique(xs []any) []any {
 	return u
 }
 
-// Comparer compares xa and xb
+// Comparer compares xa and xb. Comparisons available are: ==, !=, >, <, >=, <=
 func Comparer(xa, xb any, comp string) (truth bool, err error) {
 	// a constant date comes in as a string
 	if t1 := Any2Date(xa); t1 != nil {
