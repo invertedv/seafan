@@ -51,8 +51,8 @@ func TestChData_Row(t *testing.T) {
 	assert.NotNil(t, x4)
 	x4Big := ch.Get("x4")
 	assert.Equal(t, x4Big.Raw.Data[take].(int64), x4.Raw.Data[0].(int64))
-
 }
+
 func TestChData_Init(t *testing.T) {
 	dataPath := os.Getenv("data")
 	fileName := dataPath + "/test1.csv"

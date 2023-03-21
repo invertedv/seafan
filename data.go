@@ -1142,8 +1142,8 @@ func str2Kind(str string) reflect.Kind {
 	}
 }
 
-// locInd finds the index of needle in haystack.  Return -1 if not there.
-func locInd(needle any, haystack *Raw) int {
+// LocInd finds the index of needle in haystack.  Return -1 if not there. Haystack must be sorted.
+func LocInd(needle any, haystack *Raw) int {
 	testGE := func(i int) bool { lt, _ := AnyLess(haystack.Data[i], needle); return !lt }
 	ind := sort.Search(haystack.Len(), testGE)
 

@@ -143,12 +143,11 @@ func (vec *VecData) Rows() int {
 
 // GetFTypes returns FTypes for vec Pipeline.
 func (vec *VecData) GetFTypes() FTypes {
-	fts := make(FTypes, 0)
-	for _, d := range vec.data.data {
-		fts = append(fts, d.FT)
+	if vec.data == nil {
+		return nil
 	}
 
-	return fts
+	return vec.data.GetFTypes()
 }
 
 // SaveFTypes saves the FTypes for the Pipeline.
@@ -236,12 +235,11 @@ func (vec *VecData) FieldList() []string {
 
 // GetFType returns the fields FType
 func (vec *VecData) GetFType(field string) *FType {
-	d := vec.Get(field)
-	if d == nil {
+	if vec.data == nil {
 		return nil
 	}
 
-	return d.FT
+	return vec.data.GetFType(field)
 }
 
 // Name returns Pipeline name
@@ -378,4 +376,13 @@ func (vec *VecData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
 	}
 
 	return NewVecData("new", gdNew), nil
+}
+
+func (vec *VecData) Join(right Pipeline, onField string, joinType JoinType) (result Pipeline, err error) {
+	gdResult, e := vec.data.Join(right.GData(), onField, joinType)
+	if e != nil {
+		return nil, e
+	}
+
+	return NewVecData("joined", gdResult), nil
 }

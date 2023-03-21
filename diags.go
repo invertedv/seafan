@@ -354,7 +354,7 @@ func Decile(xyIn *XY, plt *PlotDef) error {
 		return e
 	}
 
-	if e := xy.Sort(); e != nil {
+	if e = xy.Sort(); e != nil {
 		return e
 	}
 

@@ -87,7 +87,7 @@ func ExampleJoin() {
 	if e != nil {
 		panic(e)
 	}
-	joinPipe, e := Join(pipe1, pipe2, "row", false)
+	joinPipe, e := pipe1.Join(pipe2, "row", Inner)
 	if e != nil {
 		panic(e)
 	}
@@ -120,9 +120,9 @@ func ExampleJoin_dateJoin() {
 	if e != nil {
 		panic(e)
 	}
-	joinPipe, e := Join(pipe1, pipe2, "date", false)
+	joinPipe, e := pipe1.Join(pipe2, "date", Inner)
 	if e != nil {
-		fmt.Println("oops -- not sorted")
+		fmt.Println(e)
 	}
 
 	// sort pipe2 by join field
@@ -130,7 +130,7 @@ func ExampleJoin_dateJoin() {
 		panic(err)
 	}
 
-	joinPipe, e = Join(pipe1, pipe2, "date", false)
+	joinPipe, e = pipe1.Join(pipe2, "date", Inner)
 	if e != nil {
 		panic(e)
 	}
@@ -143,7 +143,6 @@ func ExampleJoin_dateJoin() {
 	fmt.Println("# Rows: ", joinPipe.Rows())
 	fmt.Println("common date values: ", raw.Data)
 	// output:
-	// oops -- not sorted
 	// # Rows:  2
 	// common date values:  [2023-04-01 00:00:00 +0000 UTC 2023-05-01 00:00:00 +0000 UTC]
 }
@@ -203,7 +202,7 @@ func ExampleJoin_cat() {
 		panic(e)
 	}
 
-	joinPipe, e := Join(outPipe1, outPipe2, "rowCat", false)
+	joinPipe, e := outPipe1.Join(outPipe2, "rowCat", Inner)
 	if e != nil {
 		panic(e)
 	}

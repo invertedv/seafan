@@ -65,7 +65,6 @@ func TestVecData_Row(t *testing.T) {
 	x2 := newPipe.Get("x2")
 	x2Big := vecData.Get("x2")
 	assert.Equal(t, x2Big.Raw.Data[take].(string), x2.Raw.Data[0].(string))
-
 }
 
 func TestVecData_Where(t *testing.T) {
@@ -79,7 +78,6 @@ func TestVecData_Where(t *testing.T) {
 	x2, e := newPipe.GData().GetRaw("x2")
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, x2.Data, equalTo)
-
 }
 
 func TestSliceVecData(t *testing.T) {

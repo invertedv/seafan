@@ -44,12 +44,11 @@ func (ch *ChData) GetKeepRaw() bool {
 
 // GetFTypes returns FTypes for ch Pipeline.
 func (ch *ChData) GetFTypes() FTypes {
-	fts := make(FTypes, 0)
-	for _, d := range ch.data.data {
-		fts = append(fts, d.FT)
+	if ch.data == nil {
+		return nil
 	}
 
-	return fts
+	return ch.data.GetFTypes()
 }
 
 // SaveFTypes saves the FTypes for the Pipeline.
@@ -59,13 +58,11 @@ func (ch *ChData) SaveFTypes(fileName string) error {
 
 // returns *FType from user-input FTypes.
 func (ch *ChData) getFType(feature string) *FType {
-	for _, ft := range ch.ftypes {
-		if ft.Name == feature {
-			return ft
-		}
+	if ch.ftypes == nil {
+		return nil
 	}
 
-	return nil
+	return ch.ftypes.Get(feature)
 }
 
 // IsNormalized returns true if the field is normalized.
@@ -316,12 +313,11 @@ func (ch *ChData) FieldList() []string {
 
 // GetFType returns the field's FType
 func (ch *ChData) GetFType(field string) *FType {
-	d := ch.Get(field)
-	if d == nil {
+	if ch.data == nil {
 		return nil
 	}
 
-	return d.FT
+	return ch.data.GetFType(field)
 }
 
 // Name returns Pipeline name
@@ -471,4 +467,13 @@ func (ch *ChData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
 	}
 
 	return NewVecData("new", gdNew), nil
+}
+
+func (ch *ChData) Join(right Pipeline, onField string, joinType JoinType) (result Pipeline, err error) {
+	gdResult, e := ch.data.Join(right.GData(), onField, joinType)
+	if e != nil {
+		return nil, e
+	}
+
+	return NewVecData("joined", gdResult), nil
 }

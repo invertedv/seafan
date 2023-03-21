@@ -4,10 +4,7 @@ package seafan
 import (
 	"fmt"
 	"os"
-	"reflect"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/invertedv/chutils"
 	cf "github.com/invertedv/chutils/file"
@@ -18,32 +15,33 @@ import (
 // The Pipeline interface specifies the methods required to be a data Pipeline. The Pipeline is the middleware between
 // the data and the fitting routines.
 type Pipeline interface {
-	Init() error                                                       // initialize the pipeline
-	Rows() int                                                         // # of observations in the pipeline (size of the epoch)
-	Batch(inputs G.Nodes) bool                                         // puts the next batch in the input nodes
-	Epoch(setTo int) int                                               // manage epoch count
-	IsNormalized(field string) bool                                    // true if feature is normalized
-	IsCat(field string) bool                                           // true if feature is one-hot encoded
-	Cols(field string) int                                             // # of columns in the feature
-	IsCts(field string) bool                                           // true if the feature is continuous
-	GetFType(field string) *FType                                      // Get FType for the feature
-	GetFTypes() FTypes                                                 // Get Ftypes for pipeline
-	BatchSize() int                                                    // batch size
-	FieldList() []string                                               // fields available
-	FieldCount() int                                                   // number of fields in the pipeline
-	GData() *GData                                                     // return underlying GData
-	Get(field string) *GDatum                                          // return data for field
-	GetKeepRaw() bool                                                  // returns whether raw data is kept
-	Slice(sl Slicer) (Pipeline, error)                                 // slice the pipeline
-	Shuffle()                                                          // shuffle data
-	Describe(field string, topK int) string                            // describes a field
-	Subset(rows []int) (newPipe Pipeline, err error)                   // subsets pipeline to rows
-	Where(field string, equalTo []any) (newPipe Pipeline, err error)   // subset pipeline to where field=equalTo
-	Keep(fields []string) error                                        // keep on fields in the pipeline
-	Drop(field string) error                                           // drop field from the pipeline
-	AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err error) // appends gd to pipeline
-	AppendRowsRaw(gd *GData) error                                     // appends gd ONLY to *Raw data
-	ReInit(ftypes *FTypes) (pipeOut Pipeline, err error)               // reinitialized pipeline from *Raw data
+	Init() error                                                              // initialize the pipeline
+	Rows() int                                                                // # of observations in the pipeline (size of the epoch)
+	Batch(inputs G.Nodes) bool                                                // puts the next batch in the input nodes
+	Epoch(setTo int) int                                                      // manage epoch count
+	IsNormalized(field string) bool                                           // true if feature is normalized
+	IsCat(field string) bool                                                  // true if feature is one-hot encoded
+	Cols(field string) int                                                    // # of columns in the feature
+	IsCts(field string) bool                                                  // true if the feature is continuous
+	GetFType(field string) *FType                                             // Get FType for the feature
+	GetFTypes() FTypes                                                        // Get Ftypes for pipeline
+	BatchSize() int                                                           // batch size
+	FieldList() []string                                                      // fields available
+	FieldCount() int                                                          // number of fields in the pipeline
+	GData() *GData                                                            // return underlying GData
+	Get(field string) *GDatum                                                 // return data for field
+	GetKeepRaw() bool                                                         // returns whether raw data is kept
+	Join(right Pipeline, onField string, joinType JoinType) (Pipeline, error) // joins two pipelines
+	Slice(sl Slicer) (Pipeline, error)                                        // slice the pipeline
+	Shuffle()                                                                 // shuffle data
+	Describe(field string, topK int) string                                   // describes a field
+	Subset(rows []int) (newPipe Pipeline, err error)                          // subsets pipeline to rows
+	Where(field string, equalTo []any) (Pipeline, error)                      // subset pipeline to where field=equalTo
+	Keep(fields []string) error                                               // keep on fields in the pipeline
+	Drop(field string) error                                                  // drop field from the pipeline
+	AppendRows(gd *GData, fTypes FTypes) (Pipeline, error)                    // appends gd to pipeline
+	AppendRowsRaw(gd *GData) error                                            // appends gd ONLY to *Raw data
+	ReInit(ftypes *FTypes) (Pipeline, error)                                  // reinitialized pipeline from *Raw data
 }
 
 // Opts function sets an option to a Pipeline
@@ -419,164 +417,6 @@ func PipeToCSV(pipe Pipeline, outFile string) error {
 	// if after < 0, then won't also move to ClickHouse
 	if e := chutils.Export(pipe.GData(), wtr, -1, false); e != nil {
 		return e
-	}
-
-	return nil
-}
-
-// Join creates a new pipeline by joining pipe1 and pipe2 on joinField.
-//   - JoinField must be categorical.
-//   - The only field pipe1 and pipe2 can have in common is joinField
-//   - pipe2 must be sorted by the join field. Duplicates in the join field in pipe2 won't work
-//   - if left, then a left join is  done
-func Join(pipe1, pipe2 Pipeline, joinField string, left bool) (joined Pipeline, err error) {
-	gd1, gd2 := pipe1.GData(), pipe2.GData()
-
-	// The safest (though not fastest) way to do this is to recover the raw data from the pipelines
-	raw1, n1, field1, e1 := gd1.Back2Raw()
-	if e1 != nil {
-		return nil, e1
-	}
-
-	raw2, n2, field2, e2 := gd2.Back2Raw()
-	if e2 != nil {
-		return nil, e2
-	}
-
-	// duplicate field names not allowed
-	if e := disjoint(field1, field2, joinField); e != nil {
-		return nil, e
-	}
-
-	var on1Loc, on2Loc int
-	if on1Loc = searchSlice(joinField, field1); on1Loc < 0 {
-		return nil, fmt.Errorf("%s not in pipe", joinField)
-	}
-
-	if on2Loc = searchSlice(joinField, field2); on2Loc < 0 {
-		return nil, fmt.Errorf("%s not in pipe", joinField)
-	}
-
-	if !sort.IsSorted(raw2[on2Loc]) {
-		return nil, fmt.Errorf("right-hand side of join is not sorted on join key")
-	}
-
-	if raw1[on1Loc].Kind != raw2[on2Loc].Kind {
-		return nil, fmt.Errorf("join field has different types: %v and %v", raw1[on1Loc].Kind, raw2[on2Loc].Kind)
-	}
-
-	joinRaw1 := make([][]any, n1)
-	joinRaw2 := make([][]any, n2)
-
-	for ind := 0; ind < pipe1.Rows(); ind++ {
-		needle := raw1[on1Loc].Data[ind]
-
-		loc2 := locInd(needle, raw2[on2Loc])
-
-		// not there:
-		if loc2 < 0 {
-			if left {
-				for cols := 0; cols < n1; cols++ {
-					joinRaw1[cols] = append(joinRaw1[cols], raw1[cols].Data[ind])
-				}
-
-				for cols := 0; cols < n2; cols++ {
-					var miss any
-					switch raw2[cols].Kind {
-					case reflect.String:
-						// repeat last element for strings... could look for default value
-						miss = raw2[cols].Data[raw2[cols].Len()-1]
-					case reflect.Float64:
-						miss = float64(0)
-					case reflect.Float32:
-						miss = float32(0)
-					case reflect.Int64:
-						miss = int64(0)
-					case reflect.Int32:
-						miss = int32(0)
-					case reflect.Struct:
-						miss = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-					}
-
-					joinRaw2[cols] = append(joinRaw2[cols], miss)
-				}
-			}
-
-			continue
-		}
-
-		// assemble columns
-		for cols := 0; cols < n1; cols++ {
-			joinRaw1[cols] = append(joinRaw1[cols], raw1[cols].Data[ind])
-		}
-
-		for cols := 0; cols < n2; cols++ {
-			joinRaw2[cols] = append(joinRaw2[cols], raw2[cols].Data[loc2])
-		}
-	}
-
-	gdata := &GData{}
-
-	// skip joinField here
-	if e := addRaw(gdata, joinRaw1, field1, pipe1.GetFTypes(), "", pipe1.GetKeepRaw()); e != nil {
-		return nil, e
-	}
-
-	// include joinField here
-	if e := addRaw(gdata, joinRaw2, field2, pipe2.GetFTypes(), joinField, pipe1.GetKeepRaw()); e != nil {
-		return nil, e
-	}
-
-	joined = NewVecData("joined", gdata)
-	WithKeepRaw(pipe1.GetKeepRaw())(joined)
-
-	return joined, nil
-}
-
-// addRaw adds fields to gdOutput.
-// The fields added are specified by:
-//   - inData - the actual data
-//   - fieldNames - the names of the fields
-//   - fts - the FType of the fields
-//
-// If joinField is in fieldNames, it is not added to gdOutput
-func addRaw(gdOutput *GData, inData [][]any, fieldNames []string, fts FTypes, joinField string, keepRaw bool) error {
-	for col := 0; col < len(fieldNames); col++ {
-		rawcol := NewRaw(inData[col], nil)
-		ft := fts[col]
-
-		// on the join
-		if fieldNames[col] == joinField {
-			continue
-		}
-
-		switch ft.Role {
-		case FRCat:
-			if e := gdOutput.AppendD(rawcol, fieldNames[col], ft.FP, keepRaw); e != nil {
-				return fmt.Errorf("addRaw error AppendD: %s", ft.Name)
-			}
-		default:
-			if e := gdOutput.AppendC(rawcol, fieldNames[col], ft.Normalized, ft.FP, keepRaw); e != nil {
-				return fmt.Errorf("addRaw error AppendC: %s", ft.Name)
-			}
-		}
-	}
-
-	return nil
-}
-
-// disjoint checks that fields1 and fields2 have no common elements aside from joinField
-func disjoint(fields1, fields2 []string, joinField string) error {
-	for _, fld1 := range fields1 {
-		if fld1 == joinField {
-			continue
-		}
-
-		for _, fld2 := range fields2 {
-			if fld1 == fld2 {
-				return fmt.Errorf("field %s in both pipelines", fld1)
-			}
-		}
 	}
 
 	return nil

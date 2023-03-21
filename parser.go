@@ -988,7 +988,7 @@ func evalOps(node *OpNode) error {
 	return nil
 }
 
-// Evaluate evaluates an expression parsed bypipe( Expr2Tree.
+// Evaluate evaluates an expression parsed by Expr2Tree.
 // The user calls Evaluate with the top node as returned by Expr2Tree
 // To add a field to a pipeline:
 //  1. Create the *OpNode tree to evaluate the expression using Expr2Tree
@@ -1166,7 +1166,7 @@ func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe
 			var e error
 			setValue(loopVar, loopInd, inner[nodeInd])
 
-			if e = Evaluate(inner[nodeInd], pipe); e != nil {
+			if e := Evaluate(inner[nodeInd], pipe); e != nil {
 				return e
 			}
 

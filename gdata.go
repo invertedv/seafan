@@ -1317,7 +1317,7 @@ func getMiss(ft *FType, kind reflect.Kind) any {
 		ft.FP.Default = int64(0)
 	case reflect.String:
 		ft.FP.Default = ""
-	// refect sees time.Time as a struct
+	// reflect sees time.Time as a struct
 	case reflect.Struct:
 		ft.FP.Default = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
@@ -1325,7 +1325,7 @@ func getMiss(ft *FType, kind reflect.Kind) any {
 	return ft.FP.Default
 }
 
-// subsets a *Raw slice to drop the omit fields
+// subsets a *Raw slice to drop the "omit" fields
 func subsetFields(uFields []string, uRaw []*Raw, uFts FTypes, omit []string) (fields []string, raw []*Raw, fts FTypes) {
 	for ind := 0; ind < len(uFields); ind++ {
 		fld := uFields[ind]
@@ -1419,7 +1419,7 @@ func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err e
 // This is performing either an inner join or left join for the indices lEqual and rEqual.
 //   - left and right are the slices of data we're joining
 //   - rFTS is the slice of FTypes for the right data.  This is used to find defaults should values be missing
-//   - lEqual, rEqual are indices of equal join values.  If rEqual is nil, there are none and we're doing a left join.
+//   - lEqual, rEqual are indices of equal join values.  If rEqual is nil, we're doing a left join.
 //   - joinRaw is the raw join data for left.
 //   - lResult, rResult are the current state of the join.  The rows line up, but will be added separately to the
 //     output *GData.  These slices do not include the join field.
