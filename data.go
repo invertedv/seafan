@@ -1141,3 +1141,45 @@ func str2Kind(str string) reflect.Kind {
 		return reflect.Interface
 	}
 }
+
+// locInd finds the index of needle in haystack.  Return -1 if not there.
+func locInd(needle any, haystack *Raw) int {
+	testGE := func(i int) bool { lt, _ := AnyLess(haystack.Data[i], needle); return !lt }
+	ind := sort.Search(haystack.Len(), testGE)
+
+	if ind == haystack.Len() {
+		return -1
+	}
+
+	// match?
+	lt, _ := AnyLess(haystack.Data[ind], needle) // true if haystack < needle
+	gt, _ := AnyLess(needle, haystack.Data[ind]) // true if needle < haystack
+
+	if !gt && !lt {
+		return ind
+	}
+
+	return -1
+}
+
+// searchSlice checks the joinField is present in the Pipeline
+func searchSlice(needle string, haystack []string) (loc int) {
+	for ind, hay := range haystack {
+		if needle == hay {
+			return ind
+		}
+	}
+
+	return -1
+}
+
+// checkSlice returns true of needle is in haystack
+func checkSlice(needle, haystack string) bool {
+	for _, straw := range strings.Split(haystack, delim) {
+		if needle == straw {
+			return true
+		}
+	}
+
+	return false
+}

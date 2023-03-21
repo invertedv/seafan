@@ -1,6 +1,7 @@
 package seafan
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -455,6 +456,10 @@ func TestGData_Join(t *testing.T) {
 	e = gdRight.AppendD(NewRaw(xt, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 
+	// this will not be in the joined data
+	e = gdRight.MakeOneHot("Field1", "x")
+	assert.Nil(t, e)
+
 	var gdJoin *GData
 	gdJoin, e = gdLeft.Join(gdRight, "Field1", Inner)
 
@@ -497,4 +502,57 @@ func TestGData_Join(t *testing.T) {
 	raw, e = gdJoin.GetRaw("Field2")
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, raw.Data, exp)
+}
+
+// This example shows how to joing two *Gdata structs.
+func ExampleGData_Join() {
+	// Build the first GData
+	gdLeft := NewGData()
+
+	field0 := []any{0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0}
+	if e := gdLeft.AppendC(NewRaw(field0, nil), "field0", false, nil, true); e != nil {
+		panic(e)
+	}
+
+	field1 := []any{"r", "s", "b", "l", "c", "s", "a"}
+	if e := gdLeft.AppendD(NewRaw(field1, nil), "field1", nil, true); e != nil {
+		panic(e)
+	}
+
+	field2 := []any{"A", "B", "C", "D", "E", "F", "G"}
+	fp := &FParam{Default: "A"}
+	if e := gdLeft.AppendD(NewRaw(field2, nil), "field2", fp, true); e != nil {
+		panic(e)
+	}
+
+	gdRight := NewGData()
+	field3 := []any{100.0, 200.0, 300.0, 400.0, 500.0}
+	if e := gdRight.AppendC(NewRaw(field3, nil), "field3", false, nil, true); e != nil {
+		panic(e)
+	}
+
+	//	field1 := []any{"r", "s", "b", "l", "c", "s", "a"} a,b,c,l,r,s,s
+	//	field1 = []any{"a", "b", "c", "k", "a"} a, a, b, c, k
+	// outer: a, a, b, c, d, l, r, s, s, k
+	field1 = []any{"a", "b", "c", "k", "a"}
+	if e := gdRight.AppendD(NewRaw(field1, nil), "field1", nil, true); e != nil {
+		panic(e)
+	}
+
+	gdJoin, err := gdLeft.Join(gdRight, "field1", Outer)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, fld := range gdJoin.FieldList() {
+		x, err := gdJoin.GetRaw(fld)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(fld)
+		fmt.Println(x.Data)
+	}
+	// output:
+
 }

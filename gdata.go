@@ -81,7 +81,11 @@ func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam, keep
 		return e
 	}
 
-	x := make([]float64, len(raw.Data))
+	if gd.rows > 0 && gd.rows != raw.Len() {
+		return fmt.Errorf("differing # of rows *GData.AppendC: %d and %d", gd.rows, raw.Len())
+	}
+
+	x := make([]float64, raw.Len())
 
 	for ind := 0; ind < len(x); ind++ {
 		switch raw.Kind {
@@ -178,7 +182,11 @@ func (gd *GData) AppendD(raw *Raw, name string, fp *FParam, keepRaw bool) error 
 		return Wrapper(ErrGData, fmt.Sprintf("field %s cannot be FRCat (wrong type)", name))
 	}
 
-	ds := make([]int32, len(raw.Data))
+	if gd.rows > 0 && gd.rows != raw.Len() {
+		return fmt.Errorf("differing # of rows *GData.AppendD: %d and %d", gd.rows, raw.Len())
+	}
+
+	ds := make([]int32, raw.Len())
 
 	for ind := 0; ind < len(ds); ind++ {
 		v := raw.Data[ind]
@@ -1098,7 +1106,7 @@ func (gd *GData) GetFTypes() FTypes {
 	return fts
 }
 
-// Get FType returns the *FType of field.  Returns
+// GetFType returns the *FType of field.  Returns
 func (gd *GData) GetFType(field string) *FType {
 	for _, d := range gd.data {
 		if d.FT.Name == field {
@@ -1121,22 +1129,6 @@ const (
 	Outer
 )
 
-func joinCheck(left, right *Raw, onField string) error {
-	if left.Kind == reflect.Float32 || left.Kind == reflect.Float64 {
-		return fmt.Errorf("cannot join on Float")
-	}
-
-	if right.Kind == reflect.Float32 || right.Kind == reflect.Float64 {
-		return fmt.Errorf("cannot join on Float")
-	}
-
-	if left.Kind != right.Kind {
-		return fmt.Errorf("join types not the same")
-	}
-
-	return nil
-}
-
 // Join joins two *GData on onField.
 // Both *GData are sorted by onField, though the result may not be in sort order for Outer and Right joins.
 // If a field value is missing, the FType.FParam.Default value is filled in. If that value is nil, the following
@@ -1144,6 +1136,12 @@ func joinCheck(left, right *Raw, onField string) error {
 //   - int,float : 0
 //   - string ""
 //   - time.Time: 1/1/1970
+//
+// The field being joined on must have the same name in both *GData.
+// Fields in the left *GData have priority -- if there are duplicate fields, the field in "right" are omitted.
+//
+// The resulting *GData has only *Raw fields populated. To populate the .data fields, use ReInit.
+// FROneHot and FREmbed fields are left behind -- they'll need to be recreated after the join.
 func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *GData, err error) {
 	var (
 		ulRaw, urRaw, lRaw, rRaw             []*Raw
@@ -1176,7 +1174,7 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 		}
 	}
 
-	if e := joinCheck(lJoin, rJoin, onField); e != nil {
+	if e := joinCheck(lJoin, rJoin); e != nil {
 		return nil, e
 	}
 
@@ -1270,7 +1268,7 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 	return result, nil
 }
 
-// Adds a number of fields to a *GData. The fts are only used to determine the Role
+// AddRaw adds a number of fields in []any format to *GData. The fts are only used to determine the Role.
 func (gd *GData) AddRaw(data [][]any, fields []string, fts FTypes, keepRaw bool) error {
 	for ind := 0; ind < len(fields); ind++ {
 		raw := NewRaw(data[ind], nil)
@@ -1287,7 +1285,6 @@ func (gd *GData) AddRaw(data [][]any, fields []string, fts FTypes, keepRaw bool)
 			if e := gd.MakeOneHot(fts[ind].From, fts[ind].Name); e != nil {
 				return e
 			}
-
 		}
 	}
 
@@ -1311,6 +1308,7 @@ func getMiss(ft *FType, kind reflect.Kind) any {
 		ft.FP.Default = int64(0)
 	case reflect.String:
 		ft.FP.Default = ""
+	// refect sees time.Time as a struct
 	case reflect.Struct:
 		ft.FP.Default = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
@@ -1323,6 +1321,10 @@ func subsetFields(uFields []string, uRaw []*Raw, uFts FTypes, omit []string) (fi
 	for ind := 0; ind < len(uFields); ind++ {
 		fld := uFields[ind]
 		if searchSlice(fld, omit) >= 0 {
+			continue
+		}
+
+		if uFts[ind].Role == FROneHot || uFts[ind].Role == FREmbed {
 			continue
 		}
 
@@ -1405,7 +1407,14 @@ func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err e
 }
 
 // collectResults adds rows to lResult, rResult and joinResult returning them as lUp, rUp, joinUp.
-//   - left and right are th
+// This is performing either an inner join or left join for the indices lEqual and rEqual.
+//   - left and right are the slices of data we're joining
+//   - rFTS is the slice of FTypes for the right data.  This is used to find defaults should values be missing
+//   - lEqual, rEqual are indices of equal join values.  If rEqual is nil, there are none and we're doing a left join.
+//   - joinRaw is the raw join data for left.
+//   - lResult, rResult are the current state of the join.  The rows line up, but will be added separately to the
+//     output *GData.  These slices do not include the join field.
+//   - joinResult is the current state of the join field.
 func collectResults(left, right []*Raw, rFts FTypes, lEqual, rEqual []int, lResult, rResult [][]any,
 	joinRaw *Raw, joinResult []any) (lUp, rUp [][]any, joinUp []any) {
 	//
@@ -1444,4 +1453,21 @@ func collectResults(left, right []*Raw, rFts FTypes, lEqual, rEqual []int, lResu
 	}
 
 	return lUp, rUp, joinUp
+}
+
+// joinCheck does a few sanity checks for the join
+func joinCheck(left, right *Raw) error {
+	if left.Kind == reflect.Float32 || left.Kind == reflect.Float64 {
+		return fmt.Errorf("cannot join on Float")
+	}
+
+	if right.Kind == reflect.Float32 || right.Kind == reflect.Float64 {
+		return fmt.Errorf("cannot join on Float")
+	}
+
+	if left.Kind != right.Kind {
+		return fmt.Errorf("join types not the same")
+	}
+
+	return nil
 }
