@@ -173,6 +173,15 @@ func (gd *GData) AppendD(raw *Raw, name string, fp *FParam, keepRaw bool) error 
 		return e
 	}
 
+	// it could be that fp is populated only with the default value
+	if fp != nil && fp.Lvl == nil {
+		fp.Lvl = ByPtr(raw)
+
+		if _, ok := fp.Lvl[fp.Default]; !ok {
+			fp.Lvl[fp.Default] = -1
+		}
+	}
+
 	if fp == nil {
 		lv := ByPtr(raw)
 		fp = &FParam{Lvl: lv}

@@ -41,6 +41,10 @@ func TestGData_UpdateFts(t *testing.T) {
 	e = gd.AppendC(NewRaw(x0, nil), "Field0", true, nil, false)
 	assert.Nil(t, e)
 
+	// wrong length
+	e = gd.AppendC(NewRaw(x0[0:3], nil), "fail", false, nil, false)
+	assert.NotNil(t, e)
+
 	fp := &FParam{
 		Location: 0,
 		Scale:    1,
@@ -504,7 +508,7 @@ func TestGData_Join(t *testing.T) {
 	assert.ElementsMatch(t, raw.Data, exp)
 }
 
-// This example shows how to joing two *Gdata structs.
+// This example shows how to join two *Gdata structs.
 func ExampleGData_Join() {
 	// Build the first GData
 	gdLeft := NewGData()
@@ -520,25 +524,26 @@ func ExampleGData_Join() {
 	}
 
 	field2 := []any{"A", "B", "C", "D", "E", "F", "G"}
-	fp := &FParam{Default: "A"}
+
+	// value to use for field2 if gdLeft doesn't contribute to an output row
+	fp := &FParam{Default: "XX"}
 	if e := gdLeft.AppendD(NewRaw(field2, nil), "field2", fp, true); e != nil {
 		panic(e)
 	}
 
+	// Build the second GData
 	gdRight := NewGData()
 	field3 := []any{100.0, 200.0, 300.0, 400.0, 500.0}
 	if e := gdRight.AppendC(NewRaw(field3, nil), "field3", false, nil, true); e != nil {
 		panic(e)
 	}
 
-	//	field1 := []any{"r", "s", "b", "l", "c", "s", "a"} a,b,c,l,r,s,s
-	//	field1 = []any{"a", "b", "c", "k", "a"} a, a, b, c, k
-	// outer: a, a, b, c, d, l, r, s, s, k
 	field1 = []any{"a", "b", "c", "k", "a"}
 	if e := gdRight.AppendD(NewRaw(field1, nil), "field1", nil, true); e != nil {
 		panic(e)
 	}
 
+	// do an outer join on field1
 	gdJoin, err := gdLeft.Join(gdRight, "field1", Outer)
 	if err != nil {
 		panic(err)
@@ -554,5 +559,13 @@ func ExampleGData_Join() {
 		fmt.Println(x.Data)
 	}
 	// output:
+	// field0
+	// [6 6 2 4 3 0 1 5 0]
+	// field2
+	// [G G C E D A B F XX]
+	// field3
+	// [100 500 200 300 0 0 0 0 400]
+	// field1
+	// [a a b c l r s s k]
 
 }
