@@ -473,13 +473,16 @@ func TestGData_Join(t *testing.T) {
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, raw.Data, exp)
 
+	ft := gdRight.GetFTypes().Get("Field2")
+	ft.FP.Default = 110.0
+
 	gdJoin, e = gdLeft.Join(gdRight, "Field1", Left)
 	raw, e = gdJoin.GetRaw("Field1")
 	assert.Nil(t, e)
 	exp = []any{"a", "a", "a", "a", "b", "b", "c", "c", "e", "f", "g", "h"}
 	assert.ElementsMatch(t, raw.Data, exp)
 
-	exp = []any{0.0, 4.0, 0.0, 4.0, 1.0, 1.0, 2.0, 2.0, 0.0, 0.0, 0.0, 0.0}
+	exp = []any{0.0, 4.0, 0.0, 4.0, 1.0, 1.0, 2.0, 2.0, 110.0, 110.0, 110.0, 110.0}
 	raw, e = gdJoin.GetRaw("Field2")
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, raw.Data, exp)

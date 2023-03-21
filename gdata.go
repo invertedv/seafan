@@ -1088,7 +1088,7 @@ func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {
 	return gdOut, nil
 }
 
-// GetFYtypes returns a slice of *FType corresponding to GData.data
+// GetFTypes returns a slice of *FType corresponding to GData.data
 func (gd *GData) GetFTypes() FTypes {
 	fts := make(FTypes, 0)
 	for _, d := range gd.data {
@@ -1098,72 +1098,19 @@ func (gd *GData) GetFTypes() FTypes {
 	return fts
 }
 
-func equalInd(data *Raw, startInd int) (inds []int, err error) {
-	var comp bool
-	for ind := startInd; ind < data.Len(); ind++ {
-		if comp, err = Comparer(data.Data[startInd], data.Data[ind], "=="); err != nil {
-			return nil, err
+// Get FType returns the *FType of field.  Returns
+func (gd *GData) GetFType(field string) *FType {
+	for _, d := range gd.data {
+		if d.FT.Name == field {
+			return d.FT
 		}
-
-		if !comp {
-			break
-		}
-
-		inds = append(inds, ind)
 	}
 
-	return inds, nil
+	return nil
 }
 
-func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err error) {
-	var comp bool
-
-	// out of right rows? if so, return remainder of left
-	if rInd == right.Len() {
-		for ind := lInd; ind < left.Len(); ind++ {
-			lEqual = append(lEqual, ind)
-		}
-
-		return lEqual, nil, nil
-	}
-
-	// find all on left side that equal our first element
-	if lEqual, err = equalInd(left, lInd); err != nil {
-		return nil, nil, err
-	}
-
-	if comp, err = Comparer(left.Data[lInd], right.Data[rInd], "<"); err != nil {
-		return nil, nil, err
-	}
-
-	// left less than next right?
-	if comp {
-		return lEqual, nil, nil
-	}
-
-	// find first equal
-	rEq := -1
-	for ind := rInd; ind < right.Len(); ind++ {
-		if comp, err = Comparer(left.Data[lInd], right.Data[ind], "=="); err != nil {
-			return nil, nil, err
-		}
-		if comp {
-			rEq = ind
-			break
-		}
-	}
-
-	// none equal
-	if rEq == -1 {
-		return lEqual, nil, nil
-	}
-	if rEqual, err = equalInd(right, rEq); err != nil {
-		return nil, nil, err
-	}
-
-	return lEqual, rEqual, nil
-}
-
+// JoinType is the method to use in joining two GData structs
+//
 //go:generate stringer -type=JoinType
 type JoinType int
 
@@ -1174,46 +1121,29 @@ const (
 	Outer
 )
 
-func collectResults(left, right []*Raw, rFts FTypes, lEqual, rEqual []int, lResult, rResult [][]any,
-	joinRaw *Raw, joinResult []any) (lUp, rUp [][]any, joinUp []any) {
-	//
-
-	joinUp = joinResult
-	lUp = lResult
-	rUp = rResult
-
-	for _, indL := range lEqual {
-		if rEqual == nil {
-			joinUp = append(joinUp, joinRaw.Data[indL])
-
-			for col := 0; col < len(left); col++ {
-				lUp[col] = append(lUp[col], left[col].Data[indL])
-			}
-
-			for col := 0; col < len(right); col++ {
-				miss := getMiss(rFts[col], right[col].Kind)
-				rUp[col] = append(rUp[col], miss)
-			}
-
-			continue
-		}
-
-		for _, indR := range rEqual {
-			joinUp = append(joinUp, joinRaw.Data[indL])
-
-			for col := 0; col < len(left); col++ {
-				lUp[col] = append(lUp[col], left[col].Data[indL])
-			}
-
-			for col := 0; col < len(right); col++ {
-				rUp[col] = append(rUp[col], right[col].Data[indR])
-			}
-		}
+func joinCheck(left, right *Raw, onField string) error {
+	if left.Kind == reflect.Float32 || left.Kind == reflect.Float64 {
+		return fmt.Errorf("cannot join on Float")
 	}
 
-	return lUp, rUp, joinUp
+	if right.Kind == reflect.Float32 || right.Kind == reflect.Float64 {
+		return fmt.Errorf("cannot join on Float")
+	}
+
+	if left.Kind != right.Kind {
+		return fmt.Errorf("join types not the same")
+	}
+
+	return nil
 }
 
+// Join joins two *GData on onField.
+// Both *GData are sorted by onField, though the result may not be in sort order for Outer and Right joins.
+// If a field value is missing, the FType.FParam.Default value is filled in. If that value is nil, the following
+// are used:
+//   - int,float : 0
+//   - string ""
+//   - time.Time: 1/1/1970
 func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *GData, err error) {
 	var (
 		ulRaw, urRaw, lRaw, rRaw             []*Raw
@@ -1223,7 +1153,7 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 	)
 
 	if right == nil {
-		return nil, fmt.Errorf("join GData is nil")
+		return nil, fmt.Errorf("right *GDatais nil")
 	}
 
 	if lJoin, err = gd.GetRaw(onField); err != nil {
@@ -1234,16 +1164,20 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 		return nil, err
 	}
 
-	if gd.sortField != onField {
+	if gd.sortField != onField || !gd.sortAscending {
 		if e := gd.Sort(onField, true); e != nil {
 			return nil, e
 		}
 	}
 
-	if right.sortField != onField {
+	if right.sortField != onField || !right.sortAscending {
 		if e := right.Sort(onField, true); e != nil {
 			return nil, e
 		}
+	}
+
+	if e := joinCheck(lJoin, rJoin, onField); e != nil {
+		return nil, e
 	}
 
 	if ulRaw, _, ulFields, err = gd.Back2Raw(); err != nil {
@@ -1368,7 +1302,7 @@ func getMiss(ft *FType, kind reflect.Kind) any {
 
 	switch kind {
 	case reflect.Float64:
-		ft.FP.Default = 0.0
+		ft.FP.Default = float64(0)
 	case reflect.Float32:
 		ft.FP.Default = float32(0)
 	case reflect.Int32:
@@ -1376,7 +1310,7 @@ func getMiss(ft *FType, kind reflect.Kind) any {
 	case reflect.Int64:
 		ft.FP.Default = int64(0)
 	case reflect.String:
-		ft.FP.Default = "missing"
+		ft.FP.Default = ""
 	case reflect.Struct:
 		ft.FP.Default = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
@@ -1398,4 +1332,116 @@ func subsetFields(uFields []string, uRaw []*Raw, uFts FTypes, omit []string) (fi
 	}
 
 	return fields, raw, fts
+}
+
+// equalInd returns a slice of indices where data.Data have the same value as data.Data[startInd]
+func equalInd(data *Raw, startInd int) (inds []int, err error) {
+	var comp bool
+	for ind := startInd; ind < data.Len(); ind++ {
+		if comp, err = Comparer(data.Data[startInd], data.Data[ind], "=="); err != nil {
+			return nil, err
+		}
+
+		if !comp {
+			break
+		}
+
+		inds = append(inds, ind)
+	}
+
+	return inds, nil
+}
+
+// collectEqual returns a list of indices in left & right that have the same value as left.Data[lInd].
+//   - left, right are join *Raw data values
+//   - lInd is the key that determines the value we are looking for
+//   - rInd is the starting point in right for the search
+func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err error) {
+	var comp bool
+	// out of right rows? if so, return remainder of left
+	if rInd == right.Len() {
+		for ind := lInd; ind < left.Len(); ind++ {
+			lEqual = append(lEqual, ind)
+		}
+
+		return lEqual, nil, nil
+	}
+
+	// find all on left side that equal our first element
+	if lEqual, err = equalInd(left, lInd); err != nil {
+		return nil, nil, err
+	}
+
+	if comp, err = Comparer(left.Data[lInd], right.Data[rInd], "<"); err != nil {
+		return nil, nil, err
+	}
+
+	// left less than next right?
+	if comp {
+		return lEqual, nil, nil
+	}
+
+	// find first equal
+	rEq := -1
+	for ind := rInd; ind < right.Len(); ind++ {
+		if comp, err = Comparer(left.Data[lInd], right.Data[ind], "=="); err != nil {
+			return nil, nil, err
+		}
+		if comp {
+			rEq = ind
+			break
+		}
+	}
+
+	// none equal
+	if rEq == -1 {
+		return lEqual, nil, nil
+	}
+	if rEqual, err = equalInd(right, rEq); err != nil {
+		return nil, nil, err
+	}
+
+	return lEqual, rEqual, nil
+}
+
+// collectResults adds rows to lResult, rResult and joinResult returning them as lUp, rUp, joinUp.
+//   - left and right are th
+func collectResults(left, right []*Raw, rFts FTypes, lEqual, rEqual []int, lResult, rResult [][]any,
+	joinRaw *Raw, joinResult []any) (lUp, rUp [][]any, joinUp []any) {
+	//
+
+	joinUp = joinResult
+	lUp = lResult
+	rUp = rResult
+
+	for _, indL := range lEqual {
+		if rEqual == nil {
+			joinUp = append(joinUp, joinRaw.Data[indL])
+
+			for col := 0; col < len(left); col++ {
+				lUp[col] = append(lUp[col], left[col].Data[indL])
+			}
+
+			for col := 0; col < len(right); col++ {
+				miss := getMiss(rFts[col], right[col].Kind)
+				rUp[col] = append(rUp[col], miss)
+			}
+
+			continue
+		}
+
+		for _, indR := range rEqual {
+			joinUp = append(joinUp, joinRaw.Data[indL])
+
+			for col := 0; col < len(left); col++ {
+				lUp[col] = append(lUp[col], left[col].Data[indL])
+			}
+
+			for col := 0; col < len(right); col++ {
+				rUp[col] = append(rUp[col], right[col].Data[indR])
+			}
+		}
+	}
+
+	return lUp, rUp, joinUp
 }
