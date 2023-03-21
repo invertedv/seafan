@@ -1,7 +1,6 @@
 package seafan
 
 import (
-	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -457,9 +456,42 @@ func TestGData_Join(t *testing.T) {
 	assert.Nil(t, e)
 
 	var gdJoin *GData
-	gdJoin, e = gdLeft.Join(gdRight, "Field1", Right)
+	gdJoin, e = gdLeft.Join(gdRight, "Field1", Inner)
 
+	raw, e := gdJoin.GetRaw("Field1")
 	assert.Nil(t, e)
-	fmt.Println(gdJoin.Rows())
+	exp := []any{"a", "a", "a", "a", "b", "b", "c", "c"}
+	assert.ElementsMatch(t, raw.Data, exp)
 
+	exp = []any{0.0, 0.0, 3.0, 3.0, 1.0, 4.0, 2.0, 5.0}
+	raw, e = gdJoin.GetRaw("Field0")
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, raw.Data, exp)
+
+	exp = []any{0.0, 4.0, 0.0, 4.0, 1.0, 1.0, 2.0, 2.0}
+	raw, e = gdJoin.GetRaw("Field2")
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, raw.Data, exp)
+
+	gdJoin, e = gdLeft.Join(gdRight, "Field1", Left)
+	raw, e = gdJoin.GetRaw("Field1")
+	assert.Nil(t, e)
+	exp = []any{"a", "a", "a", "a", "b", "b", "c", "c", "e", "f", "g", "h"}
+	assert.ElementsMatch(t, raw.Data, exp)
+
+	exp = []any{0.0, 4.0, 0.0, 4.0, 1.0, 1.0, 2.0, 2.0, 0.0, 0.0, 0.0, 0.0}
+	raw, e = gdJoin.GetRaw("Field2")
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, raw.Data, exp)
+
+	gdJoin, e = gdLeft.Join(gdRight, "Field1", Right)
+	raw, e = gdJoin.GetRaw("Field1")
+	assert.Nil(t, e)
+	exp = []any{"a", "a", "a", "a", "b", "b", "c", "c", "k"}
+	assert.ElementsMatch(t, raw.Data, exp)
+
+	exp = []any{0.0, 4.0, 0.0, 4.0, 1.0, 1.0, 2.0, 2.0, 3.0}
+	raw, e = gdJoin.GetRaw("Field2")
+	assert.Nil(t, e)
+	assert.ElementsMatch(t, raw.Data, exp)
 }

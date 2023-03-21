@@ -1198,7 +1198,7 @@ func collectResults(left, right []*Raw, rFts FTypes, lEqual, rEqual []int, lResu
 			continue
 		}
 
-		for indR := range rEqual {
+		for _, indR := range rEqual {
 			joinUp = append(joinUp, joinRaw.Data[indL])
 
 			for col := 0; col < len(left); col++ {
@@ -1291,7 +1291,7 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 					rTake = append(rTake, ind)
 				}
 
-				lResult, rResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
+				rResult, lResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
 			}
 
 			rInd = rEqual[len(rEqual)-1] + 1
@@ -1317,7 +1317,7 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 			rTake = append(rTake, ind)
 		}
 
-		lResult, rResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
+		rResult, lResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
 	}
 
 	result = NewGData()
