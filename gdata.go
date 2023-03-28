@@ -688,7 +688,6 @@ func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []c
 			return
 		}
 
-		ind := 0
 		for col := 0; col < len(gd.data); col++ {
 			var e error
 			datum := gd.data[col]
@@ -701,9 +700,8 @@ func (gd *GData) Read(nTarget int, validate bool) (data []chutils.Row, valid []c
 			if datum.FT.Role == FREmbed || datum.FT.Role == FROneHot {
 				continue
 			}
-			x := gd.data[ind].Raw.Data[row]
+			x := gd.data[col].Raw.Data[row]
 			rows = append(rows, x)
-			ind++
 		}
 
 		data = append(data, rows)
