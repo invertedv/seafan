@@ -80,7 +80,11 @@ func (vec *VecData) Slice(sl Slicer) (Pipeline, error) {
 		return nil, Wrapper(e, "*VecData.Slice")
 	}
 	name := fmt.Sprintf("sliced from %s", vec.name)
-	return NewVecData(name, gOut), nil
+
+	outPipe := NewVecData(name, gOut)
+	WithKeepRaw(vec.keepRaw)(outPipe)
+
+	return outPipe, nil
 }
 
 func (vec *VecData) Init() error {
@@ -308,7 +312,10 @@ func (vec *VecData) Row(take int) (newPipe Pipeline, err error) {
 		return nil, err
 	}
 
-	return NewVecData("new pipe", gdNew), nil
+	newPipe = NewVecData("new pipe", gdNew)
+	WithKeepRaw(vec.keepRaw)(newPipe)
+
+	return newPipe, nil
 }
 
 // FieldCount returns the number of fields in the pipeline
@@ -324,7 +331,10 @@ func (vec *VecData) Subset(rows []int) (newPipe Pipeline, err error) {
 		return nil, err
 	}
 
-	return NewVecData("new pipe", gdNew), nil
+	newPipe = NewVecData("new pipe", gdNew)
+	WithKeepRaw(vec.keepRaw)(newPipe)
+
+	return newPipe, nil
 }
 
 // Where creates a new pipeline with rows where field is in equalTo. The comparison uses the *Raw data.
@@ -335,7 +345,10 @@ func (vec *VecData) Where(field string, equalTo []any) (newPipe Pipeline, err er
 		return nil, err
 	}
 
-	return NewVecData("new pipe", gdNew), nil
+	newPipe = NewVecData("new pipe", gdNew)
+	WithKeepRaw(vec.keepRaw)(newPipe)
+
+	return newPipe, nil
 }
 
 // Keep keeps only the listed fields in the pipeline
@@ -355,7 +368,10 @@ func (vec *VecData) AppendRows(gd *GData, fTypes FTypes) (pipeOut Pipeline, err 
 		return nil, e
 	}
 
-	return NewVecData("out", gdOut), nil
+	pipeOut = NewVecData("out", gdOut)
+	WithKeepRaw(vec.keepRaw)(pipeOut)
+
+	return pipeOut, nil
 }
 
 // AppendRowsRaw simply appends rows, in place, to the existing GData.  Only the *Raw data is updated.
@@ -375,7 +391,10 @@ func (vec *VecData) ReInit(ftypes *FTypes) (pipeOut Pipeline, err error) {
 		return nil, err
 	}
 
-	return NewVecData("new", gdNew), nil
+	pipeOut = NewVecData("new", gdNew)
+	WithKeepRaw(vec.keepRaw)(pipeOut)
+
+	return pipeOut, nil
 }
 
 func (vec *VecData) Join(right Pipeline, onField string, joinType JoinType) (result Pipeline, err error) {
@@ -384,5 +403,8 @@ func (vec *VecData) Join(right Pipeline, onField string, joinType JoinType) (res
 		return nil, e
 	}
 
-	return NewVecData("joined", gdResult), nil
+	result = NewVecData("joined", gdResult)
+	WithKeepRaw(vec.keepRaw)(result)
+
+	return result, nil
 }

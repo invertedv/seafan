@@ -70,7 +70,7 @@ const (
 //   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
 //   - row(<expr>) row number in pipeline. Row starts as 0 and is continuous.
 //   - countAfter(<expr>), countBefore(<expr>) is the number of rows after (before) the current row.
-//   - cumAfter(<expr>,<missing>), cumBefore(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
+//   - cumeAfter(<expr>,<missing>), cumeBefore(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
 //   - prodAfter(<expr>,<missing>), prodBefore(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
 //     and <missing> is used for the last (first) element.
 //   - index(<expr>,<index>) returns <expr> in the order of <index>
