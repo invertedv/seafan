@@ -92,8 +92,8 @@ github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+
 github.com/gorgonia/bindgen v0.0.0-20180812032444-09626750019e/go.mod h1:YzKk63P9jQHkwAo2rXHBv02yPxDzoQT2cBV0x5bGV/8=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/huandu/xstrings v1.3.2/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
-github.com/invertedv/chutils v1.1.15 h1:A6I1Dh9O31p4hNl3si+myHMXcMWZfr2Tlu2wtMIw4Vg=
-github.com/invertedv/chutils v1.1.15/go.mod h1:cSgf6g0dae/wJ+vfz6YslDIDsepYKd9l0Iswcl+zeY8=
+github.com/invertedv/chutils v1.1.17 h1:zKWKl7ZTG2QaxRkILfQHdXBbtXlzsSjhCp57iQH+hnw=
+github.com/invertedv/chutils v1.1.17/go.mod h1:cSgf6g0dae/wJ+vfz6YslDIDsepYKd9l0Iswcl+zeY8=
 github.com/jung-kurt/gofpdf v1.0.3-0.20190309125859-24315acbbda5/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
