@@ -601,8 +601,19 @@ func sseMAD(y, yhat *Raw, op string) float64 {
 
 // generate a slice that runs from start to end
 func ranger(start, end any) (*Raw, error) {
-	beg := int32(start.(float64))
-	finish := int32(end.(float64))
+	var begPtr, finishPtr any
+
+	if begPtr = Any2Int32(start); begPtr == nil {
+		return nil, fmt.Errorf("range -- cannot convert start to int32")
+	}
+
+	if finishPtr = Any2Int32(end); finishPtr == nil {
+		return nil, fmt.Errorf("range -- cannot convert end to int32")
+	}
+
+	beg := begPtr.(int32)
+	finish := finishPtr.(int32)
+
 	if beg == finish {
 		return nil, fmt.Errorf("empty range")
 	}
@@ -936,6 +947,10 @@ func evalOps(node *OpNode) error {
 	ind1, ind2 := 0, 0
 
 	for ind := 0; ind < node.Raw.Len(); ind++ {
+		if ind1 >= node.Inputs[0].Raw.Len() || ind2 >= node.Inputs[1].Raw.Len() {
+			return fmt.Errorf("slices not same length")
+		}
+
 		x0 := Any2Kind(node.Inputs[0].Raw.Data[ind1], reflect.Float64)
 		x1 := Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Float64)
 		if x0 == nil || x1 == nil {
