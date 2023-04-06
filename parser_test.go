@@ -328,6 +328,7 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
+		"count(c)",
 		"min(c)",
 		"prodAfter(D,100)",
 		"prodBefore(D,0)",
@@ -371,6 +372,7 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	expect := [][]float64{
+		{2},
 		{1},
 		{10, 100},
 		{0, 3},
