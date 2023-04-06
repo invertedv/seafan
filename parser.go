@@ -648,7 +648,7 @@ func EvalSFunction(node *OpNode) error {
 	case "std":
 		result, e = node.Inputs[0].Raw.Std()
 	case "count":
-		result = NewRaw([]any{node.Inputs[0].Raw.Len()}, nil)
+		result = NewRaw([]any{int32(node.Inputs[0].Raw.Len())}, nil)
 	case "npv":
 		result = NewRaw([]any{npv(node.Inputs[0].Raw, node.Inputs[1].Raw)}, nil)
 	case "irr":
