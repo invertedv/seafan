@@ -313,7 +313,7 @@ func GTAny(xa, xb any) (truth bool, err error) {
 	}
 
 	if reflect.TypeOf(xa) != reflect.TypeOf(xb) {
-		return false, fmt.Errorf("must be of same type")
+		return false, fmt.Errorf("compared values must be of same type, got %v and %v", reflect.TypeOf(xa), reflect.TypeOf(xb))
 	}
 
 	switch x := xa.(type) {
