@@ -330,8 +330,6 @@ func GTAny(xa, xb any) (truth bool, err error) {
 	case float64:
 		return x > xb.(float64), nil
 	case time.Time:
-		tmp := x.Sub(xb.(time.Time))
-		_ = tmp
 		return x.Sub(xb.(time.Time)) > 0, nil
 	}
 
@@ -475,53 +473,36 @@ func (r *Raw) IsNumeric() bool {
 //	- "count" Counts for rows are taken.
 //
 // For "sum" and "product", the value "missing" is used for the last row.
-func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
+func (r *Raw) CumeAfter(aggType string) (*Raw, error) {
 	if !r.IsNumeric() {
 		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
-	}
-
-	// coerce to same type as r
-	var miss any
-	if missing != nil {
-		miss = Any2Kind(missing, r.Kind)
-		if miss == nil {
-			return nil, fmt.Errorf("cannot convert %v to %v (*Raw) Lag", missing, r.Kind)
-		}
 	}
 
 	cumes := make([]any, r.Len())
 
 	for ind := 0; ind < r.Len(); ind++ {
-		if ind < r.Len()-1 {
-			var e error
-			var result any
-			var data *Raw
-			switch aggType {
-			case "sum":
-				data, e = NewRaw(r.Data[ind+1:], nil).Sum()
-				result = data.Data[0]
-			case "product":
-				data, e = NewRaw(r.Data[ind+1:], nil).Product()
-				result = data.Data[0]
-			case "count":
-				result = any(float64(r.Len() - 1 - ind))
-			default:
-				return nil, fmt.Errorf("unknown aggType (*Raw) CumeAfter")
-			}
 
-			if e != nil {
-				return nil, e
-			}
-
-			cumes[ind] = result
-		} else {
-			switch aggType {
-			case "sum", "product":
-				cumes[ind] = miss
-			default:
-				cumes[ind] = float64(ind - 1)
-			}
+		var e error
+		var result any
+		var data *Raw
+		switch aggType {
+		case "sum":
+			data, e = NewRaw(r.Data[ind:], nil).Sum()
+			result = data.Data[0]
+		case "product":
+			data, e = NewRaw(r.Data[ind:], nil).Product()
+			result = data.Data[0]
+		case "count":
+			result = any(float64(r.Len() - ind))
+		default:
+			return nil, fmt.Errorf("unknown aggType (*Raw) CumeAfter")
 		}
+
+		if e != nil {
+			return nil, e
+		}
+
+		cumes[ind] = result
 	}
 
 	return NewRaw(cumes, nil), nil
@@ -535,49 +516,32 @@ func (r *Raw) CumeAfter(missing any, aggType string) (*Raw, error) {
 //	- "count", "row" Counts for rows are taken.
 //
 // For "sum" and "product", the value "missing" is used for the first row.
-func (r *Raw) CumeBefore(missing any, aggType string) (*Raw, error) {
+func (r *Raw) CumeBefore(aggType string) (*Raw, error) {
 	if !r.IsNumeric() {
 		return nil, fmt.Errorf("numeric operation on %v", r.Kind)
-	}
-
-	// coerce to same type as r
-	var miss any
-	if missing != nil {
-		miss = Any2Kind(missing, r.Kind)
-		if miss == nil {
-			return nil, fmt.Errorf("cannot convert %v to %v (*Raw) Lag", missing, r.Kind)
-		}
 	}
 
 	cumes := make([]any, r.Len())
 
 	for ind := 0; ind < r.Len(); ind++ {
-		if ind > 0 {
-			var data *Raw
-			var e error
-			var result any
-			switch aggType {
-			case "sum":
-				data, e = NewRaw(r.Data[:ind], nil).Sum()
-				result = data.Data[0]
-			case "product":
-				data, e = NewRaw(r.Data[:ind], nil).Product()
-				result = data.Data[0]
-			case "count", "row":
-				result = float64(ind)
-			}
-			if e != nil {
-				return nil, e
-			}
-			cumes[ind] = result
-		} else {
-			switch aggType {
-			case "sum", "product":
-				cumes[ind] = miss
-			default:
-				cumes[ind] = float64(ind)
-			}
+
+		var data *Raw
+		var e error
+		var result any
+		switch aggType {
+		case "sum":
+			data, e = NewRaw(r.Data[:ind+1], nil).Sum()
+			result = data.Data[0]
+		case "product":
+			data, e = NewRaw(r.Data[:ind+1], nil).Product()
+			result = data.Data[0]
+		case "count", "row":
+			result = float64(ind + 1)
 		}
+		if e != nil {
+			return nil, e
+		}
+		cumes[ind] = result
 	}
 
 	return NewRaw(cumes, nil), nil

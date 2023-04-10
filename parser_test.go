@@ -196,18 +196,18 @@ func TestEvalSFunction(t *testing.T) {
 	pvx := tester("max(f)", pipe)
 	assert.Equal(t, pvx[0].(string), "z")
 
-	expIr := 0.19194
+	expIr := 0.3169080407719
 	ir := tester("irr(e,c)", pipe)
 	assert.InDelta(t, ir[0], expIr, .0001, nil)
 
 	// constant discount rate
 	pv := tester("npv(.1,c)", pipe)
-	ExpVal := 7.54798
+	ExpVal := 8.302778
 	assert.InDelta(t, pv[0], ExpVal, .0001)
 
 	// variable discount rate
 	pv = tester("npv(D,c)", pipe)
-	ExpVal = 4.70471
+	ExpVal = 5.8995
 	assert.InDelta(t, pv[0], ExpVal, .0001)
 }
 
@@ -220,7 +220,7 @@ func TestEvaluate2(t *testing.T) {
 	dataS := "'x','a','z','t'"  // f
 	pipe := buildPipe([]string{dataCF, dataDr, dataPV, dataS}, []string{"f", "f", "f", "s"})
 
-	express := []string{"c+f", "f+1", "f*f", "index(c,f)", "c^f", "cumeAfter(c,'a')", "log(e)"}
+	express := []string{"c+f", "f+1", "f*f", "index(c,f)", "c^f", "log(e)"}
 
 	for _, exp := range express {
 		root := &OpNode{Expression: exp}
@@ -328,14 +328,14 @@ func TestEvaluate(t *testing.T) {
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f", "f"})
 
 	frmla := []string{
-		"if(c==1,D==toInt(3),c)",
+		"if(c==1.0,D==3.0,c)",
 		"count(c)",
 		"min(c)",
-		"prodAfter(D,100)",
-		"prodBefore(D,0)",
+		"prodAfter(D)",
+		"prodBefore(D)",
 		"lag(c,42)",
 		"c+D",
-		"cumeBefore(c,42)",
+		"cumeBefore(c)",
 		"if(c==1,log(c),-c)",
 		"max(c)",
 		"c-D-D",
@@ -346,9 +346,9 @@ func TestEvaluate(t *testing.T) {
 		"-D*3 + D",
 		"lag(c,42)",
 		"countBefore(c)",
-		"cumeBefore(c,42)",
+		"cumeBefore(c)",
 		"countAfter(c)",
-		"cumeAfter(c, 42)",
+		"cumeAfter(c)",
 		"std(c)",
 		"max(c)",
 		//		"median(c)",
@@ -376,24 +376,24 @@ func TestEvaluate(t *testing.T) {
 		{1, 2},
 		{2},
 		{1},
-		{10, 100},
-		{0, 3},
+		{30, 10},
+		{3, 30},
 		{42, 1},
 		{4, 12},
-		{42, 1},
+		{1, 3},
 		{0, -2},
 		{2},
 		{-5, -18},
 		{0, 1},
 		{10, 3},
-		{0, 1},
+		{1, 2},
 		{-5, -18},
 		{-6, -20},
 		{42, 1},
-		{0, 1},
-		{42, 1},
-		{1, 0},
-		{2, 42},
+		{1, 2},
+		{1, 3},
+		{2, 1},
+		{3, 2},
 		{0.7071067811865476},
 		{2},
 		//		{1},
@@ -418,8 +418,6 @@ func TestEvaluate(t *testing.T) {
 	}
 
 	for ind := 0; ind < len(frmla); ind++ {
-		x := frmla[ind]
-		_ = x
 		act := tester(frmla[ind], pipe)
 		acts := make([]float64, len(act))
 		for indx, a := range act {

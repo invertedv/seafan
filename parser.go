@@ -70,8 +70,8 @@ const (
 //   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
 //   - row(<expr>) row number in pipeline. Row starts as 0 and is continuous.
 //   - countAfter(<expr>), countBefore(<expr>) is the number of rows after (before) the current row.
-//   - cumeAfter(<expr>,<missing>), cumeBefore(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row
-//   - prodAfter(<expr>,<missing>), prodBefore(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row
+//   - cumeAfter(<expr>), cumeBefore(<expr>,<missing>) is the cumulative sum of <expr> after (before) the current row (included)
+//   - prodAfter(<expr>), prodBefore(<expr>,<missing>) is the cumulative product of <expr> after (before) the current row (included)
 //     and <missing> is used for the last (first) element.
 //   - index(<expr>,<index>) returns <expr> in the order of <index>
 //   - cat(<expr>) converts <expr> to a categorical field. Only applicable to continuous fields.
@@ -517,16 +517,19 @@ func getDeltas(node *OpNode) (x *Raw, deltas []int) {
 	return AllocRaw(n, node.Func.Return), deltas
 }
 
-// npv finds NPV when the discount rate is a constant
+// npv finds NPV when the discount rate is a constant. The first cashflow has a discount factor of 1.0
 func npv(discount, cashflows *Raw) (pv float64) {
 	r := 1.0 / (1.0 + discount.Data[0].(float64))
 	totalD := 1.0
 	for ind := 0; ind < cashflows.Len(); ind++ {
 		if discount.Len() == 1 {
-			totalD *= r
+			if ind > 0 {
+				totalD *= r
+			}
 		} else {
-			totalD = math.Pow(1.0/(1.0+discount.Data[ind].(float64)), float64(ind+1))
+			totalD = math.Pow(1.0/(1.0+discount.Data[ind].(float64)), float64(ind))
 		}
+
 		pv += cashflows.Data[ind].(float64) * totalD
 	}
 
@@ -787,19 +790,22 @@ func evalFunction(node *OpNode) error {
 	var err error
 	switch node.Func.Name {
 	case "cumeAfter":
-		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "sum")
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter("sum")
 	case "prodAfter":
-		node.Raw, err = node.Inputs[0].Raw.CumeAfter(node.Inputs[1].Raw.Data[0], "product")
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter("product")
 	case "countAfter":
-		node.Raw, err = node.Inputs[0].Raw.CumeAfter(nil, "count")
+		node.Raw, err = node.Inputs[0].Raw.CumeAfter("count")
 	case "cumeBefore":
-		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "sum")
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore("sum")
 	case "prodBefore":
-		node.Raw, err = node.Inputs[0].Raw.CumeBefore(node.Inputs[1].Raw.Data[0], "product")
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore("product")
 	case "countBefore":
-		node.Raw, err = node.Inputs[0].Raw.CumeBefore(nil, "count")
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore("count")
 	case "row":
-		node.Raw, err = node.Inputs[0].Raw.CumeBefore(nil, "count")
+		node.Raw, err = node.Inputs[0].Raw.CumeBefore("count")
+		for ind, x := range node.Raw.Data {
+			node.Raw.Data[ind] = x.(float64) - 1
+		}
 	case "lag":
 		node.Raw, err = node.Inputs[0].Raw.Lag(node.Inputs[1].Raw.Data[0])
 	case "pow":
