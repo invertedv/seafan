@@ -1063,6 +1063,35 @@ func (gd *GData) AppendRows(gdApp *GData, fTypes FTypes) (gdOut *GData, err erro
 	return gdOut, nil
 }
 
+// Copy makes an independent copy of gd
+func (gd *GData) Copy() (gdOut *GData, err error) {
+	gdOut = NewGData()
+	fTypes := gd.GetFTypes()
+
+	for ind, fld := range gd.FieldList() {
+		datum := gd.Get(fld)
+		keepRaw := true
+		raw := datum.Raw
+		if raw == nil {
+			raw, _ = gd.GetRaw(fld)
+			keepRaw = false
+		}
+		switch fTypes[ind].Role {
+		case FRCts:
+			err = gdOut.AppendC(raw, fTypes[ind].Name, fTypes[ind].Normalized, fTypes[ind].FP, keepRaw)
+		case FRCat:
+			err = gdOut.AppendD(raw, fTypes[ind].Name, fTypes[ind].FP, keepRaw)
+		case FROneHot, FREmbed:
+			err = gdOut.MakeOneHot(fTypes[ind].From, fTypes[ind].Name)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return gdOut, nil
+}
+
 // ReInit re-initializes the Data field from Raw for each GDatum. If ftypes is not nil, these values
 // are used, otherwise the FParam values are re-derived from the data.
 func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {

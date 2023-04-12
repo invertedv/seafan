@@ -25,6 +25,8 @@ sse,float64,S,float64,float64,$
 mad,float64,S,float64,float64,$
 corr,float64,S,float64,float64,$
 r2,float64,S,float64,float64,$
+print,float64,S,any,float64,$
+printIf,float64,S,any,float64,float64$
 dateAdd,time.Time,R,time.Time,int32,$
 toDate,time.Time,R,string,,$
 toString,string,R,any$

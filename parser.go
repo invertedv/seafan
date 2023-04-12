@@ -97,6 +97,8 @@ const (
 //     is a slice, then the ith month's cashflows are discounted for i months at the ith discount rate.
 //   - irr(<cost>,<cash flows>).  Find the IRR of an initial outlay of <cost> (a positive value!), yielding cash flows
 //     (The first cash flow gets discounted one period). irr returns 0 if there's no solution.
+//   - print(<expr>,<rows>) print <rows> of the <expr>.  If <rows>=0, print entire slice.
+//   - printIf(<expr>,<rows>,<cond>) if condition evaluates to a value > 0, execute print(<expr>,<rows>)
 //
 // Comparisons
 //   - ==, !=, >,>=, <, <=
@@ -536,6 +538,46 @@ func npv(discount, cashflows *Raw) (pv float64) {
 	return pv
 }
 
+// print the slice (and return 1)
+func printer(toPrint *Raw, name string, numPrint any) (*Raw, error) {
+	asInt32 := Any2Int32(numPrint)
+	if asInt32 == nil {
+		return nil, fmt.Errorf("cannot convert # rows to print to int32")
+	}
+
+	num2Print := int(asInt32.(int32))
+
+	if num2Print == 0 {
+		num2Print = toPrint.Len()
+	}
+
+	if num2Print < 0 {
+		return nil, fmt.Errorf("negative # rows to print")
+	}
+
+	num2Print = Min(num2Print, toPrint.Len())
+
+	fmt.Println(name)
+	for ind := 0; ind < num2Print; ind++ {
+		fmt.Printf("%d: %v\n", ind, toPrint.Data[ind])
+	}
+
+	return NewRaw([]any{1.0}, nil), nil
+}
+
+func printIf(toPrint *Raw, name string, numPrint, cond any) (*Raw, error) {
+	asFlt := Any2Float64(cond)
+	if asFlt == nil {
+		return nil, fmt.Errorf("invalid logical condition")
+	}
+
+	if asFlt.(float64) <= 0.0 {
+		return NewRaw([]any{0.0}, nil), nil
+	}
+
+	return printer(toPrint, name, numPrint)
+}
+
 // irr finds the internal rate of return of the cashflows against the initial outlay of cost.
 // guess0 is the initial guess to the optimizer.
 func irr(cost, guess0 float64, cashflows *Raw) (float64, error) {
@@ -651,6 +693,10 @@ func EvalSFunction(node *OpNode) error {
 	var result *Raw
 
 	switch node.Func.Name {
+	case "print":
+		result, e = printer(node.Inputs[0].Raw, node.Inputs[0].Expression, node.Inputs[1].Raw.Data[0])
+	case "printIf":
+		result, e = printIf(node.Inputs[0].Raw, node.Inputs[0].Expression, node.Inputs[1].Raw.Data[0], node.Inputs[2].Raw.Data[0])
 	case "sum":
 		result, e = node.Inputs[0].Raw.Sum()
 	case "max":
@@ -844,7 +890,8 @@ func evalConstant(node *OpNode) bool {
 	}
 
 	if strings.Contains(node.Expression, "'") {
-		node.Raw = NewRaw([]any{node.Expression}, nil)
+		// strip single quote
+		node.Raw = NewRaw([]any{strings.ReplaceAll(node.Expression, "'", "")}, nil)
 		node.Role = FRCat
 
 		return true

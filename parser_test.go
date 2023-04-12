@@ -617,3 +617,28 @@ func ExampleLoop() {
 	// t
 	// [19 -41 35 95]
 }
+
+// This example shows how to print a result
+func ExampleEvaluate() {
+	Verbose = false
+
+	// builds a Pipline with two fields:
+	//    c = 1,2,3,4
+	//    D = 5,-5,3,6
+	pipe := buildPipe([]string{"1,2,3,4", "'a', 'b', 'c', 'd'"}, []string{"f", "s"})
+
+	field := &OpNode{Expression: "print(c, 0)"}
+	if e := Expr2Tree(field); e != nil {
+		panic(e)
+	}
+
+	if e := Evaluate(field, pipe); e != nil {
+		panic(e)
+	}
+	// output:
+	// c
+	// 0: 1
+	// 1: 2
+	// 2: 3
+	// 3: 4
+}
