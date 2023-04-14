@@ -828,7 +828,7 @@ func evalFunction(node *OpNode) error {
 			return e
 		}
 
-		goNegative(node.Raw, node.Neg)
+		//		goNegative(node.Raw, node.Neg)
 
 		return nil
 	}
