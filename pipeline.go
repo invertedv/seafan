@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/invertedv/utilities"
+
 	"github.com/invertedv/chutils"
 	cf "github.com/invertedv/chutils/file"
 	s "github.com/invertedv/chutils/sql"
@@ -432,7 +434,7 @@ func Append(pipe1, pipe2 Pipeline) (Pipeline, error) {
 	flds1 := pipe1.FieldList()
 	flds2 := pipe2.FieldList()
 	for _, fld := range flds1 {
-		if searchSlice(fld, flds2) < 0 {
+		if utilities.Position(fld, "", flds2...) < 0 {
 			return nil, fmt.Errorf("field %s not in append pipe", fld)
 		}
 	}

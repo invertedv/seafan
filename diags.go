@@ -7,6 +7,8 @@ import (
 	"math"
 	"sort"
 
+	"github.com/invertedv/utilities"
+
 	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"gonum.org/v1/gonum/stat"
 )
@@ -354,8 +356,8 @@ func Decile(xyIn *XY, plt *PlotDef) error {
 		return e
 	}
 
-	if e = xy.Sort(); e != nil {
-		return e
+	if ex := xy.Sort(); ex != nil {
+		return ex
 	}
 
 	deciles, e := NewDesc([]float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9}, "fitted")
@@ -581,12 +583,13 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 	const (
 		take    = 1000 // # of obs to use for graph
 		maxCats = 10   // max # of levels of a categorical field to show in plot
+		cols    = 6
 	)
 	var e error
 
 	name := feat
 	lay := &grob.Layout{}
-	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: 6, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
+	lay.Grid = &grob.LayoutGrid{Rows: 2, Columns: cols, Pattern: grob.LayoutGridPatternIndependent, Roworder: grob.LayoutGridRoworderTopToBottom}
 	fig := &grob.Fig{}
 
 	bSize := pipe.BatchSize()
@@ -619,7 +622,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 
 		newPipe.Shuffle()
 
-		n := Min(newPipe.Rows(), take)
+		n := utilities.MinInt(newPipe.Rows(), take)
 
 		WithBatchSize(n)(newPipe)
 
@@ -641,12 +644,12 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 			fig.AddTraces(tr)
 
 			qs := gd.Summary.DistrC.Q
-			dp := (qs[6] - qs[0]) / 5
+			dp := (qs[cols] - qs[0]) / 5
 			nper := n / 4
 			data := gd.Data
 
 			for row := 0; row < n; row++ {
-				grp := 1 + Min(row/nper, 3)
+				grp := 1 + utilities.MinInt(row/nper, 3)
 				xx := qs[0] + dp*float64(grp)
 				data.([]float64)[row] = xx
 				xs1[row] = fmt.Sprintf("%0.2f", xx*gd.FT.FP.Scale+gd.FT.FP.Location)
@@ -662,7 +665,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 				rate[ind] = float64(vals[ind]) / float64(gd.Summary.NRows)
 			}
 
-			cats := Min(len(keys), maxCats)
+			cats := utilities.MinInt(len(keys), maxCats)
 			tr := &grob.Bar{Xaxis: xAxis, Yaxis: yAxis, X: keys[0:cats], Y: rate[0:cats], Type: grob.TraceTypeBar}
 
 			fig.AddTraces(tr)
@@ -671,7 +674,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 			data := gd.Data
 
 			for row := 0; row < n; row++ {
-				grp := Min(row/nper, cats-1)
+				grp := utilities.MinInt(row/nper, cats-1)
 				grpKey := keys[grp]
 				grpVal := int(gdFrom.FT.FP.Lvl[grpKey])
 
@@ -699,12 +702,12 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 			return Wrapper(e, "Marginal")
 		}
 
-		xAxis, yAxis = fmt.Sprintf("x%d", plotNo-6), fmt.Sprintf("y%d", plotNo-6)
+		xAxis, yAxis = fmt.Sprintf("x%d", plotNo-cols), fmt.Sprintf("y%d", plotNo-cols)
 		plotNo--
 		tr := &grob.Box{X: xs1, Y: fit, Type: grob.TraceTypeBox, Xaxis: xAxis, Yaxis: yAxis}
 
 		fig.AddTraces(tr)
-		if plotNo == 6 {
+		if plotNo == cols {
 			break
 		}
 	}

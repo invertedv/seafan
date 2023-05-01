@@ -94,7 +94,6 @@ func Plotter(fig *grob.Fig, lay *grob.Layout, pd *PlotDef) error {
 		if pd.FileName == "" {
 			tmp = true
 			// create temp file.  We'll return this, in case it's needed
-			rand.Seed(time.Now().UnixMicro())
 			pd.FileName = fmt.Sprintf("%s/plotly%d.html", os.TempDir(), rand.Uint32())
 		}
 

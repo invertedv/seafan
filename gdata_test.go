@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"testing"
 
 	"github.com/invertedv/chutils"
@@ -201,7 +200,6 @@ func TestGData_Slice(t *testing.T) {
 }
 
 func TestGData_Shuffle(t *testing.T) {
-	rand.Seed(494949)
 	gd := NewGData()
 	x0 := make([]any, 0)
 

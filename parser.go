@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/invertedv/utilities"
+	"github.com/pkg/errors"
+
 	"gonum.org/v1/gonum/optimize"
 )
 
@@ -132,16 +135,13 @@ func loadFunctions() {
 	for _, f := range funcs {
 		fdetail := strings.Split(f, ",")
 		fSpec := FuncSpec{Name: fdetail[0],
-			Return: str2Kind(fdetail[1]),
+			Return: utilities.String2Kind(fdetail[1]),
 			Level:  rune(fdetail[2][0]),
 		}
-		//			Return: 0,
-		//			Args:   nil,
-		//			Level:  0,
 
 		for ind := 3; ind < len(fdetail); ind++ {
 			if fdetail[ind] != "" {
-				fSpec.Args = append(fSpec.Args, str2Kind(fdetail[ind]))
+				fSpec.Args = append(fSpec.Args, utilities.String2Kind(fdetail[ind]))
 			}
 		}
 		Functions = append(Functions, fSpec)
@@ -312,11 +312,11 @@ func searchOp(expr, needles string) (op string, args []string) {
 		default:
 			if ignore == 0 && !ignoreQ && indx > 0 {
 				// check 2-character needles first
-				if checkSlice(ch2, needles) {
+				if utilities.Has(ch2, delim, needles) {
 					return ch2, []string{expr[0:indx], expr[indx+2:]}
 				}
 
-				if checkSlice(ch, needles) {
+				if utilities.Has(ch, delim, needles) {
 					return ch, []string{expr[0:indx], expr[indx+1:]}
 				}
 			}
@@ -540,12 +540,16 @@ func npv(discount, cashflows *Raw) (pv float64) {
 
 // print the slice (and return 1)
 func printer(toPrint *Raw, name string, numPrint any) (*Raw, error) {
-	asInt32 := Any2Int32(numPrint)
+	asInt32, e := utilities.Any2Int32(numPrint)
+	if e != nil {
+		return nil, e
+	}
+
 	if asInt32 == nil {
 		return nil, fmt.Errorf("cannot convert # rows to print to int32")
 	}
 
-	num2Print := int(asInt32.(int32))
+	num2Print := int(*asInt32)
 
 	if num2Print == 0 {
 		num2Print = toPrint.Len()
@@ -555,7 +559,7 @@ func printer(toPrint *Raw, name string, numPrint any) (*Raw, error) {
 		return nil, fmt.Errorf("negative # rows to print")
 	}
 
-	num2Print = Min(num2Print, toPrint.Len())
+	num2Print = utilities.MinInt(num2Print, toPrint.Len())
 
 	fmt.Println(name)
 	for ind := 0; ind < num2Print; ind++ {
@@ -566,12 +570,12 @@ func printer(toPrint *Raw, name string, numPrint any) (*Raw, error) {
 }
 
 func printIf(toPrint *Raw, name string, numPrint, cond any) (*Raw, error) {
-	asFlt := Any2Float64(cond)
-	if asFlt == nil {
-		return nil, fmt.Errorf("invalid logical condition")
+	asFlt, e := utilities.Any2Float64(cond)
+	if e != nil {
+		return nil, errors.WithMessage(e, "printIf")
 	}
 
-	if asFlt.(float64) <= 0.0 {
+	if *asFlt <= 0.0 {
 		return NewRaw([]any{0.0}, nil), nil
 	}
 
@@ -646,18 +650,21 @@ func sseMAD(y, yhat *Raw, op string) float64 {
 
 // generate a slice that runs from start to end
 func ranger(start, end any) (*Raw, error) {
-	var begPtr, finishPtr any
+	var (
+		begPtr, finishPtr *int32
+		e                 error
+	)
 
-	if begPtr = Any2Int32(start); begPtr == nil {
-		return nil, fmt.Errorf("range -- cannot convert start to int32")
+	if begPtr, e = utilities.Any2Int32(start); e != nil {
+		return nil, errors.WithMessage(e, "ranger")
 	}
 
-	if finishPtr = Any2Int32(end); finishPtr == nil {
-		return nil, fmt.Errorf("range -- cannot convert end to int32")
+	if finishPtr, e = utilities.Any2Int32(end); e != nil {
+		return nil, errors.WithMessage(e, "ranger")
 	}
 
-	beg := begPtr.(int32)
-	finish := finishPtr.(int32)
+	beg := *begPtr
+	finish := *finishPtr
 
 	if beg == finish {
 		return nil, fmt.Errorf("empty range")
@@ -762,9 +769,13 @@ func dateAddMonths(node *OpNode) error {
 			return fmt.Errorf("arg 1 to dateadd isn't a date")
 		}
 
-		var param any
-		if param = Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Int32); param == nil {
-			return fmt.Errorf("cannot convert")
+		var (
+			param any
+			e     error
+		)
+
+		if param, e = utilities.Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Int32); e != nil {
+			return errors.WithMessage(e, "dateAddMonths")
 		}
 
 		dates[ind] = dt.AddDate(0, int(param.(int32)), 0)
@@ -785,9 +796,9 @@ func toWhatever(node *OpNode, kind reflect.Kind) error {
 	xOut := make([]any, n)
 
 	for ind := 0; ind < n; ind++ {
-		val := Any2Kind(xIn[ind], kind)
+		val, e := utilities.Any2Kind(xIn[ind], kind)
 
-		if val == nil {
+		if e != nil {
 			return fmt.Errorf("conversion to %v failed", kind)
 		}
 
@@ -937,7 +948,7 @@ func evalOpsCat(node *OpNode) error {
 	for ind := 0; ind < node.Raw.Len(); ind++ {
 		// check same type...
 		node.Raw.Data[ind] = float64(0)
-		test, e := Comparer(node.Inputs[0].Raw.Data[ind1], node.Inputs[1].Raw.Data[ind2], node.Func.Name)
+		test, e := utilities.Comparer(node.Inputs[0].Raw.Data[ind1], node.Inputs[1].Raw.Data[ind2], node.Func.Name)
 		if e != nil {
 			return e
 		}
@@ -1003,10 +1014,13 @@ func evalOps(node *OpNode) error {
 		if ind1 >= node.Inputs[0].Raw.Len() || ind2 >= node.Inputs[1].Raw.Len() {
 			return fmt.Errorf("slices not same length")
 		}
-
-		x0 := Any2Kind(node.Inputs[0].Raw.Data[ind1], reflect.Float64)
-		x1 := Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Float64)
-		if x0 == nil || x1 == nil {
+		var (
+			x0, x1 any
+			e0, e1 error
+		)
+		x0, e0 = utilities.Any2Kind(node.Inputs[0].Raw.Data[ind1], reflect.Float64)
+		x1, e1 = utilities.Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Float64)
+		if e0 != nil || e1 != nil {
 			return fmt.Errorf("cannot convert")
 		}
 
@@ -1031,7 +1045,7 @@ func evalOps(node *OpNode) error {
 			node.Raw.Data[ind] = val
 		case ">", ">=", "==", "!=", "<", "<=":
 			node.Raw.Data[ind] = float64(0)
-			test, _ := Comparer(x0, x1, node.Func.Name)
+			test, _ := utilities.Comparer(x0, x1, node.Func.Name)
 			if test {
 				node.Raw.Data[ind] = float64(1)
 			}
@@ -1074,7 +1088,7 @@ func Evaluate(curNode *OpNode, pipe Pipeline) error {
 	}
 
 	// check: are these operations: && || > >= = == != + - * / ^
-	if curNode.Func != nil && checkSlice(curNode.Func.Name, operations) {
+	if curNode.Func != nil && utilities.Has(curNode.Func.Name, delim, operations) {
 		return evalOps(curNode)
 	}
 
@@ -1234,8 +1248,8 @@ func Loop(loopVar string, start, end int, inner []*OpNode, assign []string, pipe
 			var e error
 			setValue(loopVar, loopInd, inner[nodeInd])
 
-			if e := Evaluate(inner[nodeInd], pipe); e != nil {
-				return e
+			if ex := Evaluate(inner[nodeInd], pipe); ex != nil {
+				return ex
 			}
 
 			// if there, must drop it

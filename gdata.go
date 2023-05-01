@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/invertedv/utilities"
+
 	"github.com/invertedv/chutils"
 
 	"gonum.org/v1/gonum/stat"
@@ -330,7 +332,7 @@ func (gd *GData) Slice(sl Slicer) (*GData, error) {
 		switch role := ft.Role; role {
 		// These are all float64, but FROneHot and FREmbed are matrices
 		case FRCts, FROneHot, FREmbed:
-			cats := Max(1, ft.Cats)
+			cats := utilities.MaxInt(1, ft.Cats)
 
 			d := make([]float64, 0)
 			n := 0
@@ -521,7 +523,6 @@ func (gd *GData) SortField() string {
 func (gd *GData) Shuffle() {
 	gd.sortField = ""
 
-	rand.Seed(time.Now().UnixMicro())
 	rand.Shuffle(gd.Len(), gd.Swap)
 }
 
@@ -1229,7 +1230,7 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 	omit := []string{onField}
 
 	for _, fld := range urFields {
-		if searchSlice(fld, lFields) >= 0 {
+		if utilities.Position(fld, "", lFields...) >= 0 {
 			omit = append(omit, fld)
 		}
 	}
@@ -1356,7 +1357,7 @@ func getMiss(ft *FType, kind reflect.Kind) any {
 func subsetFields(uFields []string, uRaw []*Raw, uFts FTypes, omit []string) (fields []string, raw []*Raw, fts FTypes) {
 	for ind := 0; ind < len(uFields); ind++ {
 		fld := uFields[ind]
-		if searchSlice(fld, omit) >= 0 {
+		if utilities.Position(fld, "", omit...) >= 0 {
 			continue
 		}
 
@@ -1376,7 +1377,7 @@ func subsetFields(uFields []string, uRaw []*Raw, uFts FTypes, omit []string) (fi
 func equalInd(data *Raw, startInd int) (inds []int, err error) {
 	var comp bool
 	for ind := startInd; ind < data.Len(); ind++ {
-		if comp, err = Comparer(data.Data[startInd], data.Data[ind], "=="); err != nil {
+		if comp, err = utilities.Comparer(data.Data[startInd], data.Data[ind], "=="); err != nil {
 			return nil, err
 		}
 
@@ -1410,7 +1411,7 @@ func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err e
 		return nil, nil, err
 	}
 
-	if comp, err = Comparer(left.Data[lInd], right.Data[rInd], "<"); err != nil {
+	if comp, err = utilities.Comparer(left.Data[lInd], right.Data[rInd], "<"); err != nil {
 		return nil, nil, err
 	}
 
@@ -1422,7 +1423,7 @@ func collectEqual(left, right *Raw, lInd, rInd int) (lEqual, rEqual []int, err e
 	// find first equal
 	rEq := -1
 	for ind := rInd; ind < right.Len(); ind++ {
-		if comp, err = Comparer(left.Data[lInd], right.Data[ind], "=="); err != nil {
+		if comp, err = utilities.Comparer(left.Data[lInd], right.Data[ind], "=="); err != nil {
 			return nil, nil, err
 		}
 		if comp {

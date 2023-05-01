@@ -617,7 +617,6 @@ type FitOpts func(*Fit)
 
 // NewFit creates a new *Fit.
 func NewFit(nn *NNModel, epochs int, p Pipeline, opts ...FitOpts) *Fit {
-	rand.Seed(time.Now().UnixMicro())
 	outFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
 	tmpFile := fmt.Sprintf("%s/NN%d", os.TempDir(), int(rand.Uint32()))
 	fit := &Fit{

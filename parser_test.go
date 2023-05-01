@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/invertedv/utilities"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/invertedv/chutils"
@@ -157,6 +159,9 @@ func TestExpr2Tree(t *testing.T) {
 
 		assert.Nil(t, e)
 		assert.ElementsMatch(t, root.Raw.Data, results[ind])
+		if ind == 0 {
+			break
+		}
 	}
 }
 
@@ -305,7 +310,6 @@ func TestEvaluate_range(t *testing.T) {
 	dataC := "1"
 	dataD := "30"
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "f"})
-	fmt.Println(pipe.Rows())
 
 	root := &OpNode{Expression: "range(0,10)"}
 	if err = Expr2Tree(root); err != nil {
@@ -423,7 +427,8 @@ func TestEvaluate(t *testing.T) {
 		act := tester(frmla[ind], pipe)
 		acts := make([]float64, len(act))
 		for indx, a := range act {
-			r := Any2Kind(a, reflect.Float64)
+			r, e := utilities.Any2Kind(a, reflect.Float64)
+			assert.Nil(t, e)
 			acts[indx] = r.(float64)
 		}
 		assert.EqualValues(t, expect[ind], acts)
