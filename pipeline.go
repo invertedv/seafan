@@ -392,7 +392,7 @@ func PipeToSQL(pipe Pipeline, table string, conn *chutils.Connect) error {
 }
 
 // PipeToCSV saves the pipe as a CSV
-func PipeToCSV(pipe Pipeline, outFile string) error {
+func PipeToCSV(pipe Pipeline, outFile string, sep, eol, quote rune) error {
 	if outFile == "" {
 		return fmt.Errorf("exportCSV: outFile cannot be empty")
 	}
@@ -409,7 +409,7 @@ func PipeToCSV(pipe Pipeline, outFile string) error {
 	}
 
 	// make writer
-	wtr := cf.NewWriter(handle, "output", nil, ',', '\n', "tmp.xyz")
+	wtr := cf.NewWriter(handle, "output", nil, sep, eol, quote, "tmp.xyz")
 	defer func() { _ = wtr.Close() }()
 
 	if e := pipe.GData().Reset(); e != nil {
