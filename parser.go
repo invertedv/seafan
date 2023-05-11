@@ -3,6 +3,7 @@ package seafan
 import (
 	_ "embed"
 	"fmt"
+	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"math"
 	"reflect"
 	"strconv"
@@ -22,6 +23,11 @@ var (
 
 	// Functions is a slice that describes all supported functions/operations
 	Functions []FuncSpec
+
+	Height = 1200.0
+	Width  = 1200.0
+
+	fig = &grob.Fig{}
 )
 
 const (
@@ -46,6 +52,9 @@ const (
 
 	// operations is a list of supported operations
 	operations = logicals + "$" + comparisons + "$" + arithmetics
+
+	colors = "black,red,blue,green,yellow"
+	mType  = "line,markers"
 )
 
 // OpNode is a single node of an expression.
@@ -102,6 +111,12 @@ const (
 //     (The first cash flow gets discounted one period). irr returns 0 if there's no solution.
 //   - print(<expr>,<rows>) print <rows> of the <expr>.  If <rows>=0, print entire slice.
 //   - printIf(<expr>,<rows>,<cond>) if condition evaluates to a value > 0, execute print(<expr>,<rows>)
+//   - histogram(<x>,<color>).  Creates a histogram.
+//   - plotLine(<x>,<markerType>, <color>)
+//   - plotXY(<x>,<y>,<markerType>, <color>)
+//   - setPlotDim(<width>,<height>)
+//   - render(<file>,<title>,<x label>,<y label>)
+//   - newPlot()
 //
 // Comparisons
 //   - ==, !=, >,>=, <, <=
@@ -171,7 +186,7 @@ func Expr2Tree(curNode *OpNode) error {
 		loadFunctions()
 	}
 
-	curNode.Expression = strings.ReplaceAll(curNode.Expression, " ", "")
+	curNode.Expression = utilities.ReplaceSmart(curNode.Expression, " ", "", "'")
 
 	if e := matchedParen(curNode.Expression); e != nil {
 		return e
@@ -704,6 +719,18 @@ func EvalSFunction(node *OpNode) error {
 		result, e = printer(node.Inputs[0].Raw, node.Inputs[0].Expression, node.Inputs[1].Raw.Data[0])
 	case "printIf":
 		result, e = printIf(node.Inputs[0].Raw, node.Inputs[0].Expression, node.Inputs[1].Raw.Data[0], node.Inputs[2].Raw.Data[0])
+	case "plotXY":
+		result, e = plotXY(node.Inputs[0].Raw, node.Inputs[1].Raw, node.Inputs[2].Raw, node.Inputs[3].Raw)
+	case "plotLine":
+		result, e = plotLine(node.Inputs[0].Raw, node.Inputs[1].Raw, node.Inputs[2].Raw)
+	case "histogram":
+		result, e = histogram(node.Inputs[0].Raw, node.Inputs[1].Raw, node.Inputs[2].Raw)
+	case "setPlotDim":
+		result, e = setPlotDim(node.Inputs[0].Raw, node.Inputs[1].Raw)
+	case "newPlot":
+		result = newPlot()
+	case "render":
+		result, e = render(node.Inputs[0].Raw, node.Inputs[1].Raw, node.Inputs[2].Raw, node.Inputs[3].Raw)
 	case "sum":
 		result, e = node.Inputs[0].Raw.Sum()
 	case "max":
@@ -1298,4 +1325,176 @@ func CopyNode(src *OpNode) (dest *OpNode) {
 	}
 
 	return dest
+}
+
+func newPlot() *Raw {
+	ret := NewRaw([]any{1}, nil)
+
+	fig = &grob.Fig{}
+
+	return ret
+}
+
+func plotLine(y, lineType, color *Raw) (*Raw, error) {
+	x := make([]any, y.Len())
+	for ind := 0; ind < len(x); ind++ {
+		x[ind] = float64(ind + 1)
+	}
+
+	xRaw := NewRaw(x, nil)
+
+	return plotXY(xRaw, y, lineType, color)
+
+}
+
+func plotXY(x, y, lineType, color *Raw) (*Raw, error) {
+	var (
+		err    error
+		sType  grob.ScatterMode
+		xf, yf []float64
+	)
+
+	ret := NewRaw([]any{1}, nil)
+
+	marker := strings.ToLower(utilities.Any2String(lineType.Data[0]))
+	if !utilities.Has(marker, ",", mType) {
+		return ret, fmt.Errorf("line type must be 'line' or 'markers', got %s", marker)
+	}
+
+	if x.Len() != y.Len() {
+		return ret, fmt.Errorf("plotXY slices not same length: %d, %d", x.Len(), y.Len())
+	}
+
+	if x.Kind != reflect.Float64 || y.Kind != reflect.Float64 {
+		return ret, fmt.Errorf("plotXY slices are not floats")
+	}
+
+	sColor := strings.ToLower(utilities.Any2String(color.Data[0]))
+	if !utilities.Has(sColor, ",", colors) {
+		return ret, fmt.Errorf("color %s not supported", sColor)
+	}
+
+	switch marker {
+	case "markers":
+		sType = grob.ScatterModeMarkers
+	default:
+		sType = grob.ScatterModeLines
+	}
+
+	if xf, err = utilities.AnySlice2Float64(x.Data); err != nil {
+		return ret, err
+	}
+
+	if yf, err = utilities.AnySlice2Float64(y.Data); err != nil {
+		return ret, err
+	}
+
+	tr := &grob.Scatter{
+		Type: grob.TraceTypeScatter,
+		X:    xf,
+		Y:    yf,
+		Name: "Scatter",
+		Mode: sType,
+		Line: &grob.ScatterLine{Color: sColor},
+	}
+
+	fig.AddTraces(tr)
+
+	return ret, nil
+}
+
+func histogram(x, color, norm *Raw) (*Raw, error) {
+	const normalized = "counts,percent,density"
+
+	ret := NewRaw([]any{1}, nil)
+
+	if x.Kind != reflect.Float64 {
+		return ret, fmt.Errorf("histogram only for float64 currently, got %v", x.Kind)
+	}
+
+	sColor := strings.ToLower(utilities.Any2String(color.Data[0]))
+	if !utilities.Has(sColor, ",", colors) {
+		return ret, fmt.Errorf("color %s not supported", sColor)
+	}
+
+	sNorm := strings.ToLower(utilities.Any2String(norm.Data[0]))
+	if !utilities.Has(sNorm, ",", normalized) {
+		return ret, fmt.Errorf("unknown density normalization: %s", sNorm)
+	}
+
+	var normGrob grob.HistogramHistnorm
+	switch sNorm {
+	case "count":
+		normGrob = grob.HistogramHistnormEmpty
+	case "density":
+		normGrob = grob.HistogramHistnormDensity
+	case "percent":
+		normGrob = grob.HistogramHistnormPercent
+	}
+
+	xRaw, err := utilities.AnySlice2Float64(x.Data)
+	if err != nil {
+		return ret, err
+	}
+
+	tr := &grob.Histogram{X: xRaw, Type: grob.TraceTypeHistogram,
+		Histnorm: normGrob,
+		Marker:   &grob.HistogramMarker{Color: sColor}}
+
+	fig.AddTraces(tr)
+
+	return ret, nil
+}
+func render(fileName, title, xlab, ylab *Raw) (*Raw, error) {
+	ret := NewRaw([]any{1}, nil)
+
+	sFile := utilities.Any2String(fileName.Data[0])
+	sTitle := utilities.Any2String(title.Data[0])
+	sXlab := utilities.Any2String(xlab.Data[0])
+	sYlab := utilities.Any2String(ylab.Data[0])
+
+	show := sFile == ""
+
+	pd := &PlotDef{
+		Show:     show,
+		Title:    sTitle,
+		XTitle:   sXlab,
+		YTitle:   sYlab,
+		STitle:   "",
+		Legend:   false,
+		Height:   Height,
+		Width:    Width,
+		FileName: sFile,
+	}
+
+	return ret, Plotter(fig, nil, pd)
+}
+
+func setPlotDim(width, height *Raw) (*Raw, error) {
+	var (
+		w, h *float64
+		err  error
+	)
+	ret := NewRaw([]any{1}, nil)
+
+	if w, err = utilities.Any2Float64(width.Data[0]); err != nil {
+		return ret, fmt.Errorf("illegal float: %v", width.Data[0])
+	}
+
+	if h, err = utilities.Any2Float64(height.Data[0]); err != nil {
+		return ret, fmt.Errorf("illegal float: %v", height.Data[0])
+	}
+
+	if *w <= 100 || *w >= 2000 {
+		return ret, fmt.Errorf("plot width must be between 100 & 2000, got %v", w)
+	}
+
+	if *h <= 100 || *h >= 2000 {
+		return ret, fmt.Errorf("plot height must be between 100 & 2000, got %v", w)
+	}
+
+	Height = *h
+	Width = *w
+
+	return ret, nil
 }

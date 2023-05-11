@@ -649,3 +649,43 @@ func ExampleEvaluate() {
 	// 2: 3
 	// 3: 4
 }
+
+// This is an examples of plots
+func ExampleEvaluate_2() {
+	Verbose = false
+
+	pipe := buildPipe([]string{"1,2,3,4", "6,7,8,9", "9,8,7,6", "1,2,1,1"}, []string{"f", "f", "f", "f"})
+
+	cmds := []string{"setPlotDim(500,300)",
+		"histogram(f,'green', 'counts')",
+		"render('', 'Histogram', 'Data','Counts')",
+		"newPlot()",
+		"plotXY(c,D,'line','black')",
+		"render('','One Line','X label','Y label')",
+		"plotXY(c,e,'markers','red')",
+		"render('','Two Lines','X label','Y label')",
+		"newPlot()",
+		"plotXY(c,e,'line','blue')",
+		"setPlotDim(1000,1000)",
+		"render('','One Line Again','X label','Y label')",
+		"newPlot()",
+		"plotLine(D,'line','green')",
+		"plotLine(D,'markers','yellow')",
+		"render('','plotLine Test','Auto-x', 'Y')",
+	}
+
+	for ind := 0; ind < len(cmds); ind++ {
+		node := &OpNode{Expression: cmds[ind]}
+
+		if e := Expr2Tree(node); e != nil {
+			panic(e)
+		}
+
+		if e := Evaluate(node, pipe); e != nil {
+			panic(e)
+		}
+	}
+
+	// output:
+
+}
