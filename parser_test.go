@@ -654,7 +654,7 @@ func ExampleEvaluate() {
 func ExampleEvaluate_2() {
 	Verbose = false
 
-	pipe := buildPipe([]string{"1,2,3,4", "6,7,8,9", "9,8,7,6", "1,2,1,1"}, []string{"f", "f", "f", "f"})
+	pipe := buildPipe([]string{"1,2,3,4", "6,7,8,9", "9,8,7,6", "1,2,1,1", "'One','Two','Three','Four'"}, []string{"f", "f", "f", "f", "s"})
 
 	cmds := []string{"setPlotDim(500,300)",
 		"histogram(f,'green', 'counts')",
@@ -672,6 +672,9 @@ func ExampleEvaluate_2() {
 		"plotLine(D,'line','green')",
 		"plotLine(D,'markers','yellow')",
 		"render('','plotLine Test','Auto-x', 'Y')",
+		"newPlot()",
+		"plotXY(g,c,'markers','blue')",
+		"render('','Character-Based X','count','#')",
 	}
 
 	for ind := 0; ind < len(cmds); ind++ {
@@ -687,5 +690,4 @@ func ExampleEvaluate_2() {
 	}
 
 	// output:
-
 }

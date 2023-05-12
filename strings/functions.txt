@@ -27,7 +27,7 @@ corr,float64,S,float64,float64,$
 r2,float64,S,float64,float64,$
 print,float64,S,any,float64,$
 printIf,float64,S,any,float64,float64$
-plotXY,float64,S,float64,float64,string,string$
+plotXY,float64,S,any,any,string,string$
 plotLine,float64,S,float64,string,string$
 histogram,float64,S,float64,string,string$
 setPlotDim,float64,S,float64,float64$

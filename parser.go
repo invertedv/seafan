@@ -111,10 +111,10 @@ const (
 //     (The first cash flow gets discounted one period). irr returns 0 if there's no solution.
 //   - print(<expr>,<rows>) print <rows> of the <expr>.  If <rows>=0, print entire slice.
 //   - printIf(<expr>,<rows>,<cond>) if condition evaluates to a value > 0, execute print(<expr>,<rows>)
-//   - histogram(<x>,<color>).  Creates a histogram.
+//   - histogram(<x>,<color>, <normalization>).  Creates a histogram. normalization is one of: percent, count, density
 //   - plotLine(<x>,<markerType>, <color>)
 //   - plotXY(<x>,<y>,<markerType>, <color>)
-//   - setPlotDim(<width>,<height>)
+//   - setPlotDim(<width>,<height>), <width>, <height> are in pixels
 //   - render(<file>,<title>,<x label>,<y label>)
 //   - newPlot()
 //
@@ -1348,11 +1348,7 @@ func plotLine(y, lineType, color *Raw) (*Raw, error) {
 }
 
 func plotXY(x, y, lineType, color *Raw) (*Raw, error) {
-	var (
-		err    error
-		sType  grob.ScatterMode
-		xf, yf []float64
-	)
+	var sType grob.ScatterMode
 
 	ret := NewRaw([]any{1}, nil)
 
@@ -1363,10 +1359,6 @@ func plotXY(x, y, lineType, color *Raw) (*Raw, error) {
 
 	if x.Len() != y.Len() {
 		return ret, fmt.Errorf("plotXY slices not same length: %d, %d", x.Len(), y.Len())
-	}
-
-	if x.Kind != reflect.Float64 || y.Kind != reflect.Float64 {
-		return ret, fmt.Errorf("plotXY slices are not floats")
 	}
 
 	sColor := strings.ToLower(utilities.Any2String(color.Data[0]))
@@ -1381,18 +1373,10 @@ func plotXY(x, y, lineType, color *Raw) (*Raw, error) {
 		sType = grob.ScatterModeLines
 	}
 
-	if xf, err = utilities.AnySlice2Float64(x.Data); err != nil {
-		return ret, err
-	}
-
-	if yf, err = utilities.AnySlice2Float64(y.Data); err != nil {
-		return ret, err
-	}
-
 	tr := &grob.Scatter{
 		Type: grob.TraceTypeScatter,
-		X:    xf,
-		Y:    yf,
+		X:    x.Data,
+		Y:    y.Data,
 		Name: "Scatter",
 		Mode: sType,
 		Line: &grob.ScatterLine{Color: sColor},
@@ -1445,6 +1429,7 @@ func histogram(x, color, norm *Raw) (*Raw, error) {
 
 	return ret, nil
 }
+
 func render(fileName, title, xlab, ylab *Raw) (*Raw, error) {
 	ret := NewRaw([]any{1}, nil)
 
