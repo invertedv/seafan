@@ -16,6 +16,42 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+func TestAssess(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "toLastDayOfMonth(date)"}
+
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []time.Time{
+		time.Date(2023, 3, 31, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 4, 30, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 5, 31, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 6, 30, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 7, 31, 0, 0, 0, 0, time.UTC),
+		time.Date(2020, 8, 31, 0, 0, 0, 0, time.UTC),
+	}
+
+	for ind, dtAny := range root.Raw.Data {
+		dt := dtAny.(time.Time)
+		assert.Equal(t, exp[ind], dt)
+	}
+
+}
+
 // Simple date arithmetic is possible.  The function dateAdd(d,m) adds m months to d.
 // The data is:
 // row, newField1, newField2, newField3, date

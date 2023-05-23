@@ -34,6 +34,7 @@ setPlotDim,float64,S,float64,float64$
 newPlot,float64,S$
 render,float64,S,string,string,string,string$
 dateAdd,time.Time,R,time.Time,int32,$
+toLastDayOfMonth,time.Time,R,time.Time$
 toDate,time.Time,R,string,,$
 toString,string,R,any$
 toFloat,float64,R,any,,$

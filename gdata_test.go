@@ -445,6 +445,10 @@ func TestGData_Join(t *testing.T) {
 	e = gdLeft.AppendD(NewRaw(xt, nil), "Field1", nil, false)
 	assert.Nil(t, e)
 
+	xt = []any{"a", "b", "c", "a", "b", "c", "e", "f", "g", "h"}
+	e = gdLeft.AppendD(NewRaw(xt, nil), "FieldNM", nil, false)
+	assert.Nil(t, e)
+
 	gdRight := NewGData()
 	var x1 []any
 	for ind := 0; ind < 5; ind++ {
@@ -456,6 +460,10 @@ func TestGData_Join(t *testing.T) {
 
 	xt = []any{"a", "b", "c", "k", "a"}
 	e = gdRight.AppendD(NewRaw(xt, nil), "Field1", nil, false)
+	assert.Nil(t, e)
+
+	xt = []any{"x", "y", "x", "z", "s"}
+	e = gdRight.AppendD(NewRaw(xt, nil), "FieldNM", nil, false)
 	assert.Nil(t, e)
 
 	// this will not be in the joined data
@@ -509,6 +517,9 @@ func TestGData_Join(t *testing.T) {
 	raw, e = gdJoin.GetRaw("Field2")
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, raw.Data, exp)
+
+	gdJoin, e = gdLeft.Join(gdRight, "FieldNM", Inner)
+	assert.NotNil(t, e)
 }
 
 // This example shows how to join two *Gdata structs.

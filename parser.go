@@ -92,6 +92,7 @@ const (
 //   - toFloat(<expr>) converts <expr> to float
 //   - toInt(<expr>) converts <expr> to int.  Same as cat().
 //   - dateAdd(<date>,<months>) adds <months> to the date, <date>
+//   - toLastDayOfMonth(<date>)  moves the date to the last day of the month
 //
 // The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
 // countAfter, countBefore do NOT include the current row.
@@ -776,6 +777,29 @@ func EvalSFunction(node *OpNode) error {
 	return nil
 }
 
+// toLastDayOfMonth moves the date to the last day of the month
+func toLastDayOfMonth(node *OpNode) error {
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to toLastDayOfMonth isn't a date")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	dates := make([]any, n)
+
+	for ind := 0; ind < n; ind++ {
+		dt, ok := node.Inputs[0].Raw.Data[ind].(time.Time)
+		if !ok {
+			return fmt.Errorf("arg 1 to dateadd isn't a date")
+		}
+
+		dates[ind] = utilities.ToLastDay(dt)
+	}
+
+	node.Raw = NewRaw(dates, nil)
+
+	return nil
+}
+
 // dateAddMonths adds months to a date field
 func dateAddMonths(node *OpNode) error {
 	var deltas []int
@@ -786,7 +810,7 @@ func dateAddMonths(node *OpNode) error {
 		return fmt.Errorf("arg 1 to dateadd isn't a date")
 	}
 
-	n := node.Inputs[0].Raw.Len()
+	n := utilities.MaxInt(node.Inputs[0].Raw.Len(), node.Inputs[1].Raw.Len())
 	dates := make([]any, n)
 	ind1, ind2 := 0, 0
 
@@ -849,6 +873,8 @@ func evalFunction(node *OpNode) error {
 		return ifCond(node)
 	case "dateAdd":
 		return dateAddMonths(node)
+	case "toLastDayOfMonth":
+		return toLastDayOfMonth(node)
 	case "toDate":
 		return toWhatever(node, reflect.Struct)
 	case "toString":

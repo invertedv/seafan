@@ -4,8 +4,8 @@ go 1.19
 
 require (
 	github.com/MetalBlueberry/go-plotly v0.4.0
-	github.com/invertedv/chutils v1.1.21
-	github.com/invertedv/utilities v0.0.12
+	github.com/invertedv/chutils v1.1.22
+	github.com/invertedv/utilities v0.0.13
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.2
 	gonum.org/v1/gonum v0.12.0

@@ -1289,6 +1289,10 @@ func (gd *GData) Join(right *GData, onField string, joinType JoinType) (result *
 		rResult, lResult, joinResult = collectResults(rRaw, lRaw, lFts, rTake, nil, rResult, lResult, rJoin, joinResult)
 	}
 
+	if joinType == Inner && lResult[0] == nil {
+		return nil, fmt.Errorf("join has no elements")
+	}
+
 	result = NewGData()
 	if e := result.AddRaw(lResult, lFields, lFts, true); e != nil {
 		return nil, e
