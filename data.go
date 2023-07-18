@@ -109,7 +109,7 @@ func (p *XY) String() string {
 }
 
 // Plot produces an XY Plotly plot
-func (p *XY) Plot(pd *PlotDef, scatter bool) error {
+func (p *XY) Plot(pd *utilities.PlotDef, scatter bool) error {
 	if len(p.X) != len(p.Y) {
 		return Wrapper(ErrData, "(*XY).Plot: X and Y must have same length")
 	}
@@ -134,7 +134,7 @@ func (p *XY) Plot(pd *PlotDef, scatter bool) error {
 
 	fig := &grob.Fig{Data: grob.Traces{tr}}
 
-	return Plotter(fig, nil, pd)
+	return utilities.Plotter(fig, nil, pd)
 }
 
 // Desc contains descriptive information of a float64 slice

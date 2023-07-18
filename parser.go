@@ -1466,7 +1466,7 @@ func render(fileName, title, xlab, ylab *Raw) (*Raw, error) {
 
 	show := sFile == ""
 
-	pd := &PlotDef{
+	pd := &utilities.PlotDef{
 		Show:     show,
 		Title:    sTitle,
 		XTitle:   sXlab,
@@ -1478,7 +1478,7 @@ func render(fileName, title, xlab, ylab *Raw) (*Raw, error) {
 		FileName: sFile,
 	}
 
-	return ret, Plotter(fig, nil, pd)
+	return ret, utilities.Plotter(fig, nil, pd)
 }
 
 func setPlotDim(width, height *Raw) (*Raw, error) {

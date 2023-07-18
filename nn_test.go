@@ -2,6 +2,7 @@ package seafan
 
 import (
 	"fmt"
+	"github.com/invertedv/utilities"
 	"math"
 	"os"
 	"testing"
@@ -308,7 +309,7 @@ func ExampleFit_Do() {
 		panic(e)
 	}
 	// Plot the in-sample cost in a browser (default: firefox)
-	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200,
+	e = ft.InCosts().Plot(&utilities.PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200,
 		Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
 
 	if e != nil {
@@ -348,14 +349,14 @@ func ExampleFit_Do_example2() {
 		panic(e)
 	}
 	// Plot the in-sample cost in a browser (default: firefox)
-	e = ft.InCosts().Plot(&PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200,
+	e = ft.InCosts().Plot(&utilities.PlotDef{Title: "In-Sample Cost Curve", Height: 1200, Width: 1200,
 		Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
 
 	if e != nil {
 		panic(e)
 	}
 
-	e = ft.OutCosts().Plot(&PlotDef{Title: "Validation Sample Cost Curve", Height: 1200, Width: 1200,
+	e = ft.OutCosts().Plot(&utilities.PlotDef{Title: "Validation Sample Cost Curve", Height: 1200, Width: 1200,
 		Show: true, XTitle: "epoch", YTitle: "Cost"}, true)
 
 	if e != nil {

@@ -107,7 +107,7 @@ func Coalesce(vals []float64, nCat int, trg []int, binary, logodds bool, sl Slic
 //	target     Desc struct of fitted values of target outcomes
 //
 // Target: html plot file and/or plot in browser.
-func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err error) {
+func KS(xy *XY, plt *utilities.PlotDef) (ks float64, notTarget *Desc, target *Desc, err error) {
 	const nPoints = 101 // # of points for ks plot
 	const divisor = float64(nPoints - 1)
 
@@ -211,7 +211,7 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 
 		lay := &grob.Layout{}
 		lay.Legend = &grob.LayoutLegend{X: target.Q[0], Y: 1.0}
-		err = Plotter(fig, lay, plt)
+		err = utilities.Plotter(fig, lay, plt)
 	}
 	return ks, notTarget, target, err
 }
@@ -223,7 +223,7 @@ func KS(xy *XY, plt *PlotDef) (ks float64, notTarget *Desc, target *Desc, err er
 //		fit       fitted field (x-axis) name
 //	    seg       segmenting field name
 //		plt       PlotDef plot options.  If plt is nil an error is generated.
-func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *float64) error {
+func SegPlot(pipe Pipeline, obs, fit, seg string, plt *utilities.PlotDef, minVal, maxVal *float64) error {
 	const minCnt = 1 // min # of obs for each point
 
 	if plt == nil {
@@ -330,7 +330,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 	}
 	plt.Title = fmt.Sprintf("%s<br>%s", plt.Title, "Bias Corrected")
 
-	err := Plotter(fig, &grob.Layout{}, plt)
+	err := utilities.Plotter(fig, &grob.Layout{}, plt)
 
 	return err
 }
@@ -341,7 +341,7 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *PlotDef, minVal, maxVal *
 //	plt       PlotDef plot options.  If plt is nil an error is generated.
 //
 // The deciles are created based on the values of xy.X
-func Decile(xyIn *XY, plt *PlotDef) error {
+func Decile(xyIn *XY, plt *utilities.PlotDef) error {
 	if plt == nil {
 		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
 	}
@@ -457,7 +457,7 @@ func Decile(xyIn *XY, plt *PlotDef) error {
 		plt.Title = "Decile Plot"
 	}
 
-	err := Plotter(fig, &grob.Layout{}, plt)
+	err := utilities.Plotter(fig, &grob.Layout{}, plt)
 
 	return err
 }
@@ -579,7 +579,7 @@ func AddFitted(pipeIn Pipeline, nnFile string, target []int, name string, fts FT
 // For each segment, the feature being analyzed various across its range within the quartile (continuous)
 // its values (discrete).
 // The bottom row shows the distribution of the feature within the quartile range.
-func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotDef, obsFtype *FType) error {
+func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *utilities.PlotDef, obsFtype *FType) error {
 	const (
 		take    = 1000 // # of obs to use for graph
 		maxCats = 10   // max # of levels of a categorical field to show in plot
@@ -713,7 +713,7 @@ func Marginal(nnFile string, feat string, target []int, pipe Pipeline, pd *PlotD
 	}
 
 	pd.Title = fmt.Sprintf("Marginal Effect of %s by Quartile of Fitted Value (High to Low)<br>%s", name, pd.Title)
-	if e := Plotter(fig, lay, pd); e != nil {
+	if e := utilities.Plotter(fig, lay, pd); e != nil {
 		return Wrapper(e, "Marginal")
 	}
 
