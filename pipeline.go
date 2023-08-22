@@ -364,7 +364,7 @@ func CSVToPipe(csvFile string, fts FTypes, keepRaw bool) (pipe Pipeline, err err
 }
 
 // PipeToSQL creates "table" and saves the pipe data to it.
-func PipeToSQL(pipe Pipeline, table string, conn *chutils.Connect) error {
+func PipeToSQL(pipe Pipeline, table string, after int, conn *chutils.Connect) error {
 	if table == "" {
 		return fmt.Errorf("exportSQL: table cannot be empty")
 	}
@@ -384,7 +384,7 @@ func PipeToSQL(pipe Pipeline, table string, conn *chutils.Connect) error {
 		return e
 	}
 
-	if e := chutils.Export(pipe.GData(), wtr, 0, false); e != nil {
+	if e := chutils.Export(pipe.GData(), wtr, after, false); e != nil {
 		return e
 	}
 
