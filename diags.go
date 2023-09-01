@@ -267,7 +267,6 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *utilities.PlotDef, minVal
 		}
 
 		nSqrt := math.Sqrt(float64(pipeSlice.Rows()))
-		fmt.Println(pipeSlice.Rows())
 
 		distr := pipeSlice.Get(obs).Summary.DistrC
 		obsMean, obsStd := distr.Mean, distr.Std/nSqrt
