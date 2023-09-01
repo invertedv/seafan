@@ -224,7 +224,7 @@ func KS(xy *XY, plt *utilities.PlotDef) (ks float64, notTarget *Desc, target *De
 //	    seg       segmenting field name
 //		plt       PlotDef plot options.  If plt is nil an error is generated.
 func SegPlot(pipe Pipeline, obs, fit, seg string, plt *utilities.PlotDef, minVal, maxVal *float64) error {
-	const minCnt = 1 // min # of obs for each point
+	const minCnt = 100 // min # of obs for each point
 
 	if plt == nil {
 		return Wrapper(ErrDiags, "Decile: plt cannot be nil")
@@ -260,7 +260,14 @@ func SegPlot(pipe Pipeline, obs, fit, seg string, plt *utilities.PlotDef, minVal
 		if e != nil {
 			continue
 		}
+
+		// for continuous fields, there is no check in slicer
+		if pipeSlice.Rows() < minCnt {
+			continue
+		}
+
 		nSqrt := math.Sqrt(float64(pipeSlice.Rows()))
+		fmt.Println(pipeSlice.Rows())
 
 		distr := pipeSlice.Get(obs).Summary.DistrC
 		obsMean, obsStd := distr.Mean, distr.Std/nSqrt

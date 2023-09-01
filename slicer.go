@@ -17,6 +17,18 @@ type Slice struct {
 	title    string   // auto-generated title for plots
 	data     *GDatum  // feat data
 	restrict []any
+	q        []float64
+}
+
+func deDupe(xIn []float64) (xOut []float64) {
+	xOut = append(xOut, xIn[0])
+	for ind := 1; ind < len(xIn); ind++ {
+		if xIn[ind] > xIn[ind-1] {
+			xOut = append(xOut, xIn[ind])
+		}
+	}
+
+	return xOut
 }
 
 // NewSlice makes a new Slice based on feat in Pipeline pipe.
@@ -34,6 +46,10 @@ func NewSlice(feat string, minCnt int, pipe Pipeline, restrict []any) (*Slice, e
 	}
 
 	s := &Slice{feat: feat, minCnt: minCnt, pipe: pipe, index: -1, val: nil, data: d, restrict: restrict}
+
+	if s.data.Summary.DistrC != nil {
+		s.q = deDupe(s.data.Summary.DistrC.Q)
+	}
 
 	return s, nil
 }
@@ -76,13 +92,13 @@ func (s *Slice) MakeSlicer() Slicer {
 			return s.data.Data.([]int32)[row] == s.index
 
 		case FRCts:
-			q := s.data.Summary.DistrC.Q
-			test := s.data.Data.([]float64)[row] >= q[s.index]
-			switch s.index+1 == int32(len(q)-1) {
+			//q := deDupe(s.data.Summary.DistrC.Q)
+			test := s.data.Data.([]float64)[row] >= s.q[s.index]
+			switch s.index+1 == int32(len(s.q)-1) {
 			case false:
-				test = test && s.data.Data.([]float64)[row] < q[s.index+1]
+				test = test && s.data.Data.([]float64)[row] < s.q[s.index+1]
 			case true:
-				test = test && s.data.Data.([]float64)[row] <= q[s.index+1]
+				test = test && s.data.Data.([]float64)[row] <= s.q[s.index+1]
 			}
 			return test
 		}
@@ -98,16 +114,16 @@ func (s *Slice) Iter() bool {
 	s.index++
 	switch s.data.FT.Role {
 	case FRCts:
-		if s.index+1 == int32(len(s.data.Summary.DistrC.Q)) {
+		if s.index+1 == int32(len(s.q)) {
 			s.index = -1
 
 			return false
 		}
 
 		// make title
-		q := s.data.Summary.DistrC.Q
-		qLab := make([]float64, len(q))
-		copy(qLab, q)
+		//		q := s.data.Summary.DistrC.Q
+		qLab := make([]float64, len(s.q))
+		copy(qLab, s.q)
 		// if the feature is normalized, return it to original units for display
 		if s.data.FT.Normalized {
 			m := s.data.FT.FP.Location
