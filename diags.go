@@ -125,6 +125,10 @@ func KS(xy *XY, plt *utilities.PlotDef) (ks float64, notTarget *Desc, target *De
 		}
 	}
 
+	if len(probTarget) == 0 || len(probNotTarget) == 0 {
+		return 0, nil, nil, fmt.Errorf("no 0's or no 1's in KS")
+	}
+
 	notTarget, _ = NewDesc(nil, "not target") // fmt.Sprintf("Value not in %v", trg))
 	target, _ = NewDesc(nil, "target")        // fmt.Sprintf("Value in %v", trg))
 
