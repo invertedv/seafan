@@ -3,12 +3,13 @@ package seafan
 import (
 	_ "embed"
 	"fmt"
-	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	grob "github.com/MetalBlueberry/go-plotly/graph_objects"
 
 	"github.com/invertedv/utilities"
 	"github.com/pkg/errors"
@@ -800,6 +801,117 @@ func toLastDayOfMonth(node *OpNode) error {
 	return nil
 }
 
+// toLastDayOfMonth moves the date to the last day of the month
+func toFirstDayOfMonth(node *OpNode) error {
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to toFirstDayOfMonth isn't a date")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	dates := make([]any, n)
+
+	for ind := 0; ind < n; ind++ {
+		dt, ok := node.Inputs[0].Raw.Data[ind].(time.Time)
+		if !ok {
+			return fmt.Errorf("arg 1 to dateadd isn't a date")
+		}
+
+		dates[ind] = time.Date(dt.Year(), dt.Month(), 1, 0, 0, 0, 0, time.UTC)
+	}
+
+	node.Raw = NewRaw(dates, nil)
+
+	return nil
+}
+
+// monthYearDay returns the month/year/day from a date
+func monthYearDay(node *OpNode, part string) error {
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to month isn't a date")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	months := make([]any, n)
+
+	for ind := 0; ind < n; ind++ {
+		dt, ok := node.Inputs[0].Raw.Data[ind].(time.Time)
+		if !ok {
+			return fmt.Errorf("arg 1 to dateadd isn't a date")
+		}
+
+		switch part {
+		case "year":
+			months[ind] = int32(dt.Year())
+		case "month":
+			months[ind] = int32(dt.Month())
+		case "day":
+			months[ind] = int32(dt.Day())
+		}
+	}
+
+	node.Raw = NewRaw(months, nil)
+
+	return nil
+}
+
+// dateDiff finds the difference between two dates in hours, days, months or years
+func dateDiff(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to dateadd isn't a date")
+	}
+
+	n := utilities.MaxInt(node.Inputs[0].Raw.Len(), node.Inputs[1].Raw.Len())
+	dates := make([]any, n)
+	ind1, ind2 := 0, 0
+
+	for ind := 0; ind < n; ind++ {
+		dt1, ok := node.Inputs[0].Raw.Data[ind1].(time.Time)
+		if !ok {
+			return fmt.Errorf("arg 1 to datesub isn't a date")
+		}
+
+		dt2, ok := node.Inputs[1].Raw.Data[ind2].(time.Time)
+		if !ok {
+			return fmt.Errorf("arg 2 to datesub isn't a date")
+		}
+
+		unit, ok := node.Inputs[2].Raw.Data[0].(string)
+		if !ok {
+			return fmt.Errorf("arg 3 to datesub isn't a string")
+		}
+
+		y1, m1, d1 := dt1.Date()
+		y2, m2, d2 := dt2.Date()
+		var val int32
+
+		switch unit {
+		case "hour":
+			val = int32(dt1.Sub(dt2).Hours())
+		case "day":
+			ta := time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)
+			tb := time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC)
+			val = int32(ta.Sub(tb) / 24)
+		case "month":
+			val = int32(12*y1 + int(m1) - (12*(y2) + int(m2)))
+		case "year":
+			val = int32(y1 - y2)
+		}
+
+		dates[ind] = val
+
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+	}
+
+	node.Raw = NewRaw(dates, nil)
+
+	return nil
+}
+
 // dateAddMonths adds months to a date field
 func dateAddMonths(node *OpNode) error {
 	var deltas []int
@@ -840,6 +952,69 @@ func dateAddMonths(node *OpNode) error {
 	return nil
 }
 
+// maxmin2 takes the element-wise max/min of the two inputs
+func maxmin2(node *OpNode, maxmin string) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to dateadd isn't a date")
+	}
+
+	n := utilities.MaxInt(node.Inputs[0].Raw.Len(), node.Inputs[1].Raw.Len())
+	mm := make([]any, n)
+	ind1, ind2 := 0, 0
+
+	for ind := 0; ind < n; ind++ {
+		var e error
+
+		val := node.Inputs[0].Raw.Data[ind1]
+		t := reflect.TypeOf(val).Kind()
+
+		var y any
+		if y, e = utilities.Any2Kind(node.Inputs[1].Raw.Data[ind2], t); e != nil {
+			return fmt.Errorf("cannot coerce values to same type, max2/min2")
+		}
+
+		switch x := node.Inputs[0].Raw.Data[ind1].(type) {
+		case int32:
+			if (maxmin == "max" && y.(int32) > x) || (maxmin == "min" && y.(int32) < x) {
+				val = y
+			}
+		case int64:
+			if (maxmin == "max" && y.(int64) > x) || (maxmin == "min" && y.(int64) < x) {
+				val = y
+			}
+		case float32:
+			if (maxmin == "max" && y.(float32) > x) || (maxmin == "min" && y.(float32) < x) {
+				val = y
+			}
+		case float64:
+			if (maxmin == "max" && y.(float64) > x) || (maxmin == "min" && y.(float64) < x) {
+				val = y
+			}
+		case string:
+			if (maxmin == "max" && y.(string) > x) || (maxmin == "min" && y.(string) < x) {
+				val = y
+			}
+		case time.Time:
+			if (maxmin == "max" && y.(time.Time).Sub(x) > 0) || (maxmin == "min" && y.(time.Time).Sub(x) < 0) {
+				val = y
+			}
+		}
+
+		mm[ind] = val
+
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+	}
+
+	node.Raw = NewRaw(mm, nil)
+
+	return nil
+}
+
 // toWhatever attempts to convert the values in node to kind
 func toWhatever(node *OpNode, kind reflect.Kind) error {
 	xIn := node.Inputs[0].Raw.Data
@@ -873,8 +1048,22 @@ func evalFunction(node *OpNode) error {
 		return ifCond(node)
 	case "dateAdd":
 		return dateAddMonths(node)
+	case "dateDiff":
+		return dateDiff(node)
 	case "toLastDayOfMonth":
 		return toLastDayOfMonth(node)
+	case "toFirstDayOfMonth":
+		return toFirstDayOfMonth(node)
+	case "month":
+		return monthYearDay(node, "month")
+	case "year":
+		return monthYearDay(node, "year")
+	case "day":
+		return monthYearDay(node, "day")
+	case "maxE":
+		return maxmin2(node, "max")
+	case "minE":
+		return maxmin2(node, "min")
 	case "toDate":
 		return toWhatever(node, reflect.Struct)
 	case "toString":
@@ -1368,9 +1557,7 @@ func plotLine(y, lineType, color *Raw) (*Raw, error) {
 	}
 
 	xRaw := NewRaw(x, nil)
-
 	return plotXY(xRaw, y, lineType, color)
-
 }
 
 func plotXY(x, y, lineType, color *Raw) (*Raw, error) {

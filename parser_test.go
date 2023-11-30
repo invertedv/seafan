@@ -16,6 +16,99 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+func TestMaxMinE(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest6.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "maxE(x,y)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []float64{2, 20}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(float64)
+		assert.Equal(t, exp[ind], d)
+	}
+
+	root = &OpNode{Expression: "maxE(s1,s2)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	expS := []string{"b", "bb"}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(string)
+		assert.Equal(t, expS[ind], d)
+	}
+
+	root = &OpNode{Expression: "minE(d1,d2)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	expD := []time.Time{time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(1990, 10, 12, 0, 0, 0, 0, time.UTC)}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(time.Time)
+		assert.Equal(t, expD[ind], d)
+	}
+}
+
+func TestDateDiff(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest5.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "dateDiff(date1,date2,'year')"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{0, 0, 1, 4}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+
+	root = &OpNode{Expression: "dateDiff(date1,date2,'month')"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp = []int32{0, 1, 20, 40}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
 func TestAssess(t *testing.T) {
 	Verbose = false
 	var err error
@@ -49,7 +142,125 @@ func TestAssess(t *testing.T) {
 		dt := dtAny.(time.Time)
 		assert.Equal(t, exp[ind], dt)
 	}
+}
 
+func TestTFD(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "toFirstDayOfMonth(date)"}
+
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []time.Time{
+		time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 4, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2023, 7, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2020, 8, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	for ind, dtAny := range root.Raw.Data {
+		dt := dtAny.(time.Time)
+		assert.Equal(t, exp[ind], dt)
+	}
+}
+
+func TestDay(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "day(toLastDayOfMonth(date))"}
+
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{31, 30, 31, 30, 31, 31}
+
+	for ind, dtAny := range root.Raw.Data {
+		dt := dtAny.(int32)
+		assert.Equal(t, exp[ind], dt)
+	}
+}
+
+func TestYear(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "year(date)"}
+
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{2023, 2023, 2023, 2023, 2023, 2020}
+
+	for ind, dtAny := range root.Raw.Data {
+		dt := dtAny.(int32)
+		assert.Equal(t, exp[ind], dt)
+	}
+}
+
+func TestMonth(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest2.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "month(date)"}
+
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{3, 4, 5, 6, 7, 8}
+
+	for ind, dtAny := range root.Raw.Data {
+		dt := dtAny.(int32)
+		assert.Equal(t, exp[ind], dt)
+	}
 }
 
 // Simple date arithmetic is possible.  The function dateAdd(d,m) adds m months to d.
