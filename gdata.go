@@ -1097,6 +1097,7 @@ func (gd *GData) Copy() (gdOut *GData, err error) {
 // are used, otherwise the FParam values are re-derived from the data.
 func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {
 	gdOut = NewGData()
+	gdOut.rows = gd.rows
 
 	for ind, fld := range gd.FieldList() {
 		var (
@@ -1106,11 +1107,16 @@ func (gd *GData) ReInit(fTypes *FTypes) (gdOut *GData, err error) {
 
 		if fTypes != nil {
 			ft = fTypes.Get(fld)
-			fp = ft.FP
+			if ft != nil {
+				fp = ft.FP
+			}
 		}
 
+		// no new FType, so just point to the old value
 		if ft == nil {
-			ft = gd.data[ind].FT
+			gdOut.data = append(gdOut.data, gd.data[ind])
+
+			continue
 		}
 
 		var rawData *Raw

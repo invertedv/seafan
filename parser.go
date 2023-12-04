@@ -94,6 +94,15 @@ const (
 //   - toInt(<expr>) converts <expr> to int.  Same as cat().
 //   - dateAdd(<date>,<months>) adds <months> to the date, <date>
 //   - toLastDayOfMonth(<date>)  moves the date to the last day of the month
+//   - toFirstDayOfMonth(<date>) moves the date to the first day of the month
+//   - year(<date>) returns the year
+//   - month(<date>) returns the month (1-12)
+//   - day(<date>) returns the day of the month (1-lastDayOfMonth)
+//   - dateDiff(<data1>,<date2>,unit) returns date1-date2 units can be 'hour', 'day', 'month' or 'year'
+//   - substr(<string>,<start>,<length>) substring
+//   - strPos(<string>,<target>) first position of <target> in <string>. -1 if does not occur.
+//   - strCount(<string>,<target>) number of times <target> occurs in <string>
+//   - strLen(<string>) length of string
 //
 // The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
 // countAfter, countBefore do NOT include the current row.
@@ -902,12 +911,189 @@ func dateDiff(node *OpNode) error {
 		}
 
 		dates[ind] = val
-
 		ind1 += deltas[0]
 		ind2 += deltas[1]
 	}
 
 	node.Raw = NewRaw(dates, nil)
+
+	return nil
+}
+
+// substr finds a substring
+func substr(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to substr is missing")
+	}
+
+	n := utilities.MaxInt(utilities.MaxInt(node.Inputs[0].Raw.Len(), node.Inputs[1].Raw.Len()), node.Inputs[2].Raw.Len())
+	stringsX := make([]any, n)
+	ind1, ind2, ind3 := 0, 0, 0
+
+	for ind := 0; ind < n; ind++ {
+		str, ok := node.Inputs[0].Raw.Data[ind1].(string)
+		if !ok {
+			return fmt.Errorf("arg 1 to substr isn't a string")
+		}
+
+		var (
+			start, end int32
+			x          any
+			err        error
+		)
+
+		if x, err = utilities.Any2Kind(node.Inputs[1].Raw.Data[ind2], reflect.Int32); err != nil {
+			return fmt.Errorf("arg 2 to substr isn't an int")
+		}
+
+		start = x.(int32) - 1
+
+		if x, err = utilities.Any2Kind(node.Inputs[2].Raw.Data[ind3], reflect.Int32); err != nil {
+			return fmt.Errorf("arg 3 to substr isn't an int")
+		}
+		end = start + x.(int32)
+		if end >= int32(len(str)) {
+			end = int32(len(str))
+		}
+
+		stringsX[ind] = str[start:end]
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+		ind3 += deltas[2]
+	}
+
+	node.Raw = NewRaw(stringsX, nil)
+
+	return nil
+}
+
+// strCount counts the occurences of arg2 in arg1
+func strCount(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to strPos is missing")
+	}
+
+	n := utilities.MaxInt(node.Inputs[0].Raw.Len(), node.Inputs[1].Raw.Len())
+	locs := make([]any, n)
+	ind1, ind2 := 0, 0
+
+	for ind := 0; ind < n; ind++ {
+		str, ok := node.Inputs[0].Raw.Data[ind1].(string)
+		if !ok {
+			return fmt.Errorf("arg 1 to substr isn't a string")
+		}
+
+		var (
+			look string
+		)
+
+		if look, ok = node.Inputs[1].Raw.Data[ind2].(string); !ok {
+			return fmt.Errorf("arg 2 to strPos isn't a string")
+		}
+
+		skip, cnt := len(look), 0
+		for loc := strings.Index(str, look); loc >= 0; loc = strings.Index(str, look) {
+			if loc < 0 {
+				break
+			}
+
+			cnt++
+
+			if loc+skip >= len(str) {
+				break
+			}
+
+			str = str[loc+skip:]
+		}
+
+		locs[ind] = int32(cnt)
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+	}
+
+	node.Raw = NewRaw(locs, nil)
+
+	return nil
+}
+
+// strLen returns the length of a string
+func strLen(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to strPos is missing")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	locs := make([]any, n)
+	ind1 := 0
+
+	for ind := 0; ind < n; ind++ {
+		str, ok := node.Inputs[0].Raw.Data[ind1].(string)
+		if !ok {
+			return fmt.Errorf("arg 1 to substr isn't a string")
+		}
+
+		locs[ind] = int32(len(str))
+		ind1 += deltas[0]
+	}
+
+	node.Raw = NewRaw(locs, nil)
+
+	return nil
+}
+
+// strPos returns the index of the first occurence of arg2 in arg1, -1 if not there
+func strPos(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to strCount is missing")
+	}
+
+	n := utilities.MaxInt(node.Inputs[0].Raw.Len(), node.Inputs[1].Raw.Len())
+	locs := make([]any, n)
+	ind1, ind2 := 0, 0
+
+	for ind := 0; ind < n; ind++ {
+		str, ok := node.Inputs[0].Raw.Data[ind1].(string)
+		if !ok {
+			return fmt.Errorf("arg 1 to strCount isn't a string")
+		}
+
+		var (
+			look string
+			loc  int
+		)
+
+		if look, ok = node.Inputs[1].Raw.Data[ind2].(string); !ok {
+			return fmt.Errorf("arg 2 to strPos isn't a string")
+		}
+
+		loc = strings.Index(str, look)
+		if loc = strings.Index(str, look); loc >= 0 {
+			loc++
+		}
+
+		locs[ind] = int32(loc)
+
+		ind1 += deltas[0]
+		ind2 += deltas[1]
+	}
+
+	node.Raw = NewRaw(locs, nil)
 
 	return nil
 }
@@ -1064,6 +1250,14 @@ func evalFunction(node *OpNode) error {
 		return maxmin2(node, "max")
 	case "minE":
 		return maxmin2(node, "min")
+	case "substr":
+		return substr(node)
+	case "strPos":
+		return strPos(node)
+	case "strCount":
+		return strCount(node)
+	case "strLen":
+		return strLen(node)
 	case "toDate":
 		return toWhatever(node, reflect.Struct)
 	case "toString":
@@ -1449,12 +1643,23 @@ func AddToPipe(rootNode *OpNode, fieldName string, pipe Pipeline) (outPipe Pipel
 		}
 	}
 
+	var fp *FParam
+	normalize := false
+
+	// see if in the pipeline
+	if ft := pipe.GetFType(fieldName); ft != nil {
+		fp = ft.FP
+		normalize = ft.Normalized
+	}
+
+	// see in in pre-set FTypes
+
 	if role == FRCat {
-		err = pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, nil, pipe.GetKeepRaw())
+		err = pipe.GData().AppendD(NewRaw(rawx, nil), fieldName, fp, pipe.GetKeepRaw())
 		return pipe, err
 	}
 
-	err = pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, false, nil, pipe.GetKeepRaw())
+	err = pipe.GData().AppendC(NewRaw(rawx, nil), fieldName, normalize, fp, pipe.GetKeepRaw())
 	return pipe, err
 }
 

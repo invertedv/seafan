@@ -70,6 +70,162 @@ func TestMaxMinE(t *testing.T) {
 	}
 }
 
+func TestSubstr(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest7.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "substr(str,s,l)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []string{"te", "there", "by", "bbbb"}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(string)
+		assert.Equal(t, exp[ind], d)
+	}
+
+	root = &OpNode{Expression: "substr(str,3,l)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp = []string{"st", "llo there", "od", "bbbc"}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(string)
+		assert.Equal(t, exp[ind], d)
+	}
+
+	root = &OpNode{Expression: "substr(str,s,1)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp = []string{"t", "t", "b", "b"}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(string)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
+func TestStrPos(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest7.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "strPos(str,look)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{1, 2, 6, 2}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+
+	root = &OpNode{Expression: "strPos(str,'o')"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp = []int32{-1, 5, 2, -1}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
+func TestStrCount(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest7.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "strCount(str,look)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{2, 3, 1, 4}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+
+	root = &OpNode{Expression: "strCount(str,'c')"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp = []int32{0, 0, 0, 1}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
+func TestStrLen(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest7.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "strLen(str)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{6, 11, 7, 6}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
 func TestDateDiff(t *testing.T) {
 	Verbose = false
 	var err error
