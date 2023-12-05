@@ -70,6 +70,57 @@ func TestMaxMinE(t *testing.T) {
 	}
 }
 
+func TestMultiMinus(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest8.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "a-if(b>0,b,b)-if(c>0,c,c)-if(d>0,d,d)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []float64{-8, 0, 7}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(float64)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
+func TestMultiMinus1(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest9.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "strLen(a)-strCount(a,'a') - strCount(a, 'b') - strCount(a, 'c')"}
+	//root = &OpNode{Expression: "strLen(a)-b -b -b"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []float64{0, 2, 1}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(float64)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
 func TestSubstr(t *testing.T) {
 	Verbose = false
 	var err error
@@ -141,9 +192,9 @@ func TestStrPos(t *testing.T) {
 		panic(err)
 	}
 
-	exp := []int32{1, 2, 6, 2}
+	exp := []float64{1, 2, 6, 2}
 	for ind, delta := range root.Raw.Data {
-		d := delta.(int32)
+		d := delta.(float64)
 		assert.Equal(t, exp[ind], d)
 	}
 
@@ -155,9 +206,9 @@ func TestStrPos(t *testing.T) {
 		panic(err)
 	}
 
-	exp = []int32{-1, 5, 2, -1}
+	exp = []float64{-1, 5, 2, -1}
 	for ind, delta := range root.Raw.Data {
-		d := delta.(int32)
+		d := delta.(float64)
 		assert.Equal(t, exp[ind], d)
 	}
 }
@@ -180,9 +231,9 @@ func TestStrCount(t *testing.T) {
 		panic(err)
 	}
 
-	exp := []int32{2, 3, 1, 4}
+	exp := []float64{2, 3, 1, 4}
 	for ind, delta := range root.Raw.Data {
-		d := delta.(int32)
+		d := delta.(float64)
 		assert.Equal(t, exp[ind], d)
 	}
 
@@ -194,9 +245,9 @@ func TestStrCount(t *testing.T) {
 		panic(err)
 	}
 
-	exp = []int32{0, 0, 0, 1}
+	exp = []float64{0, 0, 0, 1}
 	for ind, delta := range root.Raw.Data {
-		d := delta.(int32)
+		d := delta.(float64)
 		assert.Equal(t, exp[ind], d)
 	}
 }
@@ -219,9 +270,9 @@ func TestStrLen(t *testing.T) {
 		panic(err)
 	}
 
-	exp := []int32{6, 11, 7, 6}
+	exp := []float64{6, 11, 7, 6}
 	for ind, delta := range root.Raw.Data {
-		d := delta.(int32)
+		d := delta.(float64)
 		assert.Equal(t, exp[ind], d)
 	}
 }

@@ -513,7 +513,7 @@ func ifCond(node *OpNode) error {
 		indF += deltas[2]
 	}
 
-	goNegative(node.Raw, node.Neg)
+	//	goNegative(node.Raw, node.Neg)
 
 	return nil
 }
@@ -1014,7 +1014,7 @@ func strCount(node *OpNode) error {
 			str = str[loc+skip:]
 		}
 
-		locs[ind] = int32(cnt)
+		locs[ind] = float64(cnt)
 		ind1 += deltas[0]
 		ind2 += deltas[1]
 	}
@@ -1044,7 +1044,7 @@ func strLen(node *OpNode) error {
 			return fmt.Errorf("arg 1 to substr isn't a string")
 		}
 
-		locs[ind] = int32(len(str))
+		locs[ind] = float64(len(str))
 		ind1 += deltas[0]
 	}
 
@@ -1087,7 +1087,7 @@ func strPos(node *OpNode) error {
 			loc++
 		}
 
-		locs[ind] = int32(loc)
+		locs[ind] = float64(loc)
 
 		ind1 += deltas[0]
 		ind2 += deltas[1]
@@ -1227,47 +1227,59 @@ func evalFunction(node *OpNode) error {
 	if e := consistent(node); e != nil {
 		return e
 	}
-
+	var err error
+	gotOne := true
 	// special cases
 	switch node.Func.Name {
 	case "if":
-		return ifCond(node)
+		err = ifCond(node)
 	case "dateAdd":
-		return dateAddMonths(node)
+		err = dateAddMonths(node)
 	case "dateDiff":
-		return dateDiff(node)
+		err = dateDiff(node)
 	case "toLastDayOfMonth":
-		return toLastDayOfMonth(node)
+		err = toLastDayOfMonth(node)
 	case "toFirstDayOfMonth":
-		return toFirstDayOfMonth(node)
+		err = toFirstDayOfMonth(node)
 	case "month":
-		return monthYearDay(node, "month")
+		err = monthYearDay(node, "month")
 	case "year":
-		return monthYearDay(node, "year")
+		err = monthYearDay(node, "year")
 	case "day":
-		return monthYearDay(node, "day")
+		err = monthYearDay(node, "day")
 	case "maxE":
-		return maxmin2(node, "max")
+		err = maxmin2(node, "max")
 	case "minE":
-		return maxmin2(node, "min")
+		err = maxmin2(node, "min")
 	case "substr":
-		return substr(node)
+		err = substr(node)
 	case "strPos":
-		return strPos(node)
+		err = strPos(node)
 	case "strCount":
-		return strCount(node)
+		err = strCount(node)
 	case "strLen":
-		return strLen(node)
+		err = strLen(node)
 	case "toDate":
-		return toWhatever(node, reflect.Struct)
+		err = toWhatever(node, reflect.Struct)
 	case "toString":
-		return toWhatever(node, reflect.String)
+		err = toWhatever(node, reflect.String)
 	case "toFloat":
 		node.Role = FRCts
-		return toWhatever(node, reflect.Float64)
+		err = toWhatever(node, reflect.Float64)
 	case "toInt", "cat":
 		node.Role = FRCat
-		return toWhatever(node, reflect.Int32)
+		err = toWhatever(node, reflect.Int32)
+	default:
+		gotOne = false
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if gotOne {
+		goNegative(node.Raw, node.Neg)
+		return nil
 	}
 
 	if node.Func != nil && node.Func.Level == 'S' {
@@ -1278,7 +1290,6 @@ func evalFunction(node *OpNode) error {
 		return nil
 	}
 
-	var err error
 	switch node.Func.Name {
 	case "cumeAfter":
 		node.Raw, err = node.Inputs[0].Raw.CumeAfter("sum")
