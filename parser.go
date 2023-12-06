@@ -90,7 +90,8 @@ const (
 //   - cat(<expr>) converts <expr> to a categorical field. Only applicable to continuous fields.
 //   - toDate(<expr>) converts a string field to a date
 //   - toString(<expr>) converts <expr> to string
-//   - toFloat(<expr>) converts <expr> to float
+//   - toFloatSP(<expr>) converts <expr> to float32
+//   - toFloatDP(<expr>) converts <expr> to float64
 //   - toInt(<expr>) converts <expr> to int.  Same as cat().
 //   - dateAdd(<date>,<months>) adds <months> to the date, <date>
 //   - toLastDayOfMonth(<date>)  moves the date to the last day of the month
@@ -103,6 +104,7 @@ const (
 //   - strPos(<string>,<target>) first position of <target> in <string>. -1 if does not occur.
 //   - strCount(<string>,<target>) number of times <target> occurs in <string>
 //   - strLen(<string>) length of string
+//   - trunc(<expr>)  truncate to int
 //
 // The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
 // countAfter, countBefore do NOT include the current row.
@@ -512,8 +514,6 @@ func ifCond(node *OpNode) error {
 		indT += deltas[1]
 		indF += deltas[2]
 	}
-
-	//	goNegative(node.Raw, node.Neg)
 
 	return nil
 }
@@ -1263,9 +1263,12 @@ func evalFunction(node *OpNode) error {
 		err = toWhatever(node, reflect.Struct)
 	case "toString":
 		err = toWhatever(node, reflect.String)
-	case "toFloat":
+	case "toFloatDP":
 		node.Role = FRCts
 		err = toWhatever(node, reflect.Float64)
+	case "toFloatSP":
+		node.Role = FRCts
+		err = toWhatever(node, reflect.Float32)
 	case "toInt", "cat":
 		node.Role = FRCat
 		err = toWhatever(node, reflect.Int32)
@@ -1562,7 +1565,17 @@ func goNegative(x *Raw, neg bool) {
 	}
 
 	for ind := 0; ind < x.Len(); ind++ {
-		x.Data[ind] = -x.Data[ind].(float64)
+		switch v := x.Data[ind].(type) {
+		case float64:
+			x.Data[ind] = -v
+		case float32:
+			x.Data[ind] = -v
+		case int32:
+			x.Data[ind] = -v
+		case int64:
+			x.Data[ind] = -v
+		}
+		//		x.Data[ind] = -x.Data[ind].(float64)
 	}
 }
 

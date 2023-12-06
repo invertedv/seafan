@@ -277,6 +277,32 @@ func TestStrLen(t *testing.T) {
 	}
 }
 
+func TestGoNegative(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest1.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "-toInt(3)"}
+	//	root = &OpNode{Expression: "if(toInt(row) > toFloatDP(4),1,0) "}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	exp := []int32{-3, -3, -3, -3, -3, -3, -3}
+	for ind, delta := range root.Raw.Data {
+		d := delta.(int32)
+		assert.Equal(t, exp[ind], d)
+	}
+}
+
 func TestDateDiff(t *testing.T) {
 	Verbose = false
 	var err error
@@ -718,7 +744,7 @@ func TestEvaluate_toFloat_cat(t *testing.T) {
 	dataD := "'34', '50'"
 	pipe := buildPipe([]string{dataC, dataD}, []string{"f", "s"})
 
-	exprs := []string{"toFloat(c)"}
+	exprs := []string{"toFloatDP(c)"}
 	results := [][]any{{1.0, 2.0}}
 	for ind, expr := range exprs {
 		act := tester(expr, pipe)

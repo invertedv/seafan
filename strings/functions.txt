@@ -42,7 +42,8 @@ month,int64,R,time.Time,,$
 year,int64,R,time.Time,,$
 toDate,time.Time,R,string,,$
 toString,string,R,any$
-toFloat,float64,R,any,,$
+toFloatDP,float64,R,any,,$
+toFloatSP,float32,R,any,,$
 toInt,int32,R,any,,$
 cat,any,R,any$
 maxE,any,R,any,any,$

@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/MetalBlueberry/go-plotly v0.4.0
 	github.com/invertedv/chutils v1.1.32
-	github.com/invertedv/utilities v0.1.25
+	github.com/invertedv/utilities v0.1.32
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.2
 	gonum.org/v1/gonum v0.12.0
@@ -23,13 +23,14 @@ require (
 	github.com/chewxy/hm v1.0.0 // indirect
 	github.com/chewxy/math32 v1.10.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/flatbuffers v1.12.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/invertedv/keyval v0.0.15 // indirect
+	github.com/invertedv/keyval v0.0.16 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/leesper/go_rng v0.0.0-20171009123644-5344a9259b21 // indirect
 	github.com/paulmach/orb v0.9.0 // indirect
