@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -90,27 +89,11 @@ func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam, keep
 	x := make([]float64, raw.Len())
 
 	for ind := 0; ind < len(x); ind++ {
-		switch raw.Kind {
-		case reflect.Float64:
-			x[ind] = raw.Data[ind].(float64)
-		case reflect.Float32:
-			x[ind] = float64(raw.Data[ind].(float32))
-		case reflect.Int:
-			x[ind] = float64(raw.Data[ind].(int))
-		case reflect.Int32:
-			x[ind] = float64(raw.Data[ind].(int32))
-		case reflect.Int64:
-			x[ind] = float64(raw.Data[ind].(int64))
-		case reflect.String:
-			xx, e := strconv.ParseFloat(raw.Data[ind].(string), 64)
-			if e != nil {
-				return e
-			}
-
-			x[ind] = xx
-		default:
-			return Wrapper(ErrGData, fmt.Sprintf("AppendC: cannot convert this type %T", x[0]))
+		xx, err := utilities.Any2Float64(raw.Data[ind])
+		if err != nil {
+			return err
 		}
+		x[ind] = *xx
 	}
 
 	ls := &FParam{}

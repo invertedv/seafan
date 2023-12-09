@@ -629,6 +629,9 @@ func (r *Raw) Pow(exponent *Raw) (*Raw, error) {
 		}
 
 		xOut[ind] = math.Pow(*base, *exp)
+
+		ind1 += delta1
+		ind2 += delta2
 	}
 
 	return NewRaw(xOut, nil), nil
@@ -747,6 +750,20 @@ func pad(maxLen, thisLen int) string {
 	}
 
 	return sp
+}
+
+func (l Levels) String() string {
+	const pad = 5
+
+	k, v := l.Sort(false, false)
+
+	table := [][]string{{"Value", "Count"}}
+	for ind := 0; ind < len(k); ind++ {
+		rowV := []string{fmt.Sprintf("%v", k[ind]), fmt.Sprintf("%d", v[ind])}
+		table = append(table, rowV)
+	}
+
+	return utilities.Pad(table, pad)
 }
 
 // FindValue returns key that maps to val

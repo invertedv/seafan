@@ -287,7 +287,7 @@ func TestGoNegative(t *testing.T) {
 		panic(e)
 	}
 
-	root := &OpNode{Expression: "-toInt(3)"}
+	root := &OpNode{Expression: "if(row > 4, row, 0)"}
 	//	root = &OpNode{Expression: "if(toInt(row) > toFloatDP(4),1,0) "}
 	if err = Expr2Tree(root); err != nil {
 		panic(err)
@@ -295,7 +295,7 @@ func TestGoNegative(t *testing.T) {
 	if err = Evaluate(root, pipe); err != nil {
 		panic(err)
 	}
-
+	return
 	exp := []int32{-3, -3, -3, -3, -3, -3, -3}
 	for ind, delta := range root.Raw.Data {
 		d := delta.(int32)

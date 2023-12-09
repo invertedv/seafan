@@ -80,6 +80,7 @@ const (
 //   - exp(<expr>)
 //   - log(<expr>)
 //   - lag(<expr>,<missing>), where <missing> is used for the first element.
+//   - abs(<expr>) absolute value
 //   - if(<test>, <true>, <false>), where the value <yes> is used if <condition> is greater than 0 and <false> o.w.
 //   - row(<expr>) row number in pipeline. Row starts as 0 and is continuous.
 //   - countAfter(<expr>), countBefore(<expr>) is the number of rows after (before) the current row.
@@ -1053,6 +1054,35 @@ func strLen(node *OpNode) error {
 	return nil
 }
 
+// abs takes the absolute value
+func abs(node *OpNode) error {
+	var deltas []int
+
+	_, deltas = getDeltas(node)
+
+	if node.Inputs[0].Raw == nil {
+		return fmt.Errorf("arg 1 to abs is missing")
+	}
+
+	n := node.Inputs[0].Raw.Len()
+	fabs := make([]any, n)
+	ind1 := 0
+
+	for ind := 0; ind < n; ind++ {
+		x, err := utilities.Any2Float64(node.Inputs[0].Raw.Data[ind1])
+		if err != nil {
+			return err
+		}
+
+		fabs[ind] = math.Abs(*x)
+		ind1 += deltas[0]
+	}
+
+	node.Raw = NewRaw(fabs, nil)
+
+	return nil
+}
+
 // strPos returns the index of the first occurence of arg2 in arg1, -1 if not there
 func strPos(node *OpNode) error {
 	var deltas []int
@@ -1272,6 +1302,8 @@ func evalFunction(node *OpNode) error {
 	case "toInt", "cat":
 		node.Role = FRCat
 		err = toWhatever(node, reflect.Int32)
+	case "abs":
+		err = abs(node)
 	default:
 		gotOne = false
 	}
