@@ -2,10 +2,12 @@ module github.com/invertedv/seafan
 
 go 1.22
 
+toolchain go1.22.0
+
 require (
 	github.com/MetalBlueberry/go-plotly v0.4.0
 	github.com/invertedv/chutils v1.1.34
-	github.com/invertedv/utilities v0.1.33
+	github.com/invertedv/utilities v0.1.34
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.4
 	gonum.org/v1/gonum v0.14.0

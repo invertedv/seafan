@@ -7,6 +7,7 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/ClickHouse/ch-go v0.61.2 h1:8+8eKO2VgxoRa0yLJpWwkqJxi/jrtP5Z+J6eZdPfwdc=
 github.com/ClickHouse/ch-go v0.61.2/go.mod h1:ZSVIE1A7mGJNcJeBvVF1v5bo12n0Wmnw30RhnPCpLzg=
+github.com/ClickHouse/clickhouse-go v1.5.4 h1:cKjXeYLNWVJIx2J1K6H2CqyRmfwVJVY1OV1coaaFcI0=
 github.com/ClickHouse/clickhouse-go/v2 v2.18.0 h1:O1LicIeg2JS2V29fKRH4+yT3f6jvvcJBm506dpVQ4mQ=
 github.com/ClickHouse/clickhouse-go/v2 v2.18.0/go.mod h1:ztQvX6wm7kAbhJslS87EXEhOVNY/TObXwyURnGju5FQ=
 github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
@@ -145,6 +146,8 @@ github.com/invertedv/keyval v0.0.17 h1:m2de5GTsMmL7Y6fS5Vuf1dze8VKXRQ2QGes2MIrpq
 github.com/invertedv/keyval v0.0.17/go.mod h1:RxuvBp2jHXVN9g9pRod/zE7/6eD2gcNkYWkJ/Ac9YdE=
 github.com/invertedv/utilities v0.1.33 h1:qYh+RKaGFlMpDKABDrdQ+uZXDqt2d0q/P8YWOm8w1jc=
 github.com/invertedv/utilities v0.1.33/go.mod h1:ZoDKgj8X1ciADes2Yrkai94t+wXyJJHUHP+QqOXS73A=
+github.com/invertedv/utilities v0.1.34 h1:3iQXk7oAex8VWRoYwipPgFeL01p6uCPTJE9TYE59ghQ=
+github.com/invertedv/utilities v0.1.34/go.mod h1:FXFMqvr98DVD5HS3FRYq1i9HacTMw5mEtwHATVgUWQM=
 github.com/jung-kurt/gofpdf v1.0.0/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
 github.com/jung-kurt/gofpdf v1.0.3-0.20190309125859-24315acbbda5/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
