@@ -9,8 +9,8 @@ github.com/ClickHouse/ch-go v0.61.2 h1:8+8eKO2VgxoRa0yLJpWwkqJxi/jrtP5Z+J6eZdPfw
 github.com/ClickHouse/ch-go v0.61.2/go.mod h1:ZSVIE1A7mGJNcJeBvVF1v5bo12n0Wmnw30RhnPCpLzg=
 github.com/ClickHouse/clickhouse-go/v2 v2.18.0 h1:O1LicIeg2JS2V29fKRH4+yT3f6jvvcJBm506dpVQ4mQ=
 github.com/ClickHouse/clickhouse-go/v2 v2.18.0/go.mod h1:ztQvX6wm7kAbhJslS87EXEhOVNY/TObXwyURnGju5FQ=
-github.com/DATA-DOG/go-sqlmock v1.5.0 h1:Shsta01QNfFxHCfpW6YH2STWB0MudeXXEWMr20OEh60=
-github.com/DATA-DOG/go-sqlmock v1.5.0/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
+github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
+github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/MetalBlueberry/go-plotly v0.4.0 h1:ld/FLZIwLmPdv09ljANonwEqSoI1uNn7myLYAVjBQ48=
 github.com/MetalBlueberry/go-plotly v0.4.0/go.mod h1:TWXjEOVRo7sm3rY3j18cKbbwRrRM3FtxjMxz8fNRsoM=
 github.com/ajstarks/deck v0.0.0-20200831202436-30c9fc6549a9/go.mod h1:JynElWSGnm/4RlzPXRlREEwqTHAN3T56Bv2ITsFT3gY=
@@ -139,8 +139,8 @@ github.com/gorgonia/bindgen v0.0.0-20210223094355-432cd89e7765/go.mod h1:BLHSe43
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/huandu/xstrings v1.3.2/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
-github.com/invertedv/chutils v1.1.33 h1:s1JGL9O3+EbVIK0q0kPeo75Pih4pDQ+7mCyAN3hF2QU=
-github.com/invertedv/chutils v1.1.33/go.mod h1:jpb+VjPeWnZOauSRxL0z9eJVInJ+pfRvsA8mV6lMnWs=
+github.com/invertedv/chutils v1.1.34 h1:e8xq+YCnK9WipOVogz2OF80pt6KDDbkJ+L0U2e0JMCY=
+github.com/invertedv/chutils v1.1.34/go.mod h1:TH0ObND3oTZDFo8ttZQWU4yioA/tfC0aCwKKa69/0Cs=
 github.com/invertedv/keyval v0.0.17 h1:m2de5GTsMmL7Y6fS5Vuf1dze8VKXRQ2QGes2MIrpqQw=
 github.com/invertedv/keyval v0.0.17/go.mod h1:RxuvBp2jHXVN9g9pRod/zE7/6eD2gcNkYWkJ/Ac9YdE=
 github.com/invertedv/utilities v0.1.33 h1:qYh+RKaGFlMpDKABDrdQ+uZXDqt2d0q/P8YWOm8w1jc=
