@@ -106,6 +106,7 @@ const (
 //   - strCount(<string>,<target>) number of times <target> occurs in <string>
 //   - strLen(<string>) length of string
 //   - trunc(<expr>)  truncate to int
+//   - exist(x,y) if x exists, returns x. If x does not exist, returns y.
 //
 // The values in <...> can be any expression.  The functions prodAfter, prodBefore, cumAfter,cumBefore,
 // countAfter, countBefore do NOT include the current row.
@@ -1326,6 +1327,8 @@ func evalFunction(node *OpNode) error {
 	}
 
 	switch node.Func.Name {
+	case "exist":
+		node.Raw, err = node.Inputs[0].Raw, nil
 	case "cumeAfter":
 		node.Raw, err = node.Inputs[0].Raw.CumeAfter("sum")
 	case "prodAfter":
@@ -1562,7 +1565,18 @@ func evalOps(node *OpNode) error {
 func Evaluate(curNode *OpNode, pipe Pipeline) error {
 	// recurse to evaluate from bottom up
 	for ind := 0; ind < len(curNode.Inputs); ind++ {
-		if e := Evaluate(curNode.Inputs[ind], pipe); e != nil {
+
+		e := Evaluate(curNode.Inputs[ind], pipe)
+
+		// Super special case: "exist" function that returns 1 if argument is in the pipeline
+		if ind == 0 && curNode.Func.Name == "exist" && len(curNode.Inputs) == 2 {
+			if e != nil {
+				curNode.Inputs[0] = curNode.Inputs[1]
+			}
+			e = nil
+		}
+
+		if e != nil {
 			return e
 		}
 	}

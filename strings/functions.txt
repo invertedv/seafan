@@ -29,6 +29,7 @@ r2,float64,S,float64,float64,$
 print,float64,S,any,float64,$
 printIf,float64,S,any,float64,float64$
 plotXY,float64,S,any,any,string,string$
+exist,int32,R,any,any,$
 plotLine,float64,S,float64,string,string$
 histogram,float64,S,float64,string,string$
 setPlotDim,float64,S,float64,float64$

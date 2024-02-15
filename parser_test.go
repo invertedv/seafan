@@ -16,6 +16,39 @@ import (
 	s "github.com/invertedv/chutils/sql"
 )
 
+func TestExist(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest6.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "exist(xx,x)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	assert.Equal(t, root.Raw.Data, []any{float64(1), float64(20)})
+
+	root = &OpNode{Expression: "exist(x,y)"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	assert.Equal(t, root.Raw.Data, []any{float64(1), float64(20)})
+}
+
 func TestMaxMinE(t *testing.T) {
 	Verbose = false
 	var err error
