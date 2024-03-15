@@ -129,27 +129,38 @@ func (ch *ChData) Init() (err error) {
 		names[ind] = fds[ind].Name
 		chTypes[ind] = fds[ind].ChSpec.Base
 	}
-	// load GData
-	for row := 0; ; row++ {
-		r, _, e := ch.rdr.Read(1, true)
 
-		if e == io.EOF {
+	// load GData
+	anyData := false
+	for rw := 0; ; rw++ {
+		r, _, ex := ch.rdr.Read(1, true)
+		if ex != nil && ex != io.EOF {
+			return ex
+		}
+
+		if ex == io.EOF {
 			if Verbose {
-				fmt.Println("rows read: ", row)
+				fmt.Println("rows read: ", rw)
 			}
 
 			break
 		}
+
 		// now we have the types, we can allocate the slices
-		if row == 0 {
+		if rw == 0 {
 			for c := 0; c < len(r[0]); c++ {
 				trans[c] = AllocRaw(nRow, reflect.TypeOf(r[0][c]).Kind())
 			}
 		}
 
+		anyData = true
 		for c := 0; c < len(trans); c++ {
-			trans[c].Data[row] = r[0][c]
+			trans[c].Data[rw] = r[0][c]
 		}
+	}
+
+	if !anyData {
+		return fmt.Errorf("ch.Init failed...query EOF with no data")
 	}
 
 	gd := NewGData()

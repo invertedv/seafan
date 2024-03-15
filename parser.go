@@ -101,6 +101,8 @@ const (
 //   - month(<date>) returns the month (1-12)
 //   - day(<date>) returns the day of the month (1-lastDayOfMonth)
 //   - dateDiff(<data1>,<date2>,unit) returns date1-date2 units can be 'hour', 'day', 'month' or 'year'
+//   - nowDate() returns current date
+//   - nowTime() returns current time as a string
 //   - substr(<string>,<start>,<length>) substring
 //   - strPos(<string>,<target>) first position of <target> in <string>. -1 if does not occur.
 //   - strCount(<string>,<target>) number of times <target> occurs in <string>
@@ -1253,6 +1255,25 @@ func toWhatever(node *OpNode, kind reflect.Kind) error {
 	return nil
 }
 
+// nowDate puts the current date into node
+func nowDate(node *OpNode) error {
+	xOut := make([]any, 1)
+	xOut[0] = time.Now()
+	node.Raw = NewRaw(xOut, nil)
+
+	return nil
+}
+
+// nowTime puts the current date/time as a string into node
+func nowTime(node *OpNode) error {
+	xOut := make([]any, 1)
+	now := time.Now()
+	xOut[0] = fmt.Sprintf("%d:%d:%d", now.Hour(), now.Minute(), now.Second())
+	node.Raw = NewRaw(xOut, nil)
+
+	return nil
+}
+
 // evalFunction evaluates a function call
 func evalFunction(node *OpNode) error {
 	if e := consistent(node); e != nil {
@@ -1268,6 +1289,10 @@ func evalFunction(node *OpNode) error {
 		err = dateAddMonths(node)
 	case "dateDiff":
 		err = dateDiff(node)
+	case "nowDate":
+		err = nowDate(node)
+	case "nowTime":
+		err = nowTime(node)
 	case "toLastDayOfMonth":
 		err = toLastDayOfMonth(node)
 	case "toFirstDayOfMonth":

@@ -49,6 +49,32 @@ func TestExist(t *testing.T) {
 	assert.Equal(t, root.Raw.Data, []any{float64(1), float64(20)})
 }
 
+func TestNowDate(t *testing.T) {
+	Verbose = false
+	var err error
+
+	data := os.Getenv("data")
+	pipe, e := CSVToPipe(data+"/pipeTest6.csv", nil, false)
+	if e != nil {
+		panic(e)
+	}
+
+	root := &OpNode{Expression: "nowDate()"}
+	if err = Expr2Tree(root); err != nil {
+		panic(err)
+	}
+	if err = Evaluate(root, pipe); err != nil {
+		panic(err)
+	}
+
+	now := time.Now()
+	for _, delta := range root.Raw.Data {
+		d := delta.(time.Time)
+		assert.Equal(t, now.Year(), d.Year())
+		assert.Equal(t, now.YearDay(), d.YearDay())
+	}
+}
+
 func TestMaxMinE(t *testing.T) {
 	Verbose = false
 	var err error
