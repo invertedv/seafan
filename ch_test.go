@@ -114,7 +114,7 @@ func TestChData_Init(t *testing.T) {
 	ft := fts.Get("x1")
 	ft.FP.Scale = 1
 	ft.FP.Location = 42
-
+	_ = rdr.Reset()
 	// set the FTypes so these values will be used
 	WithFtypes(fts)(ch)
 	e = ch.Init()

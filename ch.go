@@ -105,6 +105,109 @@ func (ch *ChData) Init() (err error) {
 		return Wrapper(ErrChData, "no reader")
 	}
 
+	ch.pull = false
+	fds := ch.rdr.TableSpec().FieldDefs
+	names := make([]string, len(fds))           // field names
+	trans := make([]*Raw, len(fds))             // data
+	chTypes := make([]chutils.ChType, len(fds)) // field types
+
+	for ind := 0; ind < len(fds); ind++ {
+		names[ind] = fds[ind].Name
+		chTypes[ind] = fds[ind].ChSpec.Base
+	}
+
+	rAll, _, ex := ch.rdr.Read(0, true)
+	if ex != nil && ex != io.EOF {
+		return ex
+	}
+
+	ch.nRow = len(rAll)
+	if ch.bs == 0 {
+		ch.bs = ch.nRow
+	}
+
+	if ch.bs > ch.nRow {
+		return Wrapper(ErrChData, fmt.Sprintf("Init: batch size = %d > dataset rows = %d", ch.bs, ch.nRow))
+	}
+
+	// load GData
+	anyData := false
+	for rw := 0; rw < ch.nRow; rw++ {
+
+		// now we have the types, we can allocate the slices
+		if rw == 0 {
+			for c := 0; c < len(rAll[rw]); c++ {
+				trans[c] = AllocRaw(ch.nRow, reflect.TypeOf(rAll[rw][c]).Kind())
+			}
+		}
+
+		anyData = true
+		for c := 0; c < len(trans); c++ {
+			trans[c].Data[rw] = rAll[rw][c]
+		}
+	}
+
+	if !anyData {
+		return fmt.Errorf("ch.Init failed...query EOF with no data")
+	}
+
+	gd := NewGData()
+
+	// work through fields, add to GData
+	for ind, nm := range names {
+		// if this isn't in our array, add it
+		ft := ch.getFType(nm) // note: this version gets user-Inputs
+		if ft == nil {
+			ft = &FType{}
+
+			switch chTypes[ind] {
+			case chutils.ChDate, chutils.ChString, chutils.ChFixedString:
+				ft.Role = FRCat
+			default:
+				ft.Role = FRCts
+			}
+		}
+
+		switch ft.Role {
+		case FRCts:
+			if err = gd.AppendC(trans[ind], nm, ft.Normalized, ft.FP, ch.keepRaw); err != nil {
+				return Wrapper(err, "(*ChData).Init")
+			}
+		default:
+			if err = gd.AppendD(trans[ind], names[ind], ft.FP, ch.keepRaw); err != nil {
+				return Wrapper(err, "(*ChData).Init")
+			}
+		}
+	}
+	// Add calculated fields
+	for _, ft := range ch.ftypes {
+		switch ft.Role {
+		case FROneHot:
+			if err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
+				return Wrapper(err, "(*ChData).Init")
+			}
+		case FREmbed:
+			if err = gd.MakeOneHot(ft.From, ft.Name); err != nil {
+				return Wrapper(err, "(*ChData).Init")
+			}
+		}
+	}
+
+	ch.data = gd
+
+	if Verbose {
+		fmt.Println("rows read: ", ch.nRow)
+	}
+
+	return nil
+}
+
+// Init initializes the Pipeline.
+func (ch *ChData) InitOld() (err error) {
+	if ch.rdr == nil {
+		return Wrapper(ErrChData, "no reader")
+	}
+
 	nRow, e := ch.rdr.CountLines()
 	if e != nil {
 		panic(e)
