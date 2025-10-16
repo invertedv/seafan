@@ -102,7 +102,7 @@ func (gd *GData) AppendC(raw *Raw, name string, normalize bool, fp *FParam, keep
 	case fp == nil:
 		m, s := stat.MeanStdDev(x, nil)
 		ls = &FParam{Location: m, Scale: s}
-	case fp != nil:
+	default:
 		ls = fp
 	}
 
@@ -525,9 +525,6 @@ func (gd *GData) GetRaw(field string) (*Raw, error) {
 		return fd.Raw, nil
 	}
 
-	if fd == nil {
-		return nil, Wrapper(ErrGData, fmt.Sprintf("(*GData) GetRaw: field %s not field", field))
-	}
 	switch fd.FT.Role {
 	case FRCts:
 		switch fd.FT.Normalized {

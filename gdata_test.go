@@ -518,7 +518,7 @@ func TestGData_Join(t *testing.T) {
 	assert.Nil(t, e)
 	assert.ElementsMatch(t, raw.Data, exp)
 
-	gdJoin, e = gdLeft.Join(gdRight, "FieldNM", Inner)
+	_, e = gdLeft.Join(gdRight, "FieldNM", Inner)
 	assert.NotNil(t, e)
 }
 

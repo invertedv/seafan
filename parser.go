@@ -1115,7 +1115,6 @@ func strPos(node *OpNode) error {
 			return fmt.Errorf("arg 2 to strPos isn't a string")
 		}
 
-		loc = strings.Index(str, look)
 		if loc = strings.Index(str, look); loc >= 0 {
 			loc++
 		}

@@ -354,12 +354,6 @@ func TestGoNegative(t *testing.T) {
 	if err = Evaluate(root, pipe); err != nil {
 		panic(err)
 	}
-	return
-	exp := []int32{-3, -3, -3, -3, -3, -3, -3}
-	for ind, delta := range root.Raw.Data {
-		d := delta.(int32)
-		assert.Equal(t, exp[ind], d)
-	}
 }
 
 func TestDateDiff(t *testing.T) {
@@ -1019,12 +1013,12 @@ func buildPipe(data, types []string) Pipeline {
 		if types[ind] == "s" {
 			sel = append(sel, fmt.Sprintf("%s AS %s", inCols[ind:ind+1], outCols[ind:ind+1]))
 		}
-		arrjoin = append(arrjoin, fmt.Sprintf(inCols[ind:ind+1]))
+		arrjoin = append(arrjoin, fmt.Sprintf("%v", inCols[ind:ind+1]))
 	}
 	qry := fmt.Sprintf("WITH d AS (SELECT %s) SELECT %s FROM d ARRAY JOIN %s", strings.Join(data, ","), strings.Join(sel, ","), strings.Join(arrjoin, ","))
 
 	user := os.Getenv("user")
-	pw := os.Getenv("pw")
+	pw := os.Getenv("password")
 	conn, err := chutils.NewConnect("127.0.0.1", user, pw, nil)
 	if err != nil {
 		panic(err)
@@ -1190,7 +1184,7 @@ func ExampleEvaluate() {
 }
 
 // This is an examples of plots
-func ExampleEvaluate_2() {
+func ExampleEvaluate_second() {
 	Verbose = false
 
 	pipe := buildPipe([]string{"1,2,3,4", "6,7,8,9", "9,8,7,6", "1,2,1,1", "'One','Two','Three','Four'"}, []string{"f", "f", "f", "f", "s"})

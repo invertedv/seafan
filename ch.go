@@ -105,6 +105,8 @@ func (ch *ChData) Init() (err error) {
 		return Wrapper(ErrChData, "no reader")
 	}
 
+	ch.rdr.Reset() // added 9/2025
+
 	ch.pull = false
 	fds := ch.rdr.TableSpec().FieldDefs
 	names := make([]string, len(fds))           // field names

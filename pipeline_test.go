@@ -280,7 +280,7 @@ func ExampleSubset() {
 }
 
 // Where restricts a pipe to rows that have given values in the specified field
-func ExampleWhere() {
+func ExamplePipeline_Where() {
 	Verbose = false
 
 	data := os.Getenv("data")
@@ -291,7 +291,7 @@ func ExampleWhere() {
 
 	pipeOut, err := pipe1.Where("Field1", []any{"c", "x"})
 	if err != nil {
-		panic(e)
+		panic(err)
 	}
 
 	var check *Raw

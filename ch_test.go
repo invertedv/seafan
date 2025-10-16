@@ -386,6 +386,10 @@ func ExampleChData_SaveFTypes() {
 		panic(e)
 	}
 
+	if e:=rdr.Reset(); e!=nil{
+		panic(e)
+	}
+
 	ch1 := NewChData("Saved FTypes", WithReader(rdr), WithBatchSize(bSize),
 		WithFtypes(saveFTypes))
 
